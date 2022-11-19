@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wiretap"
+version = "1.0.6"
+requires-python = ">=3.10.5"
+authors = [{ name = "he-dev" }]
+dependencies = [
+    "pyodbc"
+]
+
+
+#[tool.poetry]
+#packages = [
+#    { include = "handlers", from = "src" }
+#]
+
+
+
+
