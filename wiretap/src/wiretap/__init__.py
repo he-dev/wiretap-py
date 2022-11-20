@@ -71,7 +71,8 @@ class UnitOfWork:
     def _log(self, **kwargs):
         kwargs["elapsed"] = self.elapsed
         status = inspect.stack()[1][3]
-        extra = json.dumps(dict(**self._extra, **kwargs), sort_keys=True, allow_nan=False, cls=_JsonDateTimeEncoder)
+        # Use local extra only for started.
+        extra = json.dumps(dict(**self._extra if status == "started" else {}, **kwargs), sort_keys=True, allow_nan=False, cls=_JsonDateTimeEncoder)
         with _CustomLogRecordFactoryScope(self._set_module_name, self._set_func_name):
             log = self._logger.exception if all(sys.exc_info()) else self._logger.info
             log(None, extra={"status": status, "extra": extra})
