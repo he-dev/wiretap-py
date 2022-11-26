@@ -3,32 +3,56 @@ import logging
 import inspect
 import functools
 import json
-from typing import Dict, Callable, Any
+import asyncio
+import uuid
+import contextvars
+import contextlib
+import layers
+from typing import Dict, Callable, Any, Protocol, List
 from timeit import default_timer as timer
 from datetime import datetime, date
 
-PRESENTATION = {"layer": "PRESENTATION"}
-APPLICATION = {"layer": "APPLICATION"}
-BUSINESS = {"layer": "BUSINESS"}
-PERSISTENCE = {"layer": "PERSISTENCE"}
-DATABASE = {"layer": "DATABASE"}
+_scope = contextvars.ContextVar("_scope", default=None)
 
 
-def telemetry(**kwargs):
+def telemetry(*args, **kwargs):
     """Provides flow telemetry for the decorated function. Use named args to provide more static data."""
 
+    for a in args:
+        if callable(a):
+            a(kwargs)
+
     def factory(decoratee):
-        @functools.wraps(decoratee)
-        def decorator(*decoratee_args, **decoratee_kwargs):
-            uow = UnitOfWork(inspect.getmodule(decoratee).__name__, decoratee.__name__, dict(**kwargs))
+        unit_of_work = UnitOfWork(
+            module=inspect.getmodule(decoratee).__name__,
+            name=decoratee.__name__,
+            extra=dict(**kwargs),
+            parent=_scope.get()
+        )
+        _scope.set(unit_of_work)
 
-            # Inject scope if required.
-            for n, t in inspect.getfullargspec(decoratee).annotations.items():
-                if t is UnitOfWorkScope:
-                    decoratee_kwargs[n] = UnitOfWorkScope(uow)
+        @contextlib.contextmanager
+        def _context():
+            try:
+                unit_of_work.started()
+                yield
+                unit_of_work.completed()
+            except:
+                unit_of_work.faulted()
+                raise
+            finally:
+                _scope.set(unit_of_work.parent)
 
-            with uow:
-                return decoratee(*decoratee_args, **decoratee_kwargs)
+        if asyncio.iscoroutinefunction(decoratee):
+            @functools.wraps(decoratee)
+            async def decorator(*decoratee_args, **decoratee_kwargs):
+                with _context():
+                    return await decoratee(*decoratee_args, **decoratee_kwargs)
+        else:
+            @functools.wraps(decoratee)
+            def decorator(*decoratee_args, **decoratee_kwargs):
+                with _context():
+                    return decoratee(*decoratee_args, **decoratee_kwargs)
 
         return decorator
 
@@ -37,13 +61,15 @@ def telemetry(**kwargs):
 
 class UnitOfWork:
 
-    def __init__(self, module: str, name: str | None = None, extra: Dict | None = None):
+    def __init__(self, module: str, name: str | None = None, extra: Dict | None = None, parent: Any = None):
         self._logger = logging.getLogger(f"{module}.{name}")
         self._module = module
         self._name = name
         self._extra = extra or {}
         self._start = 0
         self._is_cancelled = False
+        self.correlation_id = uuid.uuid4().hex
+        self.parent = parent
 
     @property
     def elapsed(self) -> float:
@@ -71,24 +97,20 @@ class UnitOfWork:
     def _log(self, **kwargs):
         kwargs["elapsed"] = self.elapsed
         status = inspect.stack()[1][3]
-        # Use local extra only for started.
+        # Use telemetry extra only for "started".
         extra = json.dumps(dict(**self._extra if status == "started" else {}, **kwargs), sort_keys=True, allow_nan=False, cls=_JsonDateTimeEncoder)
-        with _CustomLogRecordFactoryScope(self._set_module_name, self._set_func_name):
+        with _update_log_record(
+                functools.partial(_set_module_name, name=self._module),
+                functools.partial(_set_func_name, name=self._name)
+        ):
             log = self._logger.exception if all(sys.exc_info()) else self._logger.info
-            log(None, extra={"status": status, "extra": extra})
+            log(None, extra={"status": status, "correlation": [x.correlation_id for x in self], "extra": extra})
 
-    def _set_func_name(self, record: logging.LogRecord):
-        record.funcName = self._name
-
-    def _set_module_name(self, record: logging.LogRecord):
-        record.module = self._module
-
-    def __enter__(self):
-        self.started()
-        return UnitOfWorkScope(self)
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        (self.faulted if exc_type else self.completed)()
+    def __iter__(self):
+        current = self
+        while current:
+            yield current
+            current = current.parent
 
 
 class UnitOfWorkScope:
@@ -107,25 +129,43 @@ class UnitOfWorkScope:
         self._uow.canceled(**kwargs)
 
 
-class _CustomLogRecordFactoryScope:
+def scope() -> UnitOfWorkScope:
+    return UnitOfWorkScope(_scope.get())
 
-    def __init__(self, *actions: Callable[[logging.LogRecord], None]):
-        self._actions = actions
 
-    def __enter__(self):
-        self._default = logging.getLogRecordFactory()
+def elapsed() -> float:
+    return scope().elapsed
 
-        def custom(*args, **kwargs):
-            record = self._default(*args, **kwargs)
-            for action in self._actions:
-                action(record)
-            return record
 
-        logging.setLogRecordFactory(custom)
-        return self
+def running(**kwargs) -> None:
+    return scope().running(**kwargs)
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        logging.setLogRecordFactory(self._default)
+
+def canceled(**kwargs) -> None:
+    return scope().canceled(**kwargs)
+
+
+@contextlib.contextmanager
+def _update_log_record(*actions: Callable[[logging.LogRecord], None]):
+    default = logging.getLogRecordFactory()
+
+    def custom(*args, **kwargs):
+        record = default(*args, **kwargs)
+        for action in actions:
+            action(record)
+        return record
+
+    logging.setLogRecordFactory(custom)
+    yield
+    logging.setLogRecordFactory(default)
+
+
+def _set_func_name(record: logging.LogRecord, name: str):
+    record.funcName = name
+
+
+def _set_module_name(record: logging.LogRecord, name: str):
+    record.module = name
 
 
 class _JsonDateTimeEncoder(json.JSONEncoder):

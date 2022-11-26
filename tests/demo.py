@@ -1,8 +1,8 @@
 import logging
 import logging.config
-
+import asyncio
 import wiretap.src.wiretap as wiretap
-from wiretap.src.wiretap import UnitOfWork, UnitOfWorkScope, telemetry
+from wiretap.src.wiretap import UnitOfWork, UnitOfWorkScope, telemetry, telemetry
 
 from wiretap_sqlite.src.wiretap.handlers.sqlite import SQLiteHandler
 from wiretap_sqlserver.src.wiretap.handlers import SqlServerHandler, SqlServerOdbcConnectionString
@@ -14,7 +14,7 @@ def configure_logging():
         "formatters": {
             "console": {
                 "style": "{",
-                "format": "{asctime}.{msecs:.0f} | {module}.{funcName} | {status} | {extra}",
+                "format": "{asctime}.{msecs:.0f} | {module}.{funcName} | {status} | {correlation} | {extra}",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
                 "defaults": {"status": "<status>", "extra": "<extra>"}
             }
@@ -51,11 +51,25 @@ def configure_logging():
 configure_logging()
 
 
-@telemetry(**wiretap.APPLICATION)
-def flow_decorator_test(value: int, scope: UnitOfWorkScope = None):
-    scope.running(foo=value)
-    # raise ValueError
-    pass
+#@wiretap.extra(**wiretap.APPLICATION)
+@wiretap.telemetry(wiretap.layers.Application())
+#@telemetry(**wiretap.APPLICATION)
+def foo(value: int):
+    wiretap.running(name=f"sync-{value}")
+    #raise ValueError("Test!")
+
+
+@telemetry(wiretap.layers.Application())
+async def bar(value: int):
+    wiretap.running(name=f"sync-{value}")
+    await asyncio.sleep(2.0)
+    foo(0)
+
+
+@telemetry(wiretap.layers.Application())
+async def baz(value: int):
+    wiretap.running(name=f"sync-{value}")
+    await asyncio.sleep(3.0)
 
 
 def flow_test():
@@ -71,6 +85,14 @@ def flow_test():
             scope.canceled()
 
 
+async def main():
+    #b1 = asyncio.create_task(bar(1))
+    #b2 = asyncio.create_task(baz(2))
+    #await asyncio.sleep(0)
+    #foo(3)
+    #await asyncio.gather(b1, b2)
+    foo(4)
+
+
 if __name__ == "__main__":
-    # flow_test()
-    flow_decorator_test(7)
+    asyncio.run(main())

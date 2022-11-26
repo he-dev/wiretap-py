@@ -8,6 +8,8 @@ version = "1.0.11"
 requires-python = ">=3.10.5"
 authors = [{ name = "he-dev" }]
 
+[project.urls]
+"GitHub" = "https://github.com/he-dev/wiretap-py"
 
 
 
