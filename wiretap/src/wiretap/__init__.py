@@ -12,6 +12,8 @@ from typing import Dict, Callable, Any, Protocol, List, Optional
 from timeit import default_timer as timer
 from datetime import datetime, date
 
+_scope = contextvars.ContextVar("_scope", default=None)
+
 
 class UnitOfWork:
 
@@ -84,8 +86,6 @@ class UnitOfWorkScope:
         self._uow.canceled(**kwargs)
 
 
-_scope = contextvars.ContextVar("_scope", default=None)
-
 def telemetry(*args, **kwargs):
     """Provides flow telemetry for the decorated function. Use named args to provide more static data."""
 
@@ -94,24 +94,23 @@ def telemetry(*args, **kwargs):
             a(kwargs)
 
     def factory(decoratee):
-
         @contextlib.contextmanager
         def _context() -> UnitOfWork:
-            unit_of_work = UnitOfWork(
+            unit = UnitOfWork(
                 module=inspect.getmodule(decoratee).__name__,
                 name=decoratee.__name__,
                 extra=dict(**kwargs),
                 parent=_scope.get()
             )
 
-            token = _scope.set(unit_of_work)
+            token = _scope.set(unit)
 
             try:
-                unit_of_work.started()
-                yield unit_of_work
-                unit_of_work.completed()
+                unit.started()
+                yield unit
+                unit.completed()
             except:
-                unit_of_work.faulted()
+                unit.faulted()
                 raise
             finally:
                 _scope.reset(token)
@@ -152,7 +151,8 @@ def running(**kwargs) -> None:
     return scope().running(**kwargs)
 
 
-def canceled(**kwargs) -> None:
+def canceled(reason: str, **kwargs) -> None:
+    kwargs["reason"] = reason
     return scope().canceled(**kwargs)
 
 

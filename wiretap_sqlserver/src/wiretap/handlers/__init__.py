@@ -8,7 +8,7 @@ from typing import Callable, Any, List, Optional
 
 
 class SqlServerHandler(Handler):
-    def __init__(self, connection_string: str, insert: str = "INSERT INTO log([timestamp], [scope], [status], [extra], [comment]) VALUES (?, ?, ?, ?, ?)"):
+    def __init__(self, connection_string: str, insert: str = "INSERT INTO log([timestamp], [scope], [status], [correlation], [extra], [comment]) VALUES (?, ?, ?, ?, ?, ?)"):
         super().__init__()
         self.connection_string = connection_string
         self.insert = insert
@@ -27,6 +27,7 @@ class SqlServerHandler(Handler):
             datetime.fromtimestamp(record.created),  # timestamp
             ".".join([record.module, record.funcName]),  # scope
             record.status if hasattr(record, "status") else None,  # status
+            json.dumps(record.correlation, cls=_JsonDateTimeEncoder) if hasattr(record, "correlation") and record.correlation else None,  # correlation
             json.dumps(record.extra, cls=_JsonDateTimeEncoder) if hasattr(record, "extra") and record.extra else None,  # extra
             record.exc_text if record.exc_text else None,  # comment
         )
