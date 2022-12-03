@@ -1,6 +1,7 @@
 import logging
 import logging.config
 import asyncio
+import multiprocessing
 import wiretap.src.wiretap as wiretap
 from wiretap.src.wiretap import UnitOfWork, UnitOfWorkScope, telemetry, telemetry
 
@@ -54,20 +55,28 @@ configure_logging()
 #@wiretap.extra(**wiretap.APPLICATION)
 @wiretap.telemetry(wiretap.layers.Application())
 #@telemetry(**wiretap.APPLICATION)
-def foo(value: int):
+def foo(value: int, scope: UnitOfWorkScope = None):
+    ##wiretap.running(name=f"sync-{value}")
+    wiretap.running(name=f"sync-{value}")
+    #raise ValueError("Test!")
+    qux(value)
+
+@wiretap.telemetry(wiretap.layers.Application())
+def qux(value: int, scope: UnitOfWorkScope = None):
+    ##wiretap.running(name=f"sync-{value}")
     wiretap.running(name=f"sync-{value}")
     #raise ValueError("Test!")
 
 
 @telemetry(wiretap.layers.Application())
-async def bar(value: int):
+async def bar(value: int, scope: UnitOfWorkScope = None):
     wiretap.running(name=f"sync-{value}")
     await asyncio.sleep(2.0)
     foo(0)
 
 
 @telemetry(wiretap.layers.Application())
-async def baz(value: int):
+async def baz(value: int, scope: UnitOfWorkScope = None):
     wiretap.running(name=f"sync-{value}")
     await asyncio.sleep(3.0)
 
@@ -86,13 +95,29 @@ def flow_test():
 
 
 async def main():
+    b1 = asyncio.create_task(bar(1))
+    b2 = asyncio.create_task(baz(2))
+    await asyncio.sleep(0)
+    foo(3)
+    await asyncio.gather(b1, b2)
+    foo(4)
+
+
+def main_proc():
     #b1 = asyncio.create_task(bar(1))
     #b2 = asyncio.create_task(baz(2))
     #await asyncio.sleep(0)
     #foo(3)
     #await asyncio.gather(b1, b2)
-    foo(4)
+    #foo(4)
+
+    with multiprocessing.Pool() as pool:
+        for _ in pool.starmap(foo, [(x, ) for x in range(1, 10)]):
+            pass
+
+
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+    #main_proc()

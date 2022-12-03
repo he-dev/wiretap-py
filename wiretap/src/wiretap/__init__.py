@@ -8,60 +8,14 @@ import uuid
 import contextvars
 import contextlib
 import layers
-from typing import Dict, Callable, Any, Protocol, List
+from typing import Dict, Callable, Any, Protocol, List, Optional
 from timeit import default_timer as timer
 from datetime import datetime, date
-
-_scope = contextvars.ContextVar("_scope", default=None)
-
-
-def telemetry(*args, **kwargs):
-    """Provides flow telemetry for the decorated function. Use named args to provide more static data."""
-
-    for a in args:
-        if callable(a):
-            a(kwargs)
-
-    def factory(decoratee):
-        unit_of_work = UnitOfWork(
-            module=inspect.getmodule(decoratee).__name__,
-            name=decoratee.__name__,
-            extra=dict(**kwargs),
-            parent=_scope.get()
-        )
-        _scope.set(unit_of_work)
-
-        @contextlib.contextmanager
-        def _context():
-            try:
-                unit_of_work.started()
-                yield
-                unit_of_work.completed()
-            except:
-                unit_of_work.faulted()
-                raise
-            finally:
-                _scope.set(unit_of_work.parent)
-
-        if asyncio.iscoroutinefunction(decoratee):
-            @functools.wraps(decoratee)
-            async def decorator(*decoratee_args, **decoratee_kwargs):
-                with _context():
-                    return await decoratee(*decoratee_args, **decoratee_kwargs)
-        else:
-            @functools.wraps(decoratee)
-            def decorator(*decoratee_args, **decoratee_kwargs):
-                with _context():
-                    return decoratee(*decoratee_args, **decoratee_kwargs)
-
-        return decorator
-
-    return factory
 
 
 class UnitOfWork:
 
-    def __init__(self, module: str, name: str | None = None, extra: Dict | None = None, parent: Any = None):
+    def __init__(self, module: str, name: str, extra: Dict | None = None, parent: Any = None):
         self._logger = logging.getLogger(f"{module}.{name}")
         self._module = module
         self._name = name
@@ -96,6 +50,7 @@ class UnitOfWork:
 
     def _log(self, **kwargs):
         kwargs["elapsed"] = self.elapsed
+        kwargs["depth"] = sum(1 for _ in self)
         status = inspect.stack()[1][3]
         # Use telemetry extra only for "started".
         extra = json.dumps(dict(**self._extra if status == "started" else {}, **kwargs), sort_keys=True, allow_nan=False, cls=_JsonDateTimeEncoder)
@@ -127,6 +82,62 @@ class UnitOfWorkScope:
 
     def canceled(self, **kwargs):
         self._uow.canceled(**kwargs)
+
+
+_scope = contextvars.ContextVar("_scope", default=None)
+
+def telemetry(*args, **kwargs):
+    """Provides flow telemetry for the decorated function. Use named args to provide more static data."""
+
+    for a in args:
+        if callable(a):
+            a(kwargs)
+
+    def factory(decoratee):
+
+        @contextlib.contextmanager
+        def _context() -> UnitOfWork:
+            unit_of_work = UnitOfWork(
+                module=inspect.getmodule(decoratee).__name__,
+                name=decoratee.__name__,
+                extra=dict(**kwargs),
+                parent=_scope.get()
+            )
+
+            token = _scope.set(unit_of_work)
+
+            try:
+                unit_of_work.started()
+                yield unit_of_work
+                unit_of_work.completed()
+            except:
+                unit_of_work.faulted()
+                raise
+            finally:
+                _scope.reset(token)
+
+        def inject_scope(u: UnitOfWork, d: Dict):
+            """ Injects the UnitOfWorkScope if required. """
+            for n, t in inspect.getfullargspec(decoratee).annotations.items():
+                if t is UnitOfWorkScope:
+                    d[n] = UnitOfWorkScope(u)
+
+        if asyncio.iscoroutinefunction(decoratee):
+            @functools.wraps(decoratee)
+            async def decorator(*decoratee_args, **decoratee_kwargs):
+                with _context() as unit_of_work:
+                    inject_scope(unit_of_work, decoratee_kwargs)
+                    return await decoratee(*decoratee_args, **decoratee_kwargs)
+        else:
+            @functools.wraps(decoratee)
+            def decorator(*decoratee_args, **decoratee_kwargs):
+                with _context() as unit_of_work:
+                    inject_scope(unit_of_work, decoratee_kwargs)
+                    return decoratee(*decoratee_args, **decoratee_kwargs)
+
+        return decorator
+
+    return factory
 
 
 def scope() -> UnitOfWorkScope:
