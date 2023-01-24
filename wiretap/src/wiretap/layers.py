@@ -1,28 +1,25 @@
-from dataclasses import dataclass
 from typing import Dict
-import abc
 
 
-class Layer(abc.ABC):
-    def __call__(self, extra: Dict):
-        extra["layer"] = self.__class__.__name__.upper()
+def _layer(details: Dict, name: str):
+    details["layer"] = name.lower()
 
 
-class Presentation(Layer):
-    pass
+def presentation(details: Dict) -> None:
+    return _layer(details, presentation.__name__)
 
 
-class Application(Layer):
-    pass
+def application(details: Dict) -> None:
+    return _layer(details, application.__name__)
 
 
-class Business(Layer):
-    pass
+def business(details: Dict) -> None:
+    return _layer(details, business.__name__)
 
 
-class Persistence(Layer):
-    pass
+def persistence(details: Dict) -> None:
+    return _layer(details, persistence.__name__)
 
 
-class Database(Layer):
-    pass
+def database(details: Dict) -> None:
+    return _layer(details, database.__name__)

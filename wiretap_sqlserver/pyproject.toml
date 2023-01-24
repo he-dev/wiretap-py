@@ -3,19 +3,16 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "wiretap"
-version = "1.0.6"
-requires-python = ">=3.10.5"
+name = "wiretap-sqlserver"
+version = "2.0.0"
+requires-python = ">=3.10.*"
 authors = [{ name = "he-dev" }]
 dependencies = [
     "pyodbc"
 ]
 
-
-#[tool.poetry]
-#packages = [
-#    { include = "handlers", from = "src" }
-#]
+[project.urls]
+"GitHub" = "https://github.com/he-dev/wiretap-py"
 
 
 

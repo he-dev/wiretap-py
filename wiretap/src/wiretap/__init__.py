@@ -7,29 +7,52 @@ import asyncio
 import uuid
 import contextvars
 import contextlib
+# noinspection PyUnresolvedReferences
 import layers
-from typing import Dict, Callable, Any, Protocol, List, Optional
+from typing import Dict, Callable, Any, Protocol, Optional, Self
 from timeit import default_timer as timer
 from datetime import datetime, date
 
 _scope = contextvars.ContextVar("_scope", default=None)
 
 
-class UnitOfWork:
+class PieceOfWorkScope(Protocol):
+    parent: Self
+    id: uuid.UUID
+    elapsed: float
 
-    def __init__(self, module: str, name: str, extra: Dict | None = None, parent: Any = None):
-        self._logger = logging.getLogger(f"{module}.{name}")
-        self._module = module
-        self._name = name
-        self._extra = extra or {}
-        self._start = 0
-        self._is_cancelled = False
-        self.correlation_id = uuid.uuid4().hex
+    def running(self, **kwargs):
+        ...
+
+    def canceled(self, **kwargs):
+        ...
+
+
+class SerializeDetails(Protocol):
+    def __call__(self, **kwargs) -> str | None: ...
+
+
+class DefaultSerializeDetails(SerializeDetails):
+    def __call__(self, **kwargs) -> str | None:
+        return json.dumps(kwargs, sort_keys=True, allow_nan=False, cls=_JsonDateTimeEncoder) if kwargs else None
+
+
+class PieceOfWork:
+    serialize_details: SerializeDetails = DefaultSerializeDetails()
+
+    def __init__(self, module: Optional[str], name: str, attachment: Any = None, parent: PieceOfWorkScope = None):
+        self.id = uuid.uuid4()
+        self.module = module
+        self.name = name
+        self.attachment = attachment
         self.parent = parent
+        self._start = 0
+        self._finalized = False
+        self._logger = logging.getLogger(f"{module}.{name}")
 
     @property
     def elapsed(self) -> float:
-        return round(round(timer(), 3) - round(self._start, 3), 3)
+        return round(timer() - self._start, 3)
 
     def started(self, **kwargs):
         self._start = timer()
@@ -39,29 +62,37 @@ class UnitOfWork:
         self._log(**kwargs)
 
     def canceled(self, **kwargs):
-        self._is_cancelled = True
         self._log(**kwargs)
+        self._finalized = True
 
     def faulted(self, **kwargs):
-        if not self._is_cancelled:
+        if not self._finalized:
             self._log(**kwargs)
+            self._finalized = True
 
     def completed(self, **kwargs):
-        if not self._is_cancelled:
+        if not self._finalized:
             self._log(**kwargs)
+            self._finalized = True
 
     def _log(self, **kwargs):
-        kwargs["elapsed"] = self.elapsed
-        kwargs["depth"] = sum(1 for _ in self)
+        # kwargs["depth"] = sum(1 for _ in self)
         status = inspect.stack()[1][3]
-        # Use telemetry extra only for "started".
-        extra = json.dumps(dict(**self._extra if status == "started" else {}, **kwargs), sort_keys=True, allow_nan=False, cls=_JsonDateTimeEncoder)
-        with _update_log_record(
-                functools.partial(_set_module_name, name=self._module),
-                functools.partial(_set_func_name, name=self._name)
+        details = PieceOfWork.serialize_details(**kwargs)
+        with _create_log_record(
+                functools.partial(_set_module_name, name=self.module),
+                functools.partial(_set_func_name, name=self.name)
         ):
+            # Exceptions must be logged with the exception method or otherwise the exception will be missing.
             log = self._logger.exception if all(sys.exc_info()) else self._logger.info
-            log(None, extra={"status": status, "correlation": [x.correlation_id for x in self], "extra": extra})
+            log(None, extra={
+                "nodeId": self.id,
+                "prevId": self.parent.id if self.parent else None,
+                "status": status,
+                "elapsed": self.elapsed,
+                "details": details,
+                "attachment": self.attachment
+            })
 
     def __iter__(self):
         current = self
@@ -70,20 +101,19 @@ class UnitOfWork:
             current = current.parent
 
 
-class UnitOfWorkScope:
-
-    def __init__(self, uow: UnitOfWork):
-        self._uow = uow
-
-    @property
-    def elapsed(self) -> float:
-        return self._uow.elapsed
-
-    def running(self, **kwargs):
-        self._uow.running(**kwargs)
-
-    def canceled(self, **kwargs):
-        self._uow.canceled(**kwargs)
+@contextlib.contextmanager
+def local(name: str, details: Dict | None = None, attachment: Any = None) -> PieceOfWorkScope:
+    work = PieceOfWork(None, name, attachment, _scope.get())
+    token = _scope.set(work)
+    try:
+        work.started(**details if details else dict())
+        yield work
+        work.completed()
+    except Exception:
+        work.faulted()
+        raise
+    finally:
+        _scope.reset(token)
 
 
 def telemetry(*args, **kwargs):
@@ -95,31 +125,30 @@ def telemetry(*args, **kwargs):
 
     def factory(decoratee):
         @contextlib.contextmanager
-        def _context() -> UnitOfWork:
-            unit = UnitOfWork(
+        def _context() -> PieceOfWork:
+            work = PieceOfWork(
                 module=inspect.getmodule(decoratee).__name__,
                 name=decoratee.__name__,
-                extra=dict(**kwargs),
+                attachment=kwargs.pop("attachment", None),
                 parent=_scope.get()
             )
 
-            token = _scope.set(unit)
-
+            token = _scope.set(work)
             try:
-                unit.started()
-                yield unit
-                unit.completed()
-            except:
-                unit.faulted()
+                work.started(**kwargs)
+                yield work
+                work.completed()
+            except Exception:
+                work.faulted()
                 raise
             finally:
                 _scope.reset(token)
 
-        def inject_scope(u: UnitOfWork, d: Dict):
-            """ Injects the UnitOfWorkScope if required. """
+        def inject_scope(u: PieceOfWork, d: Dict):
+            """ Injects the PieceOfWorkScope if required. """
             for n, t in inspect.getfullargspec(decoratee).annotations.items():
-                if t is UnitOfWorkScope:
-                    d[n] = UnitOfWorkScope(u)
+                if t is PieceOfWorkScope:
+                    d[n] = u
 
         if asyncio.iscoroutinefunction(decoratee):
             @functools.wraps(decoratee)
@@ -139,29 +168,16 @@ def telemetry(*args, **kwargs):
     return factory
 
 
-def scope() -> UnitOfWorkScope:
-    return UnitOfWorkScope(_scope.get())
-
-
-def elapsed() -> float:
-    return scope().elapsed
-
-
-def running(**kwargs) -> None:
-    return scope().running(**kwargs)
-
-
-def canceled(reason: str, **kwargs) -> None:
-    kwargs["reason"] = reason
-    return scope().canceled(**kwargs)
-
-
 @contextlib.contextmanager
-def _update_log_record(*actions: Callable[[logging.LogRecord], None]):
+def _create_log_record(*actions: Callable[[logging.LogRecord], None]):
     default = logging.getLogRecordFactory()
 
     def custom(*args, **kwargs):
         record = default(*args, **kwargs)
+
+        if record.exc_info:
+            record.exc_text = logging.Formatter().formatException(record.exc_info)
+
         for action in actions:
             action(record)
         return record
