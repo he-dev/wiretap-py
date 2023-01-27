@@ -2,14 +2,11 @@ import logging
 import logging.config
 import asyncio
 import multiprocessing
-import time
-import os
-import wiretap.src.wiretap as wiretap
+import wiretap as wiretap
 import wiretap_sqlserver.src.wiretap_sqlserver.handlers
-from wiretap.src.wiretap import PieceOfWork, PieceOfWorkScope, telemetry, telemetry
+from wiretap import PieceOfWorkScope, telemetry
 
-from wiretap_sqlite.src.wiretap.handlers.sqlite import SQLiteHandler
-from wiretap_sqlserver.src.wiretap_sqlserver.handlers import SqlServerHandler, SqlServerOdbcConnectionString
+from wiretap_sqlserver.src.wiretap_sqlserver.handlers import SqlServerOdbcConnectionString
 
 
 def configure_logging():
@@ -68,7 +65,7 @@ configure_logging()
 
 
 # @wiretap.extra(**wiretap.APPLICATION)
-@wiretap.telemetry(wiretap.layers.application)
+@wiretap.telemetry(wiretap.src.layers.application)
 # @telemetry(**wiretap.APPLICATION)
 def foo(value: int, scope: PieceOfWorkScope = None):
     ##wiretap.running(name=f"sync-{value}")
@@ -77,21 +74,21 @@ def foo(value: int, scope: PieceOfWorkScope = None):
     qux(value)
 
 
-@wiretap.telemetry(wiretap.layers.persistence)
+@wiretap.telemetry(wiretap.src.layers.persistence)
 def qux(value: int, scope: PieceOfWorkScope = None):
     ##wiretap.running(name=f"sync-{value}")
     scope.running(name=f"sync-{value}")
     # raise ValueError("Test!")
 
 
-@telemetry(wiretap.layers.application)
+@telemetry(wiretap.src.layers.application)
 async def bar(value: int, scope: PieceOfWorkScope = None):
     scope.running(name=f"sync-{value}")
     await asyncio.sleep(2.0)
     foo(0)
 
 
-@telemetry(wiretap.layers.application)
+@telemetry(wiretap.src.layers.application)
 async def baz(value: int, scope: PieceOfWorkScope = None):
     scope.running(name=f"sync-{value}")
     await asyncio.sleep(3.0)
