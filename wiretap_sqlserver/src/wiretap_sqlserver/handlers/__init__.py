@@ -1,35 +1,40 @@
 import logging
 import sys
 import uuid
-
+import os
 import pyodbc
 import json
 import atexit
 from datetime import datetime, date, timezone
 from logging import Handler
-from typing import Callable, Any, List, Optional, Dict, Protocol
+from typing import Callable, Any, List, Optional, Dict, Protocol, runtime_checkable
 
 DEFAULT_INSERT = """
 INSERT INTO wiretap_log(
-    [nodeId], 
     [prevId], 
+    [nodeId], 
+    [instance],
     [timestamp], 
-    [name], 
+    [scope], 
     [status], 
+    [level], 
     [elapsed], 
-    [details], 
+    [details],
     [attachment]
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 
+@runtime_checkable
 class _WiretapRecord(Protocol):
     exc_text: str | None
     created: float
     module: str
     funcName: str
+    instance: str
     nodeId: uuid.UUID
     prevId: uuid.UUID | None
+    levelname: str
     status: str
     elapsed: float
     details: str | None
@@ -46,15 +51,23 @@ class SqlServerHandler(Handler):
         atexit.register(self._cleanup)
 
     def emit(self, record: _WiretapRecord):
+        # There's no 'status' or other fields when using the default interface.
+        if not hasattr(record, "status"):
+            return
+
+        self.formatter.format(record)
+
         try:
             self._connect()
             self.db.execute(
                 self.insert,
-                record.nodeId.__str__(),  # nodeId
                 record.prevId.__str__() if record.prevId else None,  # prevId
+                record.nodeId.__str__(),  # nodeId
+                record.instance,  # instance
                 datetime.fromtimestamp(record.created, tz=timezone.utc),  # timestamp
-                ".".join(n for n in [record.module, record.funcName] if n is not None),  # name
+                ".".join(n for n in [record.module, record.funcName] if n is not None),  # scope
                 record.status.lower(),  # status
+                record.levelname,  # level
                 record.elapsed,  # elapsed
                 record.details,  # details
                 record.exc_text or record.attachment  # attachment
@@ -63,7 +76,7 @@ class SqlServerHandler(Handler):
         except:
             # Disable this handler if an error occurs.
             self.setLevel(sys.maxsize)
-            logging.exception(msg=f"Handler '{self.name}' could not log and has been disabled.")
+            logging.exception(msg=f"Handler '{self.name}' could not log and has been disabled.", exc_info=True)
 
     def _connect(self):
         if not self.db:

@@ -3,17 +3,13 @@ import logging.config
 import asyncio
 import multiprocessing
 import time
-
+import os
 import wiretap.src.wiretap as wiretap
-import wiretap_sqlserver.src.wiretap.handlers
+import wiretap_sqlserver.src.wiretap_sqlserver.handlers
 from wiretap.src.wiretap import PieceOfWork, PieceOfWorkScope, telemetry, telemetry
 
 from wiretap_sqlite.src.wiretap.handlers.sqlite import SQLiteHandler
-from wiretap_sqlserver.src.wiretap.handlers import SqlServerHandler, SqlServerOdbcConnectionString
-
-
-class UTCFormatter(logging.Formatter):
-    converter = time.gmtime
+from wiretap_sqlserver.src.wiretap_sqlserver.handlers import SqlServerHandler, SqlServerOdbcConnectionString
 
 
 def configure_logging():
@@ -26,35 +22,43 @@ def configure_logging():
                 "datefmt": "%Y-%m-%d %H:%M:%S",
                 "defaults": {"status": "<status>", "correlation": "<correlation>", "extra": "<extra>"}
             },
-            "utc": {
-                "()": UTCFormatter
+            "auto": {
+                "()": wiretap.AutoFormatter,
+                "style": "{",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+                ".": {
+                    "classic": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {message}",
+                    "wiretap": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {status} | {elapsed} | {details} | [{prevId}/{nodeId}] | {attachment}",
+                    "instance": "demo"
+                }
             }
         },
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
-                "formatter": "console",
-                "level": "INFO"
+                "formatter": "auto",
+                "level": "DEBUG"
             },
             "file": {
                 "class": "logging.handlers.TimedRotatingFileHandler",
                 "when": "d",
                 "interval": 1,
                 "filename": r"c:\temp\wiretap.log",
-                "formatter": "console",
+                "formatter": "auto",
                 "level": "INFO"
             },
             "sqlserver": {
-                "class": "wiretap_sqlserver.src.wiretap.handlers.SqlServerHandler",
-                "connection_string": SqlServerOdbcConnectionString.standard(server="localhost,1433", database="master", username="sa", password="***"),
-                "insert": wiretap_sqlserver.src.wiretap.handlers.DEFAULT_INSERT,
-                "level": "INFO",
+                "class": "wiretap_sqlserver.src.wiretap_sqlserver.handlers.SqlServerHandler",
+                "connection_string": SqlServerOdbcConnectionString.standard(server="localhost,1433", database="master", username="sa", password="blub123!"),
+                "insert": wiretap_sqlserver.src.wiretap_sqlserver.handlers.DEFAULT_INSERT,
+                "level": "DEBUG",
+                "formatter": "auto"
             }
         },
         "loggers": {
             "": {
                 "handlers": ["console", "file", "sqlserver"],
-                "level": "INFO"
+                "level": "DEBUG"
             }
         }
     })
@@ -128,6 +132,6 @@ def main_proc():
 
 
 if __name__ == "__main__":
-    #asyncio.run(main())
+    # asyncio.run(main())
     # main_proc()
     flow_test()
