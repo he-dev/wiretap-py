@@ -11,9 +11,9 @@ from typing import Callable, Any, List, Optional, Dict, Protocol, runtime_checka
 
 DEFAULT_INSERT = """
 INSERT INTO wiretap_log(
-    [prevId], 
-    [nodeId], 
     [instance],
+    [parent], 
+    [node], 
     [timestamp], 
     [scope], 
     [status], 
@@ -31,9 +31,9 @@ class _WiretapRecord(Protocol):
     created: float
     module: str
     funcName: str
-    instance: str
-    nodeId: uuid.UUID
-    prevId: uuid.UUID | None
+    values: List[Any]
+    parent: uuid.UUID | None
+    node: uuid.UUID
     levelname: str
     status: str
     elapsed: float
@@ -57,21 +57,24 @@ class SqlServerHandler(Handler):
 
         self.formatter.format(record)
 
+        args = [
+            record.parent.__str__() if record.parent else None,  # parent
+            record.node.__str__(),  # node
+            # record.instance,  # instance
+            datetime.fromtimestamp(record.created, tz=timezone.utc),  # timestamp
+            ".".join(n for n in [record.module, record.funcName] if n is not None),  # scope
+            record.status.lower(),  # status
+            record.levelname,  # level
+            record.elapsed,  # elapsed
+            record.details,  # details
+            record.exc_text or record.attachment  # attachment
+        ]
+
+        args = record.values + args
+
         try:
             self._connect()
-            self.db.execute(
-                self.insert,
-                record.prevId.__str__() if record.prevId else None,  # prevId
-                record.nodeId.__str__(),  # nodeId
-                record.instance,  # instance
-                datetime.fromtimestamp(record.created, tz=timezone.utc),  # timestamp
-                ".".join(n for n in [record.module, record.funcName] if n is not None),  # scope
-                record.status.lower(),  # status
-                record.levelname,  # level
-                record.elapsed,  # elapsed
-                record.details,  # details
-                record.exc_text or record.attachment  # attachment
-            )
+            self.db.execute(self.insert, *args)
             self.db.commit()
         except:
             # Disable this handler if an error occurs.

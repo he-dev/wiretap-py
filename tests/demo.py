@@ -2,11 +2,10 @@ import logging
 import logging.config
 import asyncio
 import multiprocessing
-import wiretap as wiretap
-import wiretap_sqlserver.src.wiretap_sqlserver.handlers
-from wiretap import PieceOfWorkScope, telemetry
+import wiretap.src.wiretap as wiretap
+import wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler
 
-from wiretap_sqlserver.src.wiretap_sqlserver.handlers import SqlServerOdbcConnectionString
+from wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler import SqlServerOdbcConnectionString
 
 
 def configure_logging():
@@ -19,21 +18,21 @@ def configure_logging():
                 "datefmt": "%Y-%m-%d %H:%M:%S",
                 "defaults": {"status": "<status>", "correlation": "<correlation>", "extra": "<extra>"}
             },
-            "auto": {
-                "()": wiretap.AutoFormatter,
+            "wiretap": {
+                "()": wiretap.MultiFormatter,
                 "style": "{",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
                 ".": {
                     "classic": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {message}",
-                    "wiretap": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {status} | {elapsed} | {details} | [{prevId}/{nodeId}] | {attachment}",
-                    "instance": "demo"
+                    "wiretap": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {status} | {elapsed} | {details} | [{parent}/{node}] | {attachment}",
+                    "values": ["demo-1"]
                 }
             }
         },
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
-                "formatter": "auto",
+                "formatter": "wiretap",
                 "level": "DEBUG"
             },
             "file": {
@@ -41,15 +40,15 @@ def configure_logging():
                 "when": "d",
                 "interval": 1,
                 "filename": r"c:\temp\wiretap.log",
-                "formatter": "auto",
+                "formatter": "wiretap",
                 "level": "INFO"
             },
             "sqlserver": {
-                "class": "wiretap_sqlserver.src.wiretap_sqlserver.handlers.SqlServerHandler",
+                "class": "wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
                 "connection_string": SqlServerOdbcConnectionString.standard(server="localhost,1433", database="master", username="sa", password="blub123!"),
-                "insert": wiretap_sqlserver.src.wiretap_sqlserver.handlers.DEFAULT_INSERT,
+                "insert": wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.DEFAULT_INSERT,
                 "level": "DEBUG",
-                "formatter": "auto"
+                "formatter": "wiretap"
             }
         },
         "loggers": {
@@ -65,31 +64,31 @@ configure_logging()
 
 
 # @wiretap.extra(**wiretap.APPLICATION)
-@wiretap.telemetry(wiretap.src.layers.application)
+@wiretap.telemetry()
 # @telemetry(**wiretap.APPLICATION)
-def foo(value: int, scope: PieceOfWorkScope = None):
+def foo(value: int, scope: wiretap.Logger = None):
     ##wiretap.running(name=f"sync-{value}")
     scope.running(name=f"sync-{value}")
     # raise ValueError("Test!")
     qux(value)
 
 
-@wiretap.telemetry(wiretap.src.layers.persistence)
-def qux(value: int, scope: PieceOfWorkScope = None):
+@wiretap.telemetry()
+def qux(value: int, scope: wiretap.Logger = None):
     ##wiretap.running(name=f"sync-{value}")
     scope.running(name=f"sync-{value}")
     # raise ValueError("Test!")
 
 
-@telemetry(wiretap.src.layers.application)
-async def bar(value: int, scope: PieceOfWorkScope = None):
+@wiretap.telemetry()
+async def bar(value: int, scope: wiretap.Logger = None):
     scope.running(name=f"sync-{value}")
     await asyncio.sleep(2.0)
     foo(0)
 
 
-@telemetry(wiretap.src.layers.application)
-async def baz(value: int, scope: PieceOfWorkScope = None):
+@wiretap.telemetry()
+async def baz(value: int, scope: wiretap.Logger = None):
     scope.running(name=f"sync-{value}")
     await asyncio.sleep(3.0)
 
@@ -103,7 +102,7 @@ def flow_test():
         try:
             raise ValueError
         except:
-            outer.canceled()
+            outer.faulted()
 
 
 async def main():

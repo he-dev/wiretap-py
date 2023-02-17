@@ -1,25 +1,29 @@
 from typing import Dict
+from .wiretap import AttachDetails
 
 
-def _layer(details: Dict, name: str):
-    details["layer"] = name.lower()
+def _layer(name: str) -> AttachDetails:
+    def attach_layer(details: Dict) -> None:
+        details["layer"] = name.lower()
+
+    return attach_layer
 
 
-def presentation(details: Dict) -> None:
-    return _layer(details, presentation.__name__)
+def presentation() -> AttachDetails:
+    return _layer(presentation.__name__)
 
 
-def application(details: Dict) -> None:
-    return _layer(details, application.__name__)
+def application() -> AttachDetails:
+    return _layer(application.__name__)
 
 
-def business(details: Dict) -> None:
-    return _layer(details, business.__name__)
+def business() -> AttachDetails:
+    return _layer(business.__name__)
 
 
-def persistence(details: Dict) -> None:
-    return _layer(details, persistence.__name__)
+def persistence() -> AttachDetails:
+    return _layer(persistence.__name__)
 
 
-def database(details: Dict) -> None:
-    return _layer(details, database.__name__)
+def database() -> AttachDetails:
+    return _layer(database.__name__)

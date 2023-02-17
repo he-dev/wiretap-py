@@ -8,9 +8,9 @@ if(not exists(select * from INFORMATION_SCHEMA.TABLES where TABLE_NAME = 'wireta
 begin
     create table wiretap_log(
         [id] int identity(1,1) primary key,
-        [prevId] uniqueidentifier null,
-        [nodeId] uniqueidentifier not null,
         [instance] nvarchar(200) not null,
+        [parent] uniqueidentifier null,
+        [node] uniqueidentifier not null,
         [timestamp] datetime2(3) not null,
         [scope] nvarchar(200) not null,
         [level] nvarchar(50) not null,

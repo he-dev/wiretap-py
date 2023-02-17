@@ -15,31 +15,36 @@ from datetime import datetime, date
 _scope = contextvars.ContextVar("_scope", default=None)
 
 
-class AutoFormatter(logging.Formatter):
+class MultiFormatter(logging.Formatter):
 
     def __new__(cls, **kwargs):
         instance = super().__new__(cls)
-        setattr(instance, "instance", "default")
+        setattr(instance, "values", [])
         return instance
 
     def format(self, record: logging.LogRecord) -> str:
-        record.__dict__["instance"] = self.instance
-        record.levelname = record.levelname.lower()[0]
+        # record.__dict__["instance"] = self.instance
+        record.levelname = record.levelname.lower()
+        record.values = self.values
         self._style._fmt = self.wiretap if hasattr(record, "status") else self.classic
         return super().format(record)
 
 
-@runtime_checkable
-class PieceOfWorkScope(Protocol):
+# @runtime_checkable
+# class LoggerContext(Protocol):
+#     parent: Any
+#     id: uuid.UUID
+#     elapsed: float
+#
+#     def running(self, **kwargs):
+#         ...
+#
+#     def canceled(self, **kwargs):
+#         ...
+
+
+class Hierarchy(Protocol):
     parent: Any
-    id: uuid.UUID
-    elapsed: float
-
-    def running(self, **kwargs):
-        ...
-
-    def canceled(self, **kwargs):
-        ...
 
 
 class SerializeDetails(Protocol):
@@ -51,10 +56,10 @@ class DefaultSerializeDetails(SerializeDetails):
         return json.dumps(kwargs, sort_keys=True, allow_nan=False, cls=_JsonDateTimeEncoder) if kwargs else None
 
 
-class PieceOfWork:
+class Logger:
     serialize_details: SerializeDetails = DefaultSerializeDetails()
 
-    def __init__(self, module: Optional[str], scope: str, attachment: Any = None, parent: PieceOfWorkScope = None):
+    def __init__(self, module: Optional[str], scope: str, attachment: Optional[Any] = None, parent: Optional[Hierarchy] = None):
         self.id = uuid.uuid4()
         self.module = module
         self.scope = scope
@@ -77,35 +82,42 @@ class PieceOfWork:
         self._logger.setLevel(logging.DEBUG)
         self._log(**kwargs)
 
+    def completed(self, **kwargs):
+        if self._finalized:
+            return
+
+        self._logger.setLevel(logging.INFO)
+        self._log(**kwargs)
+        self._finalized = True
+
     def canceled(self, **kwargs):
+        if self._finalized:
+            return
+
         self._logger.setLevel(logging.WARNING)
         self._log(**kwargs)
         self._finalized = True
 
     def faulted(self, **kwargs):
-        self._logger.setLevel(logging.ERROR)
-        if not self._finalized:
-            self._log(**kwargs)
-            self._finalized = True
+        if self._finalized:
+            return
 
-    def completed(self, **kwargs):
-        self._logger.setLevel(logging.INFO)
-        if not self._finalized:
-            self._log(**kwargs)
-            self._finalized = True
+        self._logger.setLevel(logging.ERROR)
+        self._log(**kwargs)
+        self._finalized = True
 
     def _log(self, **kwargs):
         # kwargs["depth"] = sum(1 for _ in self)
         status = inspect.stack()[1][3]
-        details = PieceOfWork.serialize_details(**kwargs)
+        details = Logger.serialize_details(**kwargs)
         with _create_log_record(
                 functools.partial(_set_module_name, name=self.module),
                 functools.partial(_set_func_name, name=self.scope)
         ):
             # Exceptions must be logged with the exception method or otherwise the exception will be missing.
             self._logger.log(level=self._logger.level, msg=None, exc_info=all(sys.exc_info()), extra={
-                "prevId": self.parent.id if self.parent else None,
-                "nodeId": self.id,
+                "parent": self.parent.id if self.parent else None,
+                "node": self.id,
                 "status": status,
                 "elapsed": self.elapsed,
                 "details": details,
@@ -120,8 +132,8 @@ class PieceOfWork:
 
 
 @contextlib.contextmanager
-def local(name: str, details: Dict | None = None, attachment: Any = None) -> PieceOfWorkScope:
-    work = PieceOfWork(None, name, attachment, _scope.get())
+def local(name: str, details: Dict | None = None, attachment: Any = None) -> Logger:
+    work = Logger(None, name, attachment, _scope.get())
     token = _scope.set(work)
     try:
         work.started(**details if details else dict())
@@ -134,6 +146,10 @@ def local(name: str, details: Dict | None = None, attachment: Any = None) -> Pie
         _scope.reset(token)
 
 
+class AttachDetails(Protocol):
+    def __call__(self, details: Dict) -> None: ...
+
+
 def telemetry(*args, **kwargs):
     """Provides flow telemetry for the decorated function. Use named args to provide more static data."""
 
@@ -143,8 +159,8 @@ def telemetry(*args, **kwargs):
 
     def factory(decoratee):
         @contextlib.contextmanager
-        def _context() -> PieceOfWork:
-            work = PieceOfWork(
+        def _context() -> Logger:
+            work = Logger(
                 module=inspect.getmodule(decoratee).__name__,
                 scope=decoratee.__name__,
                 attachment=kwargs.pop("attachment", None),
@@ -162,10 +178,10 @@ def telemetry(*args, **kwargs):
             finally:
                 _scope.reset(token)
 
-        def inject_scope(u: PieceOfWork, d: Dict):
+        def inject_scope(u: Logger, d: Dict):
             """ Injects the PieceOfWorkScope if required. """
             for n, t in inspect.getfullargspec(decoratee).annotations.items():
-                if t is PieceOfWorkScope:
+                if t is Logger:
                     d[n] = u
 
         if asyncio.iscoroutinefunction(decoratee):
