@@ -8,7 +8,7 @@ import asyncio
 import uuid
 import contextvars
 import contextlib
-from typing import Dict, Callable, Any, Protocol, Optional, runtime_checkable
+from typing import Dict, Callable, Any, Protocol, Optional, runtime_checkable, TypeVar
 from timeit import default_timer as timer
 from datetime import datetime, date
 
@@ -147,56 +147,86 @@ def local(name: str, details: Dict | None = None, attachment: Any = None) -> Log
 
 
 class AttachDetails(Protocol):
-    def __call__(self, details: Dict) -> None: ...
+    def __call__(self, details: Dict[str, Any]) -> None: ...
 
 
-def telemetry(*args, **kwargs):
+class OnStarted(Protocol):
+    """Allows you to create details from function arguments."""
+
+    def __call__(self, kwargs: Dict[str, Any]) -> Optional[Dict[str, Any]]: ...
+
+
+class OnCompleted(Protocol):
+    """Allows you to create details from function result."""
+
+    def __call__(self, result: Any) -> Optional[Dict[str, Any]]: ...
+
+
+def telemetry(on_started: Optional[OnStarted] = None, on_completed: Optional[OnCompleted] = None, **kwargs):
     """Provides flow telemetry for the decorated function. Use named args to provide more static data."""
 
-    for a in args:
-        if callable(a):
-            a(kwargs)
+    on_started = on_started or (lambda _: {})
+    on_completed = on_completed or (lambda _: {})
+
+    # for a in args:
+    #    if a is AttachDetails:  # callable(a):
+    #        a(kwargs)
 
     def factory(decoratee):
         @contextlib.contextmanager
-        def _context() -> Logger:
-            work = Logger(
+        def logger_scope() -> Logger:
+            logger = Logger(
                 module=inspect.getmodule(decoratee).__name__,
                 scope=decoratee.__name__,
                 attachment=kwargs.pop("attachment", None),
                 parent=_scope.get()
             )
 
-            token = _scope.set(work)
+            token = _scope.set(logger)
             try:
-                work.started(**kwargs)
-                yield work
-                work.completed()
+                yield logger
             except Exception:
-                work.faulted()
+                logger.faulted()
                 raise
             finally:
                 _scope.reset(token)
 
-        def inject_scope(u: Logger, d: Dict):
-            """ Injects the PieceOfWorkScope if required. """
+        def inject_logger(logger: Logger, d: Dict):
+            """ Injects Logger if required. """
             for n, t in inspect.getfullargspec(decoratee).annotations.items():
                 if t is Logger:
-                    d[n] = u
+                    d[n] = logger
+
+        def params(*decoratee_args, **decoratee_kwargs) -> Dict[str, Any]:
+            # Zip arg names and their indexes up to the number of args of the decoratee_args.
+            arg_pairs = zip(inspect.getfullargspec(decoratee).args, range(len(decoratee_args)))
+            # Turn arg_pairs into a dictionary and combine it with decoratee_kwargs.
+            return {t[0]: decoratee_args[t[1]] for t in arg_pairs} | decoratee_kwargs
 
         if asyncio.iscoroutinefunction(decoratee):
             @functools.wraps(decoratee)
             async def decorator(*decoratee_args, **decoratee_kwargs):
-                with _context() as unit_of_work:
-                    inject_scope(unit_of_work, decoratee_kwargs)
-                    return await decoratee(*decoratee_args, **decoratee_kwargs)
+                with logger_scope() as scope:
+                    inject_logger(scope, decoratee_kwargs)
+                    scope.started(**on_started(params(*decoratee_args, **decoratee_kwargs)))
+                    result = await decoratee(*decoratee_args, **decoratee_kwargs)
+                    try:
+                        return result
+                    finally:
+                        scope.completed(**on_completed(result))
         else:
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
-                with _context() as unit_of_work:
-                    inject_scope(unit_of_work, decoratee_kwargs)
-                    return decoratee(*decoratee_args, **decoratee_kwargs)
+                with logger_scope() as scope:
+                    inject_logger(scope, decoratee_kwargs)
+                    scope.started(**on_started(params(*decoratee_args, **decoratee_kwargs)))
+                    result = decoratee(*decoratee_args, **decoratee_kwargs)
+                    try:
+                        return result
+                    finally:
+                        scope.completed(**on_completed(result))
 
+        decorator.__signature__ = inspect.signature(decoratee)
         return decorator
 
     return factory

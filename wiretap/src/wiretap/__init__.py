@@ -1,6 +1,8 @@
 from .wiretap import (
     Logger,
     telemetry,
+    OnStarted,
+    OnCompleted,
     local,
     SerializeDetails,
     MultiFormatter,
