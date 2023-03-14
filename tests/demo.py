@@ -63,13 +63,12 @@ def configure_logging():
 configure_logging()
 
 
-# @wiretap.extra(**wiretap.APPLICATION)
 @wiretap.telemetry(on_started=lambda k: {"value": k["value"], "bar": k["bar"]}, on_completed=lambda r: {"count": r})
 # @telemetry(**wiretap.APPLICATION)
-def foo(value: int, scope: wiretap.Logger = None, **kwargs) -> int:
-    ##wiretap.running(name=f"sync-{value}")
-    scope.running(name=f"sync-{value}")
+def foo(value: int, logger: wiretap.Logger = None, **kwargs) -> int:
+    logger.running(name=f"sync-{value}")
     # raise ValueError("Test!")
+    raise wiretap.ContinuationError("No luck!", 37, foo="bar")
     qux(value)
     return 3
 
@@ -132,4 +131,5 @@ if __name__ == "__main__":
     # asyncio.run(main())
     # main_proc()
     # flow_test()
-    foo(1, bar="baz")
+    #raise wiretap.ContinuationError("No luck!", foo="bar")
+    print(foo(1, bar="baz"))

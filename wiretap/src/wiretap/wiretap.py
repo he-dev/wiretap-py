@@ -8,7 +8,7 @@ import asyncio
 import uuid
 import contextvars
 import contextlib
-from typing import Dict, Callable, Any, Protocol, Optional, runtime_checkable, TypeVar
+from typing import Dict, Callable, Any, Protocol, Optional
 from timeit import default_timer as timer
 from datetime import datetime, date
 
@@ -115,7 +115,8 @@ class Logger:
                 functools.partial(_set_func_name, name=self.scope)
         ):
             # Exceptions must be logged with the exception method or otherwise the exception will be missing.
-            self._logger.log(level=self._logger.level, msg=None, exc_info=all(sys.exc_info()), extra={
+            is_error = all(sys.exc_info()) and sys.exc_info()[0] is not ContinuationError
+            self._logger.log(level=self._logger.level, msg=None, exc_info=is_error, extra={
                 "parent": self.parent.id if self.parent else None,
                 "node": self.id,
                 "status": status,
@@ -162,15 +163,24 @@ class OnCompleted(Protocol):
     def __call__(self, result: Any) -> Optional[Dict[str, Any]]: ...
 
 
+class ContinuationError(Exception):
+    """Raise this error to gracefully handle a cancellation."""
+    def __new__(cls, *args, **details) -> Any:
+        instance = super().__new__(cls)
+        instance.details = details | dict(reason=args[0])
+        if len(args) > 1:
+            instance.result = args[1]
+        return instance
+
+    def __init__(self, message: str, result: Optional[Any] = None, **details):
+        super().__init__(message)
+
+
 def telemetry(on_started: Optional[OnStarted] = None, on_completed: Optional[OnCompleted] = None, **kwargs):
     """Provides flow telemetry for the decorated function. Use named args to provide more static data."""
 
     on_started = on_started or (lambda _: {})
     on_completed = on_completed or (lambda _: {})
-
-    # for a in args:
-    #    if a is AttachDetails:  # callable(a):
-    #        a(kwargs)
 
     def factory(decoratee):
         @contextlib.contextmanager
@@ -209,22 +219,32 @@ def telemetry(on_started: Optional[OnStarted] = None, on_completed: Optional[OnC
                 with logger_scope() as scope:
                     inject_logger(scope, decoratee_kwargs)
                     scope.started(**on_started(params(*decoratee_args, **decoratee_kwargs)))
-                    result = await decoratee(*decoratee_args, **decoratee_kwargs)
                     try:
-                        return result
-                    finally:
+                        result = await decoratee(*decoratee_args, **decoratee_kwargs)
                         scope.completed(**on_completed(result))
+                        return result
+                    except ContinuationError as e:
+                        if hasattr(e, "result"):
+                            scope.canceled(**(on_completed(e.result) | e.details))
+                            return e.result
+                        else:
+                            scope.canceled(**e.details)
         else:
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
                 with logger_scope() as scope:
                     inject_logger(scope, decoratee_kwargs)
                     scope.started(**on_started(params(*decoratee_args, **decoratee_kwargs)))
-                    result = decoratee(*decoratee_args, **decoratee_kwargs)
                     try:
-                        return result
-                    finally:
+                        result = decoratee(*decoratee_args, **decoratee_kwargs)
                         scope.completed(**on_completed(result))
+                        return result
+                    except ContinuationError as e:
+                        if hasattr(e, "result"):
+                            scope.canceled(**(on_completed(e.result) | e.details))
+                            return e.result
+                        else:
+                            scope.canceled(**e.details)
 
         decorator.__signature__ = inspect.signature(decoratee)
         return decorator
