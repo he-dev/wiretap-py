@@ -8,7 +8,7 @@ import asyncio
 import uuid
 import contextvars
 import contextlib
-from typing import Dict, Callable, Any, Protocol, Optional
+from typing import Dict, Callable, Any, Protocol, Optional, TypeVar
 from timeit import default_timer as timer
 from datetime import datetime, date
 
@@ -115,7 +115,7 @@ class Logger:
                 functools.partial(_set_func_name, name=self.scope)
         ):
             # Exceptions must be logged with the exception method or otherwise the exception will be missing.
-            is_error = all(sys.exc_info()) and sys.exc_info()[0] is not ContinuationError
+            is_error = all(sys.exc_info()) and sys.exc_info()[0] is not CannotContinue
             self._logger.log(level=self._logger.level, msg=None, exc_info=is_error, extra={
                 "parent": self.parent.id if self.parent else None,
                 "node": self.id,
@@ -163,17 +163,29 @@ class OnCompleted(Protocol):
     def __call__(self, result: Any) -> Optional[Dict[str, Any]]: ...
 
 
-class ContinuationError(Exception):
+#NoResult = TypeVar("NoResult")
+
+
+class CannotContinue(Exception):
     """Raise this error to gracefully handle a cancellation."""
-    def __new__(cls, *args, **details) -> Any:
+
+    details: Dict[str, Any] = dict()
+    result: Optional[Any] = None
+
+    def __new__(cls, reason: str, result: Optional[Any] = None, **details) -> Any:
         instance = super().__new__(cls)
-        instance.details = details | dict(reason=args[0])
-        if len(args) > 1:
-            instance.result = args[1]
+        instance.details = details
+        instance.result = result
         return instance
 
-    def __init__(self, message: str, result: Optional[Any] = None, **details):
-        super().__init__(message)
+    def __init__(self, reason: str, result: Optional[Any] = None, **details):
+        super().__init__(reason)
+
+
+class ReturnValueMissing(Exception):
+
+    def __init__(self, name: str):
+        super().__init__(f"Function '{name}' expects a return value, but it wasn't provided.")
 
 
 def telemetry(on_started: Optional[OnStarted] = None, on_completed: Optional[OnCompleted] = None, **kwargs):
@@ -213,6 +225,8 @@ def telemetry(on_started: Optional[OnStarted] = None, on_completed: Optional[OnC
             # Turn arg_pairs into a dictionary and combine it with decoratee_kwargs.
             return {t[0]: decoratee_args[t[1]] for t in arg_pairs} | decoratee_kwargs
 
+        # returns = inspect.getfullargspec(decoratee).annotations.get("return", None) is not None
+
         if asyncio.iscoroutinefunction(decoratee):
             @functools.wraps(decoratee)
             async def decorator(*decoratee_args, **decoratee_kwargs):
@@ -223,12 +237,13 @@ def telemetry(on_started: Optional[OnStarted] = None, on_completed: Optional[OnC
                         result = await decoratee(*decoratee_args, **decoratee_kwargs)
                         scope.completed(**on_completed(result))
                         return result
-                    except ContinuationError as e:
-                        if hasattr(e, "result"):
-                            scope.canceled(**(on_completed(e.result) | e.details))
-                            return e.result
-                        else:
-                            scope.canceled(**e.details)
+                    except CannotContinue as e:
+                        scope.canceled(**(on_completed(e.result) | e.details))
+                        return e.result
+
+            decorator.__signature__ = inspect.signature(decoratee)
+            return decorator
+
         else:
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
@@ -239,15 +254,12 @@ def telemetry(on_started: Optional[OnStarted] = None, on_completed: Optional[OnC
                         result = decoratee(*decoratee_args, **decoratee_kwargs)
                         scope.completed(**on_completed(result))
                         return result
-                    except ContinuationError as e:
-                        if hasattr(e, "result"):
-                            scope.canceled(**(on_completed(e.result) | e.details))
-                            return e.result
-                        else:
-                            scope.canceled(**e.details)
+                    except CannotContinue as e:
+                        scope.canceled(**(on_completed(e.result) | e.details))
+                        return e.result
 
-        decorator.__signature__ = inspect.signature(decoratee)
-        return decorator
+            decorator.__signature__ = inspect.signature(decoratee)
+            return decorator
 
     return factory
 

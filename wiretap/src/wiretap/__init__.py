@@ -3,7 +3,7 @@ from .wiretap import (
     telemetry,
     OnStarted,
     OnCompleted,
-    ContinuationError,
+    CannotContinue,
     local,
     SerializeDetails,
     MultiFormatter,
