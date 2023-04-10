@@ -4,7 +4,7 @@ from .wiretap import (
     OnStarted,
     OnCompleted,
     CannotContinue,
-    local,
+    begin_telemetry,
     SerializeDetails,
     MultiFormatter,
 )

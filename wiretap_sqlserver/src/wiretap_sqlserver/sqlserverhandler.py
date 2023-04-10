@@ -1,17 +1,15 @@
+import atexit
 import logging
 import sys
 import uuid
-import os
-import pyodbc
-import json
-import atexit
-from datetime import datetime, date, timezone
+from datetime import datetime, timezone
 from logging import Handler
-from typing import Callable, Any, List, Optional, Dict, Protocol, runtime_checkable
+from typing import Any, Dict, Protocol, runtime_checkable, cast
+
+import sqlalchemy  # type: ignore
 
 DEFAULT_INSERT = """
 INSERT INTO wiretap_log(
-    [instance],
     [parent], 
     [node], 
     [timestamp], 
@@ -21,20 +19,25 @@ INSERT INTO wiretap_log(
     [elapsed], 
     [details],
     [attachment]
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (
+    :parent, 
+    :node, 
+    :timestamp, 
+    :scope, 
+    :status, 
+    :level, 
+    :elapsed, 
+    :details, 
+    :attachment
+)
 """
 
 
 @runtime_checkable
-class _WiretapRecord(Protocol):
-    exc_text: str | None
-    created: float
-    module: str
-    funcName: str
-    values: List[Any]
+class _LogRecordExt(Protocol):
+    values: Dict[str, Any] | None
     parent: uuid.UUID | None
     node: uuid.UUID
-    levelname: str
     status: str
     elapsed: float
     details: str | None
@@ -43,52 +46,60 @@ class _WiretapRecord(Protocol):
 
 class SqlServerHandler(Handler):
 
-    def __init__(self, connection_string: str, insert: str):
+    def __init__(self, connection_string: str, insert: str = DEFAULT_INSERT):
         super().__init__()
-        self.connection_string = connection_string
-        self.insert = insert
-        self.db: Optional[pyodbc.Cursor] = None
+        self.insert = sqlalchemy.sql.text(insert)
+
+        connection_url = sqlalchemy.engine.URL.create("mssql+pyodbc", query={"odbc_connect": connection_string})
+        self.engine = sqlalchemy.create_engine(connection_url)
+
         atexit.register(self._cleanup)
 
-    def emit(self, record: _WiretapRecord):
-        # There's no 'status' or other fields when using the default interface.
-        if not hasattr(record, "status"):
-            return
+    def emit(self, record: logging.LogRecord):
+        default_message: str | None = None
+        if self.formatter:
+            record.format = "{message}"
+            default_message = self.formatter.format(record)
+            record.__dict__.pop("format", None)
 
-        self.formatter.format(record)
+        params = {
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc),
+            "scope": ".".join(n for n in [record.module, record.funcName] if n is not None),
+            "level": record.levelname,
+        }
 
-        args = [
-            record.parent.__str__() if record.parent else None,  # parent
-            record.node.__str__(),  # node
-            # record.instance,  # instance
-            datetime.fromtimestamp(record.created, tz=timezone.utc),  # timestamp
-            ".".join(n for n in [record.module, record.funcName] if n is not None),  # scope
-            record.status.lower(),  # status
-            record.levelname,  # level
-            record.elapsed,  # elapsed
-            record.details,  # details
-            record.exc_text or record.attachment  # attachment
-        ]
+        recext = cast(_LogRecordExt, record)
+        params = params | (recext.values or {})
 
-        args = record.values + args
+        if hasattr(record, "status"):
+            params = params | {
+                "parent": recext.parent.__str__() if recext.parent else None,
+                "node": recext.node.__str__(),
+                "status": recext.status.lower(),
+                "elapsed": recext.elapsed,
+                "details": recext.details,
+                "attachment": recext.attachment
+            }
+        else:
+            params = params | {
+                "parent": None,
+                "node": None,
+                "status": None,
+                "elapsed": None,
+                "details": None,
+                "attachment": default_message
+            }
 
         try:
-            self._connect()
-            self.db.execute(self.insert, *args)
-            self.db.commit()
-        except:
+            with self.engine.connect() as c:
+                c.execute(self.insert, **params)
+        except:  # noqa
             # Disable this handler if an error occurs.
             self.setLevel(sys.maxsize)
             logging.exception(msg=f"Handler '{self.name}' could not log and has been disabled.", exc_info=True)
 
-    def _connect(self):
-        if not self.db:
-            connection = pyodbc.connect(self.connection_string)
-            self.db = connection.cursor()
-
     def _cleanup(self):
-        if self.db:
-            self.db.connection.close()
+        self.engine.dispose(close=True)
 
 
 class SqlServerOdbcConnectionString:

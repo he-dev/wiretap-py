@@ -7,6 +7,32 @@ import wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler
 
 from wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler import SqlServerOdbcConnectionString
 
+INSERT = """
+INSERT INTO wiretap_log(
+    [instance],
+    [parent], 
+    [node], 
+    [timestamp], 
+    [scope], 
+    [status], 
+    [level], 
+    [elapsed], 
+    [details],
+    [attachment]
+) VALUES (
+    :instance, 
+    :parent, 
+    :node, 
+    :timestamp, 
+    :scope, 
+    :status, 
+    :level, 
+    :elapsed, 
+    :details, 
+    :attachment
+)
+"""
+
 
 def configure_logging():
     logging.config.dictConfig({
@@ -23,9 +49,12 @@ def configure_logging():
                 "style": "{",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
                 ".": {
-                    "classic": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {message}",
-                    "wiretap": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {status} | {elapsed} | {details} | [{parent}/{node}] | {attachment}",
-                    "values": ["demo-1"]
+                    "formats": {
+                        "classic": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {message}",
+                        "wiretap": "{asctime}.{msecs:.0f} [{indent}] {levelname} | {module}.{funcName} | {status} | {elapsed} | {details} | [{parent}/{node}] | {attachment}",
+                    },
+                    "indent": ".",
+                    "values": {"instance": "demo-1"}
                 }
             }
         },
@@ -46,7 +75,7 @@ def configure_logging():
             "sqlserver": {
                 "class": "wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
                 "connection_string": SqlServerOdbcConnectionString.standard(server="localhost,1433", database="master", username="sa", password="blub123!"),
-                "insert": wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.DEFAULT_INSERT,
+                "insert": INSERT,
                 "level": "DEBUG",
                 "formatter": "wiretap"
             }
@@ -67,8 +96,9 @@ configure_logging()
 # @telemetry(**wiretap.APPLICATION)
 def foo(value: int, logger: wiretap.Logger = None, **kwargs) -> int:
     logger.running(name=f"sync-{value}")
+    logging.info("This is a classic message!")
     # raise ValueError("Test!")
-    raise wiretap.CannotContinue("No luck!", result=-1, foo="bar",)
+    raise wiretap.CannotContinue("No luck!", result=-1, foo="bar", )
     qux(value)
     return 3
 
@@ -94,9 +124,9 @@ async def baz(value: int, scope: wiretap.Logger = None):
 
 
 def flow_test():
-    with wiretap.local(name="outer") as outer:
+    with wiretap.begin_telemetry(name="outer") as outer:
         outer.running(foo=1)
-        with wiretap.local(name="inner") as inner:
+        with wiretap.begin_telemetry(name="inner") as inner:
             inner.running(bar=2)
 
         try:
@@ -130,5 +160,5 @@ def main_proc():
 if __name__ == "__main__":
     # asyncio.run(main())
     # main_proc()
-    # flow_test()
+    flow_test()
     print(foo(1, bar="baz"))
