@@ -137,7 +137,7 @@ class AttachDetails(Protocol):
 class OnStarted(Protocol):
     """Allows you to create details from function arguments."""
 
-    def __call__(self, kwargs: Dict[str, Any]) -> Optional[Dict[str, Any]]: ...
+    def __call__(self, params: Dict[str, Any]) -> Optional[Dict[str, Any]]: ...
 
 
 class OnCompleted(Protocol):
@@ -169,7 +169,15 @@ class ReturnValueMissing(Exception):
         super().__init__(f"Function '{name}' expects a return value, but it wasn't provided.")
 
 
-def telemetry(on_started: Optional[OnStarted] = lambda _: None, on_completed: Optional[OnCompleted] = lambda _: None, attachment: Optional[Any] = None):
+def _default_on_started(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    return None
+
+
+def _default_on_completed(result: Any) -> Optional[Dict[str, Any]]:
+    return None
+
+
+def telemetry(on_started: OnStarted = _default_on_started, on_completed: OnCompleted = _default_on_completed, attachment: Optional[Any] = None):
     """Provides flow telemetry for the decorated function. Use named args to provide more static data."""
 
     def factory(decoratee):
@@ -213,13 +221,13 @@ def telemetry(on_started: Optional[OnStarted] = lambda _: None, on_completed: Op
                     decoratee_kwargs["attachment"] = attachment
                 with logger_scope() as scope:
                     inject_logger(scope, decoratee_kwargs)
-                    scope.started(**on_started(params(*decoratee_args, **decoratee_kwargs)))
+                    scope.started(**(on_started(params(*decoratee_args, **decoratee_kwargs)) or {}))
                     try:
                         result = await decoratee(*decoratee_args, **decoratee_kwargs)
-                        scope.completed(**on_completed(result))
+                        scope.completed(**(on_completed(result) or {}))
                         return result
                     except CannotContinue as e:
-                        scope.canceled(**(on_completed(e.result) | e.details))
+                        scope.canceled(**((on_completed(result) or {}) | e.details))
                         return e.result
 
             decorator.__signature__ = inspect.signature(decoratee)
@@ -232,13 +240,13 @@ def telemetry(on_started: Optional[OnStarted] = lambda _: None, on_completed: Op
                     decoratee_kwargs["attachment"] = attachment
                 with logger_scope() as scope:
                     inject_logger(scope, decoratee_kwargs)
-                    scope.started(**on_started(params(*decoratee_args, **decoratee_kwargs)))
+                    scope.started(**(on_started(params(*decoratee_args, **decoratee_kwargs)) or {}))
                     try:
                         result = decoratee(*decoratee_args, **decoratee_kwargs)
-                        scope.completed(**on_completed(result))
+                        scope.completed(**(on_completed(result) or {}))
                         return result
                     except CannotContinue as e:
-                        scope.canceled(**(on_completed(e.result) | e.details))
+                        scope.canceled(**((on_completed(result) or {}) | e.details))
                         return e.result
 
             decorator.__signature__ = inspect.signature(decoratee)
