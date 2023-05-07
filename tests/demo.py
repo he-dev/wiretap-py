@@ -51,7 +51,7 @@ def configure_logging():
                 ".": {
                     "formats": {
                         "classic": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {message}",
-                        "wiretap": "{asctime}.{msecs:.0f} [{indent}] {levelname} | {module}.{funcName} | {status} | {elapsed} | {details} | [{parent}/{node}] | {attachment}",
+                        "wiretap": "{asctime}.{msecs:.0f} [{indent}] {levelname} | {module}.{funcName} | {status} | {elapsed} | {details} | {attachment}",
                     },
                     "indent": ".",
                     "values": {"instance": "demo-1"}
@@ -82,7 +82,8 @@ def configure_logging():
         },
         "loggers": {
             "": {
-                "handlers": ["console", "file", "sqlserver"],
+                #"handlers": ["console", "file", "sqlserver"],
+                "handlers": ["console", "file"],
                 "level": "DEBUG"
             }
         }
@@ -92,20 +93,18 @@ def configure_logging():
 configure_logging()
 
 
-@wiretap.telemetry(on_started=lambda k: {"value": k["value"], "bar": k["bar"]}, on_completed=lambda r: {"count": r})
+@wiretap.telemetry(on_started=lambda k: {"value": k["value"], "bar": k["bar"]}, on_completed=lambda r: {"count": r}, attachment="This is an attachment.")
 # @telemetry(**wiretap.APPLICATION)
 def foo(value: int, logger: wiretap.Logger = None, **kwargs) -> int:
     logger.running(name=f"sync-{value}")
     logging.info("This is a classic message!")
     # raise ValueError("Test!")
-    raise wiretap.CannotContinue("No luck!", result=-1, foo="bar", )
     qux(value)
-    return 3
+    return logger.completed(3)
 
 
 @wiretap.telemetry()
 def qux(value: int, scope: wiretap.Logger = None):
-    ##wiretap.running(name=f"sync-{value}")
     scope.running(name=f"sync-{value}")
     # raise ValueError("Test!")
 
@@ -124,9 +123,9 @@ async def baz(value: int, scope: wiretap.Logger = None):
 
 
 def flow_test():
-    with wiretap.begin_telemetry(name="outer") as outer:
+    with wiretap.telemetry_context(module=None, name="outer") as outer:
         outer.running(foo=1)
-        with wiretap.begin_telemetry(name="inner") as inner:
+        with wiretap.telemetry_context(module=None, name="inner") as inner:
             inner.running(bar=2)
 
         try:

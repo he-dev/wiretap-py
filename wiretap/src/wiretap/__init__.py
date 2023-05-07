@@ -1,12 +1,9 @@
 from .wiretap import (
     Logger,
-    telemetry,
     OnStarted,
     OnCompleted,
-    CannotContinue,
-    begin_telemetry,
     SerializeDetails,
     MultiFormatter,
+    telemetry,
+    telemetry_context,
 )
-
-from . import layers

@@ -1,4 +1,3 @@
-import sys
 import asyncio
 import contextlib
 import functools
@@ -11,7 +10,7 @@ from collections.abc import Generator
 from contextvars import ContextVar
 from datetime import datetime, date
 from timeit import default_timer as timer
-from typing import Dict, Callable, Any, Protocol, Optional, Iterator
+from typing import Dict, Callable, Any, Protocol, Optional, Iterator, TypeVar
 
 _scope: ContextVar[Optional["Logger"]] = ContextVar("_scope", default=None)
 
@@ -63,6 +62,31 @@ class MultiFormatter(logging.Formatter):
         return super().format(record)
 
 
+class OnStarted(Protocol):
+    """Allows you to create details from function arguments."""
+
+    def __call__(self, params: Dict[str, Any]) -> Dict[str, Any]: ...
+
+
+class OnCompleted(Protocol):
+    """Allows you to create details from function result."""
+
+    def __call__(self, result: Optional[Any]) -> Dict[str, Any]: ...
+
+
+class EmptyOnStarted:
+    def __call__(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        return {}
+
+
+class EmptyOnCompleted(OnCompleted):
+    def __call__(self, result: Optional[Any]) -> Dict[str, Any]:
+        return {}
+
+
+TResult = TypeVar("TResult")
+
+
 class Logger:
 
     def __init__(self, module: Optional[str], scope: str, parent: Optional["Logger"] = None):
@@ -79,26 +103,29 @@ class Logger:
     def elapsed(self) -> float:
         return round(timer() - self._start, 3)
 
-    def started(self, **kwargs):
+    def started(self, **details):
         self._logger.setLevel(logging.INFO)
         self._start = timer()
-        self._log(**kwargs)
+        self._log(**details)
 
-    def running(self, **kwargs):
+    def running(self, **details):
         self._logger.setLevel(logging.DEBUG)
-        self._log(**kwargs)
+        self._log(**details)
 
-    def completed(self, **kwargs):
+    def completed(self, result: Optional[TResult] = None, details_factory: OnCompleted = EmptyOnCompleted(), **details) -> Optional[TResult]:
         self._logger.setLevel(logging.INFO)
-        self._log(**kwargs)
+        self._log(**(details_factory(result) | details))
+        return result
 
-    def canceled(self, **kwargs):
+    def canceled(self, result: Optional[TResult] = None, details_factory: OnCompleted = EmptyOnCompleted(), **details) -> Optional[TResult]:
         self._logger.setLevel(logging.WARNING)
-        self._log(**kwargs)
+        self._log(**(details_factory(result) | details))
+        return result
 
-    def faulted(self, **kwargs):
+    def faulted(self, result: Optional[TResult] = None, details_factory: OnCompleted = EmptyOnCompleted(), **details) -> Optional[TResult]:
         self._logger.setLevel(logging.ERROR)
-        self._log(**kwargs)
+        self._log(**(details_factory(result) | details))
+        return result
 
     def _log(self, **kwargs):
         if self._finalized:
@@ -111,9 +138,8 @@ class Logger:
                 functools.partial(_set_func_name, name=self.scope),
                 functools.partial(_set_attachment, value=kwargs.pop("attachment", None)),
         ):
-            # Exceptions must be logged with the exception method or otherwise the exception will be missing.
-            is_error = all(sys.exc_info()) and sys.exc_info()[0] is not CannotContinue
-            self._logger.log(level=self._logger.level, msg=None, exc_info=is_error, extra={
+            exc_info = all(sys.exc_info())
+            self._logger.log(level=self._logger.level, msg=None, exc_info=exc_info, extra={
                 "parent": self.parent.id if self.parent else None,
                 "node": self.id,
                 "status": status,
@@ -130,135 +156,10 @@ class Logger:
             current = current.parent
 
 
-class AttachDetails(Protocol):
-    def __call__(self, details: Dict[str, Any]) -> None: ...
-
-
-class OnStarted(Protocol):
-    """Allows you to create details from function arguments."""
-
-    def __call__(self, params: Dict[str, Any]) -> Optional[Dict[str, Any]]: ...
-
-
-class OnCompleted(Protocol):
-    """Allows you to create details from function result."""
-
-    def __call__(self, result: Any) -> Optional[Dict[str, Any]]: ...
-
-
-class CannotContinue(Exception):
-    """Raise this error to gracefully handle a cancellation."""
-
-    details: Dict[str, Any] = dict()
-    result: Optional[Any] = None
-
-    def __new__(cls, reason: str, result: Optional[Any] = None, **details) -> "CannotContinue":
-        instance = super().__new__(cls)
-        details["reason"] = reason
-        instance.details = details
-        instance.result = result
-        return instance
-
-    def __init__(self, reason: str, result: Optional[Any] = None, **details):
-        super().__init__(reason)
-
-
-class ReturnValueMissing(Exception):
-
-    def __init__(self, name: str):
-        super().__init__(f"Function '{name}' expects a return value, but it wasn't provided.")
-
-
-def _default_on_started(params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    return None
-
-
-def _default_on_completed(result: Any) -> Optional[Dict[str, Any]]:
-    return None
-
-
-def telemetry(on_started: OnStarted = _default_on_started, on_completed: OnCompleted = _default_on_completed, attachment: Optional[Any] = None):
-    """Provides flow telemetry for the decorated function. Use named args to provide more static data."""
-
-    def factory(decoratee):
-        module = inspect.getmodule(decoratee)
-
-        @contextlib.contextmanager
-        def logger_scope() -> Iterator[Logger]:
-            logger = Logger(
-                module=module.__name__ if module else None,
-                scope=decoratee.__name__,
-                parent=_scope.get()
-            )
-
-            token = _scope.set(logger)
-            try:
-                yield logger
-            except Exception:
-                logger.faulted()
-                raise
-            finally:
-                _scope.reset(token)
-
-        def inject_logger(logger: Logger, d: Dict):
-            """ Injects Logger if required. """
-            for n, t in inspect.getfullargspec(decoratee).annotations.items():
-                if t is Logger:
-                    d[n] = logger
-
-        def params(*decoratee_args, **decoratee_kwargs) -> Dict[str, Any]:
-            # Zip arg names and their indexes up to the number of args of the decoratee_args.
-            arg_pairs = zip(inspect.getfullargspec(decoratee).args, range(len(decoratee_args)))
-            # Turn arg_pairs into a dictionary and combine it with decoratee_kwargs.
-            return {t[0]: decoratee_args[t[1]] for t in arg_pairs} | decoratee_kwargs
-
-        # returns = inspect.getfullargspec(decoratee).annotations.get("return", None) is not None
-
-        if asyncio.iscoroutinefunction(decoratee):
-            @functools.wraps(decoratee)
-            async def decorator(*decoratee_args, **decoratee_kwargs):
-                if attachment:
-                    decoratee_kwargs["attachment"] = attachment
-                with logger_scope() as scope:
-                    inject_logger(scope, decoratee_kwargs)
-                    scope.started(**(on_started(params(*decoratee_args, **decoratee_kwargs)) or {}))
-                    try:
-                        result = await decoratee(*decoratee_args, **decoratee_kwargs)
-                        scope.completed(**(on_completed(result) or {}))
-                        return result
-                    except CannotContinue as e:
-                        scope.canceled(**((on_completed(result) or {}) | e.details))
-                        return e.result
-
-            decorator.__signature__ = inspect.signature(decoratee)
-            return decorator
-
-        else:
-            @functools.wraps(decoratee)
-            def decorator(*decoratee_args, **decoratee_kwargs):
-                if attachment:
-                    decoratee_kwargs["attachment"] = attachment
-                with logger_scope() as scope:
-                    inject_logger(scope, decoratee_kwargs)
-                    scope.started(**(on_started(params(*decoratee_args, **decoratee_kwargs)) or {}))
-                    try:
-                        result = decoratee(*decoratee_args, **decoratee_kwargs)
-                        scope.completed(**(on_completed(result) or {}))
-                        return result
-                    except CannotContinue as e:
-                        scope.canceled(**((on_completed(result) or {}) | e.details))
-                        return e.result
-
-            decorator.__signature__ = inspect.signature(decoratee)
-            return decorator
-
-    return factory
-
-
 @contextlib.contextmanager
-def begin_telemetry(name: str, **kwargs) -> Iterator[Logger]:
+def telemetry_context(module: Optional[str], name: str, **kwargs) -> Iterator[Logger]:
     """Begins a new telemetry scope."""
-    logger = Logger(None, name, _scope.get())
+    logger = Logger(module, name, _scope.get())
     token = _scope.set(logger)
     try:
         logger.started(**kwargs)
@@ -269,6 +170,54 @@ def begin_telemetry(name: str, **kwargs) -> Iterator[Logger]:
         raise
     finally:
         _scope.reset(token)
+
+
+def telemetry(on_started: OnStarted = EmptyOnStarted(), on_completed: OnCompleted = EmptyOnCompleted(), attachment: Optional[Any] = None):
+    """Provides telemetry for the decorated function."""
+
+    def factory(decoratee):
+        module = inspect.getmodule(decoratee)
+        module_name = module.__name__ if module else None
+        scope_name = decoratee.__name__
+
+        def inject_logger(logger: Logger, d: Dict):
+            """Injects Logger if required."""
+            for n, t in inspect.getfullargspec(decoratee).annotations.items():
+                if t is Logger:
+                    d[n] = logger
+
+        def params(*decoratee_args, **decoratee_kwargs) -> Dict[str, Any]:
+            # Zip arg names and their indexes up to the number of args of the decoratee_args.
+            arg_pairs = zip(inspect.getfullargspec(decoratee).args, range(len(decoratee_args)))
+            # Turn arg_pairs into a dictionary and combine it with decoratee_kwargs.
+            return {t[0]: decoratee_args[t[1]] for t in arg_pairs} | decoratee_kwargs
+
+        if asyncio.iscoroutinefunction(decoratee):
+            @functools.wraps(decoratee)
+            async def decorator(*decoratee_args, **decoratee_kwargs):
+                start_details = on_started(params(*decoratee_args, **decoratee_kwargs)) | dict(attachment=attachment)
+                with telemetry_context(module_name, scope_name, **start_details) as scope:
+                    inject_logger(scope, decoratee_kwargs)
+                    scope.started(**(on_started(params(*decoratee_args, **decoratee_kwargs)) or {}))
+                    result = await decoratee(*decoratee_args, **decoratee_kwargs)
+                    return scope.completed(result, on_completed)
+
+            decorator.__signature__ = inspect.signature(decoratee)
+            return decorator
+
+        else:
+            @functools.wraps(decoratee)
+            def decorator(*decoratee_args, **decoratee_kwargs):
+                start_details = on_started(params(*decoratee_args, **decoratee_kwargs)) | dict(attachment=attachment)
+                with telemetry_context(module_name, scope_name, **start_details) as scope:
+                    inject_logger(scope, decoratee_kwargs)
+                    result = decoratee(*decoratee_args, **decoratee_kwargs)
+                    return scope.completed(result, on_completed)
+
+            decorator.__signature__ = inspect.signature(decoratee)
+            return decorator
+
+    return factory
 
 
 @contextlib.contextmanager
