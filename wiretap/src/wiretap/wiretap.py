@@ -1,5 +1,7 @@
 import asyncio
 import contextlib
+import dataclasses
+import enum
 import functools
 import inspect
 import json
@@ -32,12 +34,12 @@ class _JsonDateTimeEncoder(json.JSONEncoder):
 
 DEFAULT_FORMATS: Dict[str, str] = {
     "classic": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {message}",
-    "wiretap": "{asctime}.{msecs:.0f} [{indent}] {levelname} | {module}.{funcName} | {status} | {elapsed} | {details} | [{parent}/{node}] | {attachment}",
+    "wiretap": "{asctime}.{msecs:.0f} {indent} {levelname} | {module}.{funcName}: {status} | {elapsed:.3f}s | {details} | [{parent}/{node}] | {attachment}",
 }
 
 
 class MultiFormatter(logging.Formatter):
-    formats: Dict[str, str] = DEFAULT_FORMATS
+    formats: Dict[str, str | None] = {}
     indent: str = "."
     values: Optional[Dict[str, Any]] = None
     serialize_details: SerializeDetails = SerializeDetailsToJson()
@@ -47,18 +49,17 @@ class MultiFormatter(logging.Formatter):
         record.values = self.values or {}
 
         if hasattr(record, "details") and isinstance(record.details, dict):
-            record.indent = self.indent * record.details["depth"]
+            record.indent = self.indent * record.details.pop("__depth__", 1)
             record.details = self.serialize_details(record.details)
 
-        self._style._fmt = self.formats["classic"]
+        self._style._fmt = self.formats.get("classic", None) or DEFAULT_FORMATS["classic"]
 
         if hasattr(record, "status"):
-            self._style._fmt = self.formats["wiretap"]
+            self._style._fmt = self.formats.get("wiretap", None) or DEFAULT_FORMATS["wiretap"]
 
         if hasattr(record, "format"):
             self._style._fmt = record.format
 
-        self.formats = DEFAULT_FORMATS | self.formats
         return super().format(record)
 
 
@@ -84,6 +85,58 @@ class EmptyOnCompleted(OnCompleted):
         return {}
 
 
+def _format_detail(value: Any, formats: Optional[str | Callable[[Any], Any]]) -> Optional[Any]:
+    if not value:
+        return None
+
+    if isinstance(value, enum.Enum):
+        value = value.value
+
+    if not formats:
+        return value
+
+    if isinstance(formats, str):
+        return format(value, formats)
+
+    if callable(formats):
+        return formats(value)
+
+    raise ValueError(f"Details format supports only [str | Callable[[Any], Any] not {type(formats)}")
+
+
+class FormatStartDetails(OnStarted):
+
+    def __init__(self, **details):
+        """Formats function parameters. Each key corresponds to the same parameter. The value is can be [None | str | Callable[[Any], Any]."""
+        self.details = details
+
+    def __call__(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        return {key: _format_detail(params.get(key, None), self.details[key]) for key in self.details}
+
+
+class FormatResultDetails(OnCompleted):
+
+    def __init__(self, formats: Optional[str | Callable[[Any], Any]] = None, **details):
+        """Formats function result.
+        :param formats: Use this to specify how to format the "result".
+        :param details: Use this to specify multiple keys or rename the "result" to something else.
+        """
+        self.formats = formats
+        self.details = details
+
+    def __call__(self, value: Optional[Any]) -> Dict[str, Any]:
+        if not value:
+            return dict(result=None)
+
+        if self.formats:
+            return dict(result=_format_detail(value, self.formats))
+
+        if self.details:
+            return {key: _format_detail(value, self.details[key]) for key in self.details}
+
+        return dict(result=value)
+
+
 TResult = TypeVar("TResult")
 
 
@@ -101,7 +154,7 @@ class Logger:
 
     @property
     def elapsed(self) -> float:
-        return round(timer() - self._start, 3)
+        return timer() - self._start
 
     def started(self, **details):
         self._logger.setLevel(logging.INFO)
@@ -138,13 +191,13 @@ class Logger:
                 functools.partial(_set_func_name, name=self.scope),
                 functools.partial(_set_attachment, value=kwargs.pop("attachment", None)),
         ):
-            exc_info = all(sys.exc_info())
+            exc_info = all(sys.exc_info()) and status in [self.faulted.__name__]  # Dump the exception only when faulted.
             self._logger.log(level=self._logger.level, msg=None, exc_info=exc_info, extra={
                 "parent": self.parent.id if self.parent else None,
                 "node": self.id,
                 "status": status,
                 "elapsed": self.elapsed,
-                "details": kwargs | {"depth": self.depth}
+                "details": kwargs | {"__depth__": self.depth}
             })
 
         self._finalized = status in [self.completed.__name__, self.canceled.__name__, self.faulted.__name__]
@@ -157,7 +210,7 @@ class Logger:
 
 
 @contextlib.contextmanager
-def telemetry_context(module: Optional[str], name: str, **kwargs) -> Iterator[Logger]:
+def collect(module: Optional[str], name: str, **kwargs) -> Iterator[Logger]:
     """Begins a new telemetry scope."""
     logger = Logger(module, name, _scope.get())
     token = _scope.set(logger)
@@ -172,7 +225,47 @@ def telemetry_context(module: Optional[str], name: str, **kwargs) -> Iterator[Lo
         _scope.reset(token)
 
 
-def telemetry(on_started: OnStarted = EmptyOnStarted(), on_completed: OnCompleted = EmptyOnCompleted(), attachment: Optional[Any] = None):
+def include_args(**details):
+    """Includes the specified arguments in the `started` status."""
+
+    def factory(decoratee):
+        if asyncio.iscoroutinefunction(decoratee):
+            pass
+        else:
+            @functools.wraps(decoratee)
+            def decorator(*decoratee_args, **decoratee_kwargs):
+                decoratee_kwargs[f"__{include_args.__name__}__"] = FormatStartDetails(**details)
+                return decoratee(*decoratee_args, **decoratee_kwargs)
+
+            return decorator
+
+    return factory
+
+
+def include_result(formats: Optional[str | Callable[[Any], Any]] = None, **details):
+    """Includes the specified arguments in the `completed` status."""
+
+    def factory(decoratee):
+        if asyncio.iscoroutinefunction(decoratee):
+            pass
+        else:
+            @functools.wraps(decoratee)
+            def decorator(*decoratee_args, **decoratee_kwargs):
+                decoratee_kwargs[f"__{include_result.__name__}__"] = FormatResultDetails(formats, **details)
+                return decoratee(*decoratee_args, **decoratee_kwargs)
+
+            return decorator
+
+    return factory
+
+
+@dataclasses.dataclass
+class _TelemetryOptions:
+    args_func: OnStarted
+    result_func: OnCompleted
+
+
+def collect_telemetry(**kwargs):
     """Provides telemetry for the decorated function."""
 
     def factory(decoratee):
@@ -192,11 +285,18 @@ def telemetry(on_started: OnStarted = EmptyOnStarted(), on_completed: OnComplete
             # Turn arg_pairs into a dictionary and combine it with decoratee_kwargs.
             return {t[0]: decoratee_args[t[1]] for t in arg_pairs} | decoratee_kwargs
 
+        def pop_options(kwargs: dict[str, Any]) -> _TelemetryOptions:
+            # start_attachment_value = decoratee_kwargs.pop(start_attachment.__name__, None)
+            return _TelemetryOptions(
+                args_func=kwargs.pop(f"__{include_args.__name__}__", EmptyOnStarted()),
+                result_func=kwargs.pop(f"__{include_result.__name__}__", EmptyOnCompleted())
+            )
+
         if asyncio.iscoroutinefunction(decoratee):
             @functools.wraps(decoratee)
             async def decorator(*decoratee_args, **decoratee_kwargs):
                 start_details = on_started(params(*decoratee_args, **decoratee_kwargs)) | dict(attachment=attachment)
-                with telemetry_context(module_name, scope_name, **start_details) as scope:
+                with collect(module_name, scope_name, **start_details) as scope:
                     inject_logger(scope, decoratee_kwargs)
                     scope.started(**(on_started(params(*decoratee_args, **decoratee_kwargs)) or {}))
                     result = await decoratee(*decoratee_args, **decoratee_kwargs)
@@ -208,11 +308,12 @@ def telemetry(on_started: OnStarted = EmptyOnStarted(), on_completed: OnComplete
         else:
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
-                start_details = on_started(params(*decoratee_args, **decoratee_kwargs)) | dict(attachment=attachment)
-                with telemetry_context(module_name, scope_name, **start_details) as scope:
+                options = pop_options(decoratee_kwargs)
+                details = options.args_func(params(*decoratee_args, **decoratee_kwargs)) | dict(attachment=None)
+                with collect(module_name, scope_name, **details) as scope:
                     inject_logger(scope, decoratee_kwargs)
                     result = decoratee(*decoratee_args, **decoratee_kwargs)
-                    return scope.completed(result, on_completed)
+                    return scope.completed(result, options.result_func)
 
             decorator.__signature__ = inspect.signature(decoratee)
             return decorator

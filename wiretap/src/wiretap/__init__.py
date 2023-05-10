@@ -2,8 +2,12 @@ from .wiretap import (
     Logger,
     OnStarted,
     OnCompleted,
+    FormatStartDetails,
+    FormatResultDetails,
     SerializeDetails,
     MultiFormatter,
-    telemetry,
-    telemetry_context,
+    collect_telemetry,
+    collect,
+    include_args,
+    include_result
 )
