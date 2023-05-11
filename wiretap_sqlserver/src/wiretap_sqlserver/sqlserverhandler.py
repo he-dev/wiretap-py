@@ -35,7 +35,6 @@ INSERT INTO wiretap_log(
 
 @runtime_checkable
 class _LogRecordExt(Protocol):
-    values: Dict[str, Any] | None
     parent: uuid.UUID | None
     node: uuid.UUID
     status: str
@@ -48,19 +47,19 @@ class SqlServerHandler(Handler):
 
     def __init__(self, connection_string: str, insert: str = DEFAULT_INSERT):
         super().__init__()
-        self.insert = sqlalchemy.sql.text(insert)
-
         connection_url = sqlalchemy.engine.URL.create("mssql+pyodbc", query={"odbc_connect": connection_string})
         self.engine = sqlalchemy.create_engine(connection_url)
+        self.insert = sqlalchemy.sql.text(insert)
 
         atexit.register(self._cleanup)
 
     def emit(self, record: logging.LogRecord):
         default_message: str | None = None
-        if self.formatter:
-            record.format = "{message}"
+        is_ext = hasattr(record, "status")
+
+        if not is_ext:
+            record.fallback = "{message}"
             default_message = self.formatter.format(record)
-            record.__dict__.pop("format", None)
 
         params = {
             "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc),
@@ -69,9 +68,9 @@ class SqlServerHandler(Handler):
         }
 
         recext = cast(_LogRecordExt, record)
-        params = params | (recext.values or {})
+        params = params | (self.formatter.values if hasattr(self.formatter, "values") else {} or {})
 
-        if hasattr(record, "status"):
+        if is_ext:
             params = params | {
                 "parent": recext.parent.__str__() if recext.parent else None,
                 "node": recext.node.__str__(),

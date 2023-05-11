@@ -46,7 +46,9 @@ class MultiFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         record.levelname = record.levelname.lower()
-        record.values = self.values or {}
+
+        for key in self.values or {}:
+            record.__dict__[key] = self.values[key]
 
         if hasattr(record, "details") and isinstance(record.details, dict):
             record.indent = self.indent * record.details.pop("__depth__", 1)
@@ -57,8 +59,9 @@ class MultiFormatter(logging.Formatter):
         if hasattr(record, "status"):
             self._style._fmt = self.formats.get("wiretap", None) or DEFAULT_FORMATS["wiretap"]
 
-        if hasattr(record, "format"):
-            self._style._fmt = record.format
+        fallback = record.__dict__.pop("fallback", None)
+        if fallback:
+            self._style._fmt = fallback
 
         return super().format(record)
 

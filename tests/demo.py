@@ -53,7 +53,7 @@ def configure_logging():
                 ".": {
                     "formats": {
                         "classic": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {message}",
-                        "wiretap": "{asctime}.{msecs:.0f} {indent} {levelname} | {module}.{funcName}: {status} | {elapsed:.3f}s | {details} | {attachment}",
+                        "wiretap": "{asctime}.{msecs:.0f} {indent} {levelname} | {module}.{funcName}: {status} | {elapsed:.3f}s | {details} | {attachment}"
                     },
                     "indent": ".",
                     "values": {"instance": "demo-1"}
@@ -90,8 +90,8 @@ def configure_logging():
         },
         "loggers": {
             "": {
-                # "handlers": ["console", "file", "sqlserver"],
-                "handlers": ["console", "file", "memory"],
+                "handlers": ["console", "file", "sqlserver"],
+                # "handlers": ["console", "file", "memory"],
                 "level": "DEBUG"
             }
         }
