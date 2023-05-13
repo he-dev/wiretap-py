@@ -17,6 +17,7 @@ INSERT INTO wiretap_log(
     [status], 
     [level], 
     [elapsed], 
+    [message],
     [details],
     [attachment]
 ) VALUES (
@@ -27,6 +28,7 @@ INSERT INTO wiretap_log(
     :status, 
     :level, 
     :elapsed, 
+    :message,
     :details, 
     :attachment
 )
@@ -54,21 +56,17 @@ class SqlServerHandler(Handler):
         atexit.register(self._cleanup)
 
     def emit(self, record: logging.LogRecord):
-        default_message: str | None = None
         is_ext = hasattr(record, "status")
-
-        if not is_ext:
-            record.fallback = "{message}"
-            default_message = self.formatter.format(record)
 
         params = {
             "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc),
             "scope": ".".join(n for n in [record.module, record.funcName] if n is not None),
             "level": record.levelname,
+            "message": record.message if hasattr(record, "message") and record.message != str(None) else None,
         }
 
         recext = cast(_LogRecordExt, record)
-        params = params | (self.formatter.values if hasattr(self.formatter, "values") else {} or {})
+        params = params | (self.formatter.values or {} if hasattr(self.formatter, "values") else {})
 
         if is_ext:
             params = params | {
@@ -86,7 +84,7 @@ class SqlServerHandler(Handler):
                 "status": None,
                 "elapsed": None,
                 "details": None,
-                "attachment": default_message
+                "attachment": None
             }
 
         try:

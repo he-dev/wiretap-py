@@ -19,6 +19,7 @@ INSERT INTO wiretap_log(
     [status], 
     [level], 
     [elapsed], 
+    [message],
     [details],
     [attachment]
 ) VALUES (
@@ -30,6 +31,7 @@ INSERT INTO wiretap_log(
     :status, 
     :level, 
     :elapsed, 
+    :message,
     :details, 
     :attachment
 )
@@ -53,7 +55,7 @@ def configure_logging():
                 ".": {
                     "formats": {
                         "classic": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {message}",
-                        "wiretap": "{asctime}.{msecs:.0f} {indent} {levelname} | {module}.{funcName}: {status} | {elapsed:.3f}s | {details} | {attachment}"
+                        "wiretap": "{asctime}.{msecs:.0f} {indent} {levelname} | {module}.{funcName} | {status} | {elapsed:.3f}s | {message} | {details} | {attachment}"
                     },
                     "indent": ".",
                     "values": {"instance": "demo-1"}
@@ -101,47 +103,71 @@ def configure_logging():
 configure_logging()
 
 
-@wiretap.collect_telemetry()
+@wiretap.telemetry()
+def include_neither_args_nor_result(a: int, b: int) -> int:
+    return a + b
+
+
+@wiretap.telemetry(include_args=True, include_result=True)
+def include_args_and_result(a: int, b: int) -> int:
+    return a + b
+
+
+@wiretap.telemetry(include_args=".1f", include_result=".3f")
+def include_args_and_result_formatted(a: int, b: int) -> int:
+    return a + b
+
+
+@wiretap.telemetry()
+def use_message(logger: wiretap.Logger = None):
+    logger.running("This is a running message!")
+    logger.canceled("This is a canceled message!")
+
+
+@wiretap.telemetry(include_args=True)
+def include_args_without_logger(a: int, b: int, logger: wiretap.Logger = None):
+    return a + b
+
+
+@wiretap.telemetry()
 def foo(value: int, logger: wiretap.Logger = None, **kwargs) -> int:
-    logger.running(name=f"sync-{value}")
+    logger.running(details=dict(name=f"sync-{value}"))
     logging.info("This is a classic message!")
     # raise ValueError("Test!")
     qux(value)
-    return logger.completed(3, wiretap.FormatResultDetails())
+    return logger.completed(message="This went smooth!", result=3, result_format=".1f")
 
 
-@wiretap.include_result()
-@wiretap.include_args(value=".2f", bar=lambda x: f"{x}-callable")
-@wiretap.collect_telemetry()
+@wiretap.telemetry(include_args=dict(value=".2f", bar=lambda x: f"{x}-callable"), include_result=True)
 def fzz(value: int, logger: wiretap.Logger = None) -> int:
     # return logger.completed(3, wiretap.FormatResultDetails())
     return 3
 
 
-@wiretap.collect_telemetry()
+@wiretap.telemetry()
 def qux(value: int, scope: wiretap.Logger = None):
-    scope.running(name=f"sync-{value}")
+    scope.running(details=dict(name=f"sync-{value}"))
     # raise ValueError("Test!")
 
 
-@wiretap.collect_telemetry()
+@wiretap.telemetry()
 async def bar(value: int, scope: wiretap.Logger = None):
-    scope.running(name=f"sync-{value}")
+    scope.running(details=dict(name=f"sync-{value}"))
     await asyncio.sleep(2.0)
     foo(0)
 
 
-@wiretap.collect_telemetry()
+@wiretap.telemetry()
 async def baz(value: int, scope: wiretap.Logger = None):
-    scope.running(name=f"sync-{value}")
+    scope.running(details=dict(name=f"sync-{value}"))
     await asyncio.sleep(3.0)
 
 
 def flow_test():
-    with wiretap.collect(module=None, name="outer") as outer:
-        outer.running(foo=1)
-        with wiretap.collect(module=None, name="inner") as inner:
-            inner.running(bar=2)
+    with wiretap.telemetry_scope(module=None, name="outer") as outer:
+        outer.running(details=dict(foo=1))
+        with wiretap.telemetry_scope(module=None, name="inner") as inner:
+            inner.running(details=dict(bar=2))
 
         try:
             raise ValueError
@@ -172,12 +198,12 @@ def main_proc():
             pass
 
 
-@wiretap.collect_telemetry()
+@wiretap.telemetry()
 def main():
     pass
 
 
-@wiretap.collect_telemetry()
+@wiretap.telemetry()
 def test_completed():
     pass
 
@@ -186,7 +212,13 @@ if __name__ == "__main__":
     # asyncio.run(main())
     # main_proc()
 
-    fzz(7)
+    # fzz(7)
 
-    flow_test()
-    print(foo(1, bar="baz"))
+    # flow_test()
+    # print(foo(1, bar="baz"))
+
+    include_neither_args_nor_result(1, 2)
+    include_args_and_result(1, 2)
+    include_args_and_result_formatted(1, 2)
+    use_message()
+    include_args_without_logger(1, 2)

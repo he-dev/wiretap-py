@@ -15,7 +15,8 @@ begin
         [scope] nvarchar(200) not null,
         [level] nvarchar(50) not null,
         [status] nvarchar(50) null,
-        [elapsed] float null,
+        [elapsed] decimal(10, 3) null,
+        [message] nvarchar(1000) null,
         [details] nvarchar(max) null,
         [attachment] nvarchar(max) null
     )

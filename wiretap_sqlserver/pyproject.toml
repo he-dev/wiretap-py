@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wiretap-sqlserver"
-version = "3.0.0"
+version = "4.2.0"
 requires-python = ">=3.10"
 authors = [{ name = "he-dev" }]
 dependencies = [
