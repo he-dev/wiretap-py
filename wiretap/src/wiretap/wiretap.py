@@ -68,7 +68,7 @@ def raw(value: TValue) -> TValue:
 
 
 def multi_format(value: Any, value_format: FormatOptions) -> Optional[Any]:
-    if not value:
+    if value is None:
         return None
 
     if isinstance(value_format, str):
@@ -97,7 +97,7 @@ def create_result_details(result: Any | None, result_format: FormatOptions | dic
     if result_format == NO_DETAILS:
         return {}
 
-    if not result:
+    if result is None:
         return {"result": None}
 
     if isinstance(result_format, dict):
