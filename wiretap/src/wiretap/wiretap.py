@@ -13,14 +13,14 @@ from contextvars import ContextVar
 from datetime import datetime, date
 from timeit import default_timer as timer
 from types import TracebackType
-from typing import Dict, Callable, Any, Protocol, Optional, Iterator, TypeVar, TypeAlias
+from typing import Dict, Callable, Any, Protocol, Optional, Iterator, TypeVar, TypeAlias, Generic
 
 FormatOptions: TypeAlias = str | Callable[[Any], Any] | None
 TValue = TypeVar("TValue")
 
 DEFAULT_FORMATS: Dict[str, str] = {
-    "classic": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {message}",
-    "wiretap": "{asctime}.{msecs:.0f} {indent} {levelname} | {module}.{funcName} | {status} | {elapsed:.3f}s | {message} | {details} | node://{parent}/{node} | {attachment}",
+    "classic": "{asctime}.{msecs:03.0f} | {levelname} | {module}.{funcName} | {message}",
+    "wiretap": "{asctime}.{msecs:03.0f} {indent} {module}.{funcName} | {status} | {elapsed:.3f}s | {message} | {details} | node://{parent}/{node} | {attachment}",
 }
 
 _scope: ContextVar[Optional["Logger"]] = ContextVar("_scope", default=None)
@@ -55,45 +55,52 @@ class MultiFormatter(logging.Formatter):
             record.indent = self.indent * record.__dict__.pop("_depth", 1)
             record.details = self.serialize_details(record.details)
 
-        if hasattr(record, "status"):
-            self._style._fmt = self.formats["wiretap"] if "wiretap" in self.formats else DEFAULT_FORMATS["wiretap"]
-        else:
-            self._style._fmt = self.formats["classic"] if "classic" in self.formats else DEFAULT_FORMATS["classic"]
+        # determine which format to use
+        format_key = "wiretap" if hasattr(record, "status") else "classic"
+
+        # use custom format if specified or the default one
+        format_str = self.formats[format_key] if format_key in self.formats else DEFAULT_FORMATS[format_key]
+        self._style._fmt = format_str
 
         return super().format(record)
 
 
-def raw(value: TValue) -> TValue:
-    return value
-
-
 def multi_format(value: Any, value_format: FormatOptions) -> Optional[Any]:
     if value is None:
+        # cancel as there is no value to format
         return None
 
     if value_format is None:
+        # cancel as no format is specified
         return value
 
     if isinstance(value_format, str):
+        # format using a format-string
         return format(value, value_format)
 
     if callable(value_format):
+        # format using a user defined function
         return value_format(value)
 
-    raise ValueError(f"Unsupported details format: {type(value_format)}. Expected: {FormatOptions}.")
+    # any other case means an error
+    raise ValueError(f"Unsupported value format: {type(value_format)}. Expected: {FormatOptions}.")
 
 
 def create_args_details(args: dict[str, Any], args_format: FormatOptions | dict[str, FormatOptions]) -> dict[str, Any]:
     if args_format is None:
+        # cancel as no format is specified
         return {}
 
     if not args:
+        # cancel as there's nothing to format
         return {}
 
     if isinstance(args_format, dict):
+        # format each arg individually
         return {"args": {key: multi_format(args.get(key, None), args_format[key]) for key in args_format}}
-
-    return {"args": {key: multi_format(args.get(key, None), args_format) for key in args}}
+    else:
+        # format all args with common format
+        return {"args": {key: multi_format(args.get(key, None), args_format) for key in args}}
 
 
 def create_result_details(result: Any | None, result_format: FormatOptions | dict[str, FormatOptions]) -> dict[str, Any]:
@@ -105,8 +112,8 @@ def create_result_details(result: Any | None, result_format: FormatOptions | dic
 
     if isinstance(result_format, dict):
         return {"result": {key: multi_format(result, result_format[key]) for key in result_format}}
-
-    return {"result": multi_format(result, result_format)}
+    else:
+        return {"result": multi_format(result, result_format)}
 
 
 class Logger:
@@ -164,7 +171,7 @@ class Logger:
             result: Optional[TValue] = None,
             result_format: FormatOptions | dict[str, FormatOptions] = None
     ) -> Optional[TValue]:
-        self._logger.setLevel(logging.WARNING)
+        self._logger.setLevel(logging.ERROR if sys.exc_info()[0] is Failure else logging.WARNING)
         self._log(message, details, attachment, result, result_format)
         return result
 
@@ -209,10 +216,11 @@ class Logger:
         details = (details or {}) | create_result_details(result, result_format)
 
         status = inspect.stack()[1][3]
-        with _use_custom_log_record_factory(
-                functools.partial(_set_module_name, name=self.module),
-                functools.partial(_set_func_name, name=self.scope),
-        ):
+        record_actions = [
+            functools.partial(_set_module_name, name=self.module),
+            functools.partial(_set_func_name, name=self.scope),
+        ]
+        with _use_custom_log_record_factory(*record_actions):
             self._logger.log(level=self._logger.level, msg=message, exc_info=exc_info, extra={
                 "parent": self.parent.id if self.parent else None,
                 "node": self.id,
@@ -257,23 +265,20 @@ def telemetry_scope(
         yield logger
         logger.completed()
     except Failure:
-        logger.failed()
+        logger.canceled(message="Unhandled exception has occurred.")
         raise
     except Exception as e:  # noqa
-        logger.failed()
+        logger.failed(message="Unhandled exception has occurred.")
         raise Failure from e  # wrap the original exception in Failure to keep failing and prevent logging it multiple times
     finally:
         _scope.reset(token)
 
 
-class NoValue:
-    pass
-
-
 class Cancellation(Exception):
-    def __init__(self, message: str, result: TValue | NoValue = NoValue()):
+    def __init__(self, message: str, result: Any | None = None, result_format: FormatOptions | dict[str, FormatOptions] = None):
         super().__init__(message)
         self.result = result
+        self.result_format = result_format
 
 
 def telemetry(
@@ -284,6 +289,9 @@ def telemetry(
         attachment: Optional[Any] = None
 ):
     """Provides telemetry for the decorated function."""
+
+    def raw(value: TValue) -> TValue:
+        return value
 
     args_format: FormatOptions | dict[str, FormatOptions] = None
     if include_args:
@@ -315,11 +323,14 @@ def telemetry(
         if asyncio.iscoroutinefunction(decoratee):
             @functools.wraps(decoratee)
             async def decorator(*decoratee_args, **decoratee_kwargs):
-                details_ = create_args_details(params(*decoratee_args, **decoratee_kwargs), args_format) | (details or {})
-                with telemetry_scope(module_name, scope_name, message=message, details=details_, attachment=attachment) as scope:
+                args_details = create_args_details(params(*decoratee_args, **decoratee_kwargs), args_format) | (details or {})
+                with telemetry_scope(module_name, scope_name, message=message, details=args_details, attachment=attachment) as scope:
                     inject_logger(scope, decoratee_kwargs)
-                    result = await decoratee(*decoratee_args, **decoratee_kwargs)
-                    return scope.completed(result=result, result_format=result_format)
+                    try:
+                        result = await decoratee(*decoratee_args, **decoratee_kwargs)
+                        return scope.completed(result=result, result_format=result_format)
+                    except Cancellation as e:
+                        return scope.canceled(result=e.result, result_format=e.result_format, message=str(e))
 
             decorator.__signature__ = inspect.signature(decoratee)
             return decorator
@@ -327,14 +338,14 @@ def telemetry(
         else:
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
-                details_ = create_args_details(params(*decoratee_args, **decoratee_kwargs), args_format) | (details or {})
-                with telemetry_scope(module_name, scope_name, message=message, details=details_, attachment=attachment) as scope:
+                args_details = create_args_details(params(*decoratee_args, **decoratee_kwargs), args_format) | (details or {})
+                with telemetry_scope(module_name, scope_name, message=message, details=args_details, attachment=attachment) as scope:
                     inject_logger(scope, decoratee_kwargs)
                     try:
                         result = decoratee(*decoratee_args, **decoratee_kwargs)
                         return scope.completed(result=result, result_format=result_format)
                     except Cancellation as e:
-                        return scope.canceled(result=e.result if type(e.result) is not NoValue else None, message=str(e), result_format="")
+                        return scope.canceled(result=e.result, result_format=e.result_format, message=str(e))
 
             decorator.__signature__ = inspect.signature(decoratee)
             return decorator

@@ -9,7 +9,7 @@ from typing import Any, Dict, Protocol, runtime_checkable, cast
 import sqlalchemy  # type: ignore
 
 DEFAULT_INSERT = """
-INSERT INTO wiretap_log(
+INSERT INTO dev.wiretap_log(
     [parent], 
     [node], 
     [timestamp], 
@@ -93,7 +93,8 @@ class SqlServerHandler(Handler):
 
         try:
             with self.engine.connect() as c:
-                c.execute(self.insert, **params)
+                c.execute(self.insert, params)
+                c.commit()
         except:  # noqa
             # Disable this handler if an error occurs.
             self.setLevel(sys.maxsize)

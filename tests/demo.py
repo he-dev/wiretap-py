@@ -10,7 +10,7 @@ import wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler
 from wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler import SqlServerOdbcConnectionString
 
 INSERT = """
-INSERT INTO wiretap_log(
+INSERT INTO dev.wiretap_log(
     [instance],
     [parent], 
     [node], 
@@ -54,8 +54,8 @@ def configure_logging():
                 "datefmt": "%Y-%m-%d %H:%M:%S",
                 ".": {
                     "formats": {
-                        "classic": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {message}",
-                        "wiretap": "{asctime}.{msecs:.0f} {indent} {levelname} | {module}.{funcName} | {status} | {elapsed:.3f}s | {message} | {details} | {attachment}"
+                        "classic": "{asctime}.{msecs:03.0f} | {levelname} | {module}.{funcName} | {message}",
+                        "wiretap": "{asctime}.{msecs:03.0f} {indent} {module}.{funcName} | {status} | {elapsed:.3f}s | {message} | {details} | {attachment}"
                     },
                     "indent": ".",
                     "values": {"instance": "demo-1"}
@@ -78,7 +78,7 @@ def configure_logging():
             },
             "sqlserver": {
                 "class": "wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
-                "connection_string": SqlServerOdbcConnectionString.standard(server="localhost,1433", database="master", username="sa", password="blub123!"),
+                "connection_string": SqlServerOdbcConnectionString.standard(server="localhost,1433", database="master", username="sa", password="MSSQL2022!"),
                 "insert": INSERT,
                 "level": "DEBUG",
                 "formatter": "wiretap"
@@ -92,8 +92,8 @@ def configure_logging():
         },
         "loggers": {
             "": {
-                # "handlers": ["console", "file", "sqlserver"],
-                "handlers": ["console", "file"],
+                "handlers": ["console", "file", "sqlserver"],
+                # "handlers": ["console", "file"],
                 # "handlers": ["file"],
                 # "handlers": ["console", "file", "memory"],
                 "level": "DEBUG"
@@ -254,7 +254,7 @@ if __name__ == "__main__":
     # flow_test()
     # print(foo(1, bar="baz"))
 
-    # foo_e()
+    foo_e()
 
     # blub(1, 2)
 

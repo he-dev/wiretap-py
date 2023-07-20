@@ -3,10 +3,10 @@ select @@version;
 select * from sysobjects where name = 'logs' and xtype = 'U'
 select * from sys.tables where xtype = 'U'
 
-drop table wiretap_log;
-if(not exists(select * from INFORMATION_SCHEMA.TABLES where TABLE_NAME = 'wiretap_log'))
+drop table dev.wiretap_log;
+if(not exists(select * from INFORMATION_SCHEMA.TABLES where TABLE_SCHEMA = 'dev' and TABLE_NAME = 'wiretap_log'))
 begin
-    create table wiretap_log(
+    create table dev.wiretap_log(
         [id] int identity(1,1) primary key,
         [instance] nvarchar(200) null,
         [parent] uniqueidentifier null,
@@ -24,3 +24,4 @@ end;
 
 
 truncate table wiretap_log;
+
