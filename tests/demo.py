@@ -42,12 +42,12 @@ def configure_logging():
     logging.config.dictConfig({
         "version": 1,
         "formatters": {
-            "console": {
-                "style": "{",
-                "format": "{asctime}.{msecs:.0f} | {module}.{funcName} | {status}",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-                "defaults": {"status": "<status>", "correlation": "<correlation>", "extra": "<extra>"}
-            },
+            # "console": {
+            #    "style": "{",
+            #    "format": "{asctime}.{msecs:.0f} | {module}.{funcName} | {status}",
+            #    "datefmt": "%Y-%m-%d %H:%M:%S",
+            #    "defaults": {"status": "<status>", "correlation": "<correlation>", "extra": "<extra>"}
+            # },
             "wiretap": {
                 "()": wiretap.MultiFormatter,
                 "style": "{",
@@ -74,7 +74,7 @@ def configure_logging():
                 "interval": 1,
                 "filename": r"c:\temp\wiretap.log",
                 "formatter": "wiretap",
-                "level": "INFO"
+                "level": "DEBUG"
             },
             "sqlserver": {
                 "class": "wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
@@ -92,7 +92,9 @@ def configure_logging():
         },
         "loggers": {
             "": {
-                "handlers": ["console", "file", "sqlserver"],
+                # "handlers": ["console", "file", "sqlserver"],
+                "handlers": ["console", "file"],
+                # "handlers": ["file"],
                 # "handlers": ["console", "file", "memory"],
                 "level": "DEBUG"
             }
@@ -118,7 +120,7 @@ def include_args_and_result_formatted(a: int, b: int) -> int:
     return a + b
 
 
-@wiretap.telemetry()
+@wiretap.telemetry(message="This is a start messag!")
 def use_message(logger: wiretap.Logger = None):
     logger.running("This is a running message!")
     logger.canceled("This is a canceled message!")
@@ -127,6 +129,21 @@ def use_message(logger: wiretap.Logger = None):
 @wiretap.telemetry(include_args=True)
 def include_args_without_logger(a: int, b: int, logger: wiretap.Logger = None):
     return a + b
+
+
+@wiretap.telemetry(include_args=dict(a=None, b=None))
+def include_args_without_formatting(a: int, b: int):
+    return a + b
+
+
+@wiretap.telemetry()
+def cancel_this_function_without_result():
+    raise wiretap.Cancellation("This was canceled!")
+
+
+@wiretap.telemetry(include_result=True)
+def cancel_this_function_with_result():
+    raise wiretap.Cancellation("This was canceled!", result=8)
 
 
 @wiretap.telemetry()
@@ -173,7 +190,7 @@ def flow_test():
             raise ValueError
         except:
             # outer.canceled(reason="Testing suppressing exceptions.")
-            outer.faulted()
+            outer.failed()
 
 
 async def main_async():
@@ -208,6 +225,26 @@ def test_completed():
     pass
 
 
+@wiretap.telemetry()
+def foo_e():
+    bar_e()
+
+
+@wiretap.telemetry(attachment="bar_e")
+def bar_e():
+    baz_e()
+
+
+@wiretap.telemetry()
+def baz_e():
+    raise ZeroDivisionError
+
+
+@wiretap.telemetry()
+def blub(a):
+    pass
+
+
 if __name__ == "__main__":
     # asyncio.run(main())
     # main_proc()
@@ -217,8 +254,15 @@ if __name__ == "__main__":
     # flow_test()
     # print(foo(1, bar="baz"))
 
+    # foo_e()
+
+    # blub(1, 2)
+
     include_neither_args_nor_result(1, 2)
     include_args_and_result(1, 2)
     include_args_and_result_formatted(1, 2)
     use_message()
     include_args_without_logger(1, 2)
+    include_args_without_formatting(3, 4)
+    cancel_this_function_without_result()
+    cancel_this_function_with_result()

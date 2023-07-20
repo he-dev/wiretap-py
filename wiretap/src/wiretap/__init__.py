@@ -4,5 +4,5 @@ from .wiretap import (
     MultiFormatter,
     telemetry,
     telemetry_scope,
-    raw
+    Cancellation
 )

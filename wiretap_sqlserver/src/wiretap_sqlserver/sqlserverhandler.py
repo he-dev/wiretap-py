@@ -77,6 +77,10 @@ class SqlServerHandler(Handler):
                 "details": recext.details,
                 "attachment": recext.attachment
             }
+
+            if record.exc_text:
+                params["attachment"] = params["attachment"] + "\n\n" + record.exc_text if params["attachment"] else record.exc_text
+
         else:
             params = params | {
                 "parent": None,

@@ -12,11 +12,11 @@ from collections.abc import Generator
 from contextvars import ContextVar
 from datetime import datetime, date
 from timeit import default_timer as timer
+from types import TracebackType
 from typing import Dict, Callable, Any, Protocol, Optional, Iterator, TypeVar, TypeAlias
 
-FormatOptions: TypeAlias = str | Callable[[Any], Any]
+FormatOptions: TypeAlias = str | Callable[[Any], Any] | None
 TValue = TypeVar("TValue")
-NO_DETAILS: dict[str, Any] = {}
 
 DEFAULT_FORMATS: Dict[str, str] = {
     "classic": "{asctime}.{msecs:.0f} | {levelname} | {module}.{funcName} | {message}",
@@ -58,7 +58,7 @@ class MultiFormatter(logging.Formatter):
         if hasattr(record, "status"):
             self._style._fmt = self.formats["wiretap"] if "wiretap" in self.formats else DEFAULT_FORMATS["wiretap"]
         else:
-            self._style._fmt = self.formats["classic"] if "classin" in self.formats else DEFAULT_FORMATS["classic"]
+            self._style._fmt = self.formats["classic"] if "classic" in self.formats else DEFAULT_FORMATS["classic"]
 
         return super().format(record)
 
@@ -71,6 +71,9 @@ def multi_format(value: Any, value_format: FormatOptions) -> Optional[Any]:
     if value is None:
         return None
 
+    if value_format is None:
+        return value
+
     if isinstance(value_format, str):
         return format(value, value_format)
 
@@ -81,11 +84,11 @@ def multi_format(value: Any, value_format: FormatOptions) -> Optional[Any]:
 
 
 def create_args_details(args: dict[str, Any], args_format: FormatOptions | dict[str, FormatOptions]) -> dict[str, Any]:
-    if args_format == NO_DETAILS:
+    if args_format is None:
         return {}
 
     if not args:
-        return {"args": None}
+        return {}
 
     if isinstance(args_format, dict):
         return {"args": {key: multi_format(args.get(key, None), args_format[key]) for key in args_format}}
@@ -94,11 +97,11 @@ def create_args_details(args: dict[str, Any], args_format: FormatOptions | dict[
 
 
 def create_result_details(result: Any | None, result_format: FormatOptions | dict[str, FormatOptions]) -> dict[str, Any]:
-    if result_format == NO_DETAILS:
+    if result_format is None:
         return {}
 
     if result is None:
-        return {"result": None}
+        return {}
 
     if isinstance(result_format, dict):
         return {"result": {key: multi_format(result, result_format[key]) for key in result_format}}
@@ -147,7 +150,7 @@ class Logger:
             details: Optional[dict[str, Any]] = None,
             attachment: Optional[Any] = None,
             result: Optional[TValue] = None,
-            result_format: FormatOptions | dict[str, FormatOptions] = NO_DETAILS
+            result_format: FormatOptions | dict[str, FormatOptions] = None
     ) -> Optional[TValue]:
         self._logger.setLevel(logging.INFO)
         self._log(message, details, attachment, result, result_format)
@@ -159,22 +162,36 @@ class Logger:
             details: Optional[dict[str, Any]] = None,
             attachment: Optional[Any] = None,
             result: Optional[TValue] = None,
-            result_format: FormatOptions | dict[str, FormatOptions] = NO_DETAILS
+            result_format: FormatOptions | dict[str, FormatOptions] = None
     ) -> Optional[TValue]:
         self._logger.setLevel(logging.WARNING)
         self._log(message, details, attachment, result, result_format)
         return result
 
-    def faulted(
+    def failed(
             self,
             message: Optional[str] = None,
             details: Optional[dict[str, Any]] = None,
             attachment: Optional[Any] = None,
             result: Optional[TValue] = None,
-            result_format: FormatOptions | dict[str, FormatOptions] = NO_DETAILS
+            result_format: FormatOptions | dict[str, FormatOptions] = None
     ) -> Optional[TValue]:
         self._logger.setLevel(logging.ERROR)
-        self._log(message, details, attachment, result, result_format)
+
+        # process the exception only if it's not Failure
+        exc_cls, exc, exc_tb = sys.exc_info()
+        if exc and exc_cls is not Failure:
+            # the first 3 frames are the decorator traces; let's get rid of them
+            for _ in range(3):
+                # in case there aren't that many frames
+                if exc_tb.tb_next:
+                    exc_tb = exc_tb.tb_next
+                else:
+                    break
+            self._log(message, details, attachment, result, result_format, (exc_cls, exc, exc_tb))
+        else:
+            self._log(message, details, attachment, result, result_format)
+
         return result
 
     def _log(
@@ -183,7 +200,8 @@ class Logger:
             details: Optional[dict[str, Any]],
             attachment: Optional[Any],
             result: Optional[TValue] = None,
-            result_format: FormatOptions | dict[str, FormatOptions] = NO_DETAILS
+            result_format: FormatOptions | dict[str, FormatOptions] = None,
+            exc_info: Optional[tuple[type[BaseException], BaseException, TracebackType | None]] = None
     ):
         if self._finalized:
             return
@@ -192,28 +210,35 @@ class Logger:
 
         status = inspect.stack()[1][3]
         with _use_custom_log_record_factory(
-                _set_exc_text,
                 functools.partial(_set_module_name, name=self.module),
                 functools.partial(_set_func_name, name=self.scope),
-                functools.partial(_set_attachment, value=attachment),
         ):
-            exc_info = all(sys.exc_info()) and status in [self.faulted.__name__]  # Dump the exception only when faulted.
             self._logger.log(level=self._logger.level, msg=message, exc_info=exc_info, extra={
                 "parent": self.parent.id if self.parent else None,
                 "node": self.id,
                 "status": status,
                 "elapsed": self.elapsed,
-                "details": details or NO_DETAILS,
+                "details": details or {},
+                "attachment": attachment,
                 "_depth": self.depth
             })
 
-        self._finalized = status in [self.completed.__name__, self.canceled.__name__, self.faulted.__name__]
+        self._finalized = status in [
+            self.completed.__name__,
+            self.canceled.__name__,
+            self.failed.__name__
+        ]
 
     def __iter__(self):
         current = self
         while current:
             yield current
             current = current.parent
+
+
+# Helps to prevent logging the same exception multiple times.
+class Failure(Exception):
+    pass
 
 
 @contextlib.contextmanager
@@ -231,24 +256,40 @@ def telemetry_scope(
         logger.started(message, details, attachment)
         yield logger
         logger.completed()
-    except:  # noqa
-        logger.faulted()
+    except Failure:
+        logger.failed()
         raise
+    except Exception as e:  # noqa
+        logger.failed()
+        raise Failure from e  # wrap the original exception in Failure to keep failing and prevent logging it multiple times
     finally:
         _scope.reset(token)
 
 
+class NoValue:
+    pass
+
+
+class Cancellation(Exception):
+    def __init__(self, message: str, result: TValue | NoValue = NoValue()):
+        super().__init__(message)
+        self.result = result
+
+
 def telemetry(
         include_args: bool | FormatOptions | dict[str, FormatOptions] = False,
-        include_result: bool | FormatOptions | dict[str, FormatOptions] = False
+        include_result: bool | FormatOptions | dict[str, FormatOptions] = False,
+        message: Optional[str] = None,
+        details: Optional[dict[str, Any]] = None,
+        attachment: Optional[Any] = None
 ):
     """Provides telemetry for the decorated function."""
 
-    args_format: FormatOptions | dict[str, FormatOptions] = NO_DETAILS
+    args_format: FormatOptions | dict[str, FormatOptions] = None
     if include_args:
         args_format = raw if isinstance(include_args, bool) else include_args
 
-    result_format: FormatOptions | dict[str, FormatOptions] = NO_DETAILS
+    result_format: FormatOptions | dict[str, FormatOptions] = None
     if include_result:
         result_format = raw if isinstance(include_result, bool) else include_result
 
@@ -274,8 +315,8 @@ def telemetry(
         if asyncio.iscoroutinefunction(decoratee):
             @functools.wraps(decoratee)
             async def decorator(*decoratee_args, **decoratee_kwargs):
-                details = create_args_details(params(*decoratee_args, **decoratee_kwargs), args_format)
-                with telemetry_scope(module_name, scope_name, details=details) as scope:
+                details_ = create_args_details(params(*decoratee_args, **decoratee_kwargs), args_format) | (details or {})
+                with telemetry_scope(module_name, scope_name, message=message, details=details_, attachment=attachment) as scope:
                     inject_logger(scope, decoratee_kwargs)
                     result = await decoratee(*decoratee_args, **decoratee_kwargs)
                     return scope.completed(result=result, result_format=result_format)
@@ -286,11 +327,14 @@ def telemetry(
         else:
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
-                details = create_args_details(params(*decoratee_args, **decoratee_kwargs), args_format)
-                with telemetry_scope(module_name, scope_name, details=details) as scope:
+                details_ = create_args_details(params(*decoratee_args, **decoratee_kwargs), args_format) | (details or {})
+                with telemetry_scope(module_name, scope_name, message=message, details=details_, attachment=attachment) as scope:
                     inject_logger(scope, decoratee_kwargs)
-                    result = decoratee(*decoratee_args, **decoratee_kwargs)
-                    return scope.completed(result=result, result_format=result_format)
+                    try:
+                        result = decoratee(*decoratee_args, **decoratee_kwargs)
+                        return scope.completed(result=result, result_format=result_format)
+                    except Cancellation as e:
+                        return scope.canceled(result=e.result if type(e.result) is not NoValue else None, message=str(e), result_format="")
 
             decorator.__signature__ = inspect.signature(decoratee)
             return decorator
@@ -321,12 +365,3 @@ def _set_func_name(record: logging.LogRecord, name: str):
 
 def _set_module_name(record: logging.LogRecord, name: str):
     record.module = name
-
-
-def _set_exc_text(record: logging.LogRecord):
-    if record.exc_info:
-        record.exc_text = logging.Formatter().formatException(record.exc_info)
-
-
-def _set_attachment(record: logging.LogRecord, value: Optional[Any]):
-    record.attachment = record.exc_text or value
