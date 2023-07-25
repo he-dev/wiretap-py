@@ -264,6 +264,9 @@ def telemetry_scope(
         logger.started(message, details, attachment)
         yield logger
         logger.completed()
+    except (StopIteration, StopAsyncIteration):
+        logger.canceled(message="The interation has been canceled.")
+        raise
     except Failure:
         logger.canceled(message="Unhandled exception has occurred.")
         raise
