@@ -92,8 +92,8 @@ def configure_logging():
         },
         "loggers": {
             "": {
-                "handlers": ["console", "file", "sqlserver"],
-                # "handlers": ["console", "file"],
+                # "handlers": ["console", "file", "sqlserver"],
+                "handlers": ["console", "file"],
                 # "handlers": ["file"],
                 # "handlers": ["console", "file", "memory"],
                 "level": "DEBUG"
@@ -144,6 +144,11 @@ def cancel_this_function_without_result():
 @wiretap.telemetry(include_result=True)
 def cancel_this_function_with_result():
     raise wiretap.Cancellation("This was canceled!", result=8)
+
+
+@wiretap.telemetry()
+def cancel_this_function_because_of_iteration_stop():
+    raise StopIteration
 
 
 @wiretap.telemetry()
@@ -254,7 +259,7 @@ if __name__ == "__main__":
     # flow_test()
     # print(foo(1, bar="baz"))
 
-    foo_e()
+    # foo_e()
 
     # blub(1, 2)
 
@@ -266,3 +271,4 @@ if __name__ == "__main__":
     include_args_without_formatting(3, 4)
     cancel_this_function_without_result()
     cancel_this_function_with_result()
+    cancel_this_function_because_of_iteration_stop()
