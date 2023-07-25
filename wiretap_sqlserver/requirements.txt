@@ -1,4 +1,4 @@
 setuptools>=65.3
 pyodbc>=4.0
-sqlalchemy>=1.4
-wiretap>=3.0
+sqlalchemy>=2.0
+wiretap>=5.0

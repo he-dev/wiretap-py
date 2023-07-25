@@ -187,7 +187,7 @@ class Logger:
 
         # process the exception only if it's not Failure
         exc_cls, exc, exc_tb = sys.exc_info()
-        if exc and exc_cls is not Failure:
+        if all((exc_cls, exc, exc_tb)) and exc_cls is not Failure:
             # the first 3 frames are the decorator traces; let's get rid of them
             for _ in range(3):
                 # in case there aren't that many frames
