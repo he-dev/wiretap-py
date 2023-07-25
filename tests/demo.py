@@ -4,10 +4,13 @@ import logging.config
 import logging.handlers
 import asyncio
 import multiprocessing
-import wiretap.src.wiretap as wiretap
-import wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler
+from typing import Iterator
 
-from wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler import SqlServerOdbcConnectionString
+
+import wiretap
+import wiretap_sqlserver.sqlserverhandler
+
+from wiretap_sqlserver.sqlserverhandler import SqlServerOdbcConnectionString
 
 INSERT = """
 INSERT INTO dev.wiretap_log(
@@ -77,7 +80,8 @@ def configure_logging():
                 "level": "DEBUG"
             },
             "sqlserver": {
-                "class": "wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
+                #"class": "wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
+                "class": "wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
                 "connection_string": SqlServerOdbcConnectionString.standard(server="localhost,1433", database="master", username="sa", password="MSSQL2022!"),
                 "insert": INSERT,
                 "level": "DEBUG",
@@ -147,8 +151,16 @@ def cancel_this_function_with_result():
 
 
 @wiretap.telemetry()
-def cancel_this_function_because_of_iteration_stop():
-    raise StopIteration
+def cancel_this_function_because_of_iteration_stop(logger: wiretap.Logger = None):
+    @wiretap.telemetry()
+    def numbers() -> Iterator[int]:
+        yield 1
+        yield 2
+        return
+        yield 3
+
+    for x in numbers():
+        logger.running(details=dict(x=x))
 
 
 @wiretap.telemetry()
