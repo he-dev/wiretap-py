@@ -6,7 +6,6 @@ import asyncio
 import multiprocessing
 from typing import Iterator
 
-
 import wiretap
 import wiretap_sqlserver.sqlserverhandler
 
@@ -80,7 +79,7 @@ def configure_logging():
                 "level": "DEBUG"
             },
             "sqlserver": {
-                #"class": "wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
+                # "class": "wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
                 "class": "wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
                 "connection_string": SqlServerOdbcConnectionString.standard(server="localhost,1433", database="master", username="sa", password="MSSQL2022!"),
                 "insert": INSERT,
@@ -244,7 +243,10 @@ def test_completed():
 
 @wiretap.telemetry()
 def foo_e():
-    bar_e()
+    try:
+        bar_e()
+    except ZeroDivisionError:
+        pass
 
 
 @wiretap.telemetry(attachment="bar_e")
@@ -271,7 +273,7 @@ if __name__ == "__main__":
     # flow_test()
     # print(foo(1, bar="baz"))
 
-    # foo_e()
+    foo_e()
 
     # blub(1, 2)
 

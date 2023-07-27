@@ -171,7 +171,7 @@ class Logger:
             result: Optional[TValue] = None,
             result_format: FormatOptions | dict[str, FormatOptions] = None
     ) -> Optional[TValue]:
-        self._logger.setLevel(logging.ERROR if sys.exc_info()[0] is Failure else logging.WARNING)
+        self._logger.setLevel(logging.ERROR)
         self._log(message, details, attachment, result, result_format)
         return result
 
@@ -187,14 +187,10 @@ class Logger:
 
         # process the exception only if it's not Failure
         exc_cls, exc, exc_tb = sys.exc_info()
-        if all((exc_cls, exc, exc_tb)) and exc_cls is not Failure:
+        if all((exc_cls, exc, exc_tb)):
             # the first 3 frames are the decorator traces; let's get rid of them
-            for _ in range(3):
-                # in case there aren't that many frames
-                if exc_tb.tb_next:
-                    exc_tb = exc_tb.tb_next
-                else:
-                    break
+            while exc_tb.tb_next:
+                exc_tb = exc_tb.tb_next
             self._log(message, details, attachment, result, result_format, (exc_cls, exc, exc_tb))
         else:
             self._log(message, details, attachment, result, result_format)
@@ -244,11 +240,6 @@ class Logger:
             current = current.parent
 
 
-# Helps to prevent logging the same exception multiple times.
-class Failure(Exception):
-    pass
-
-
 @contextlib.contextmanager
 def telemetry_scope(
         module: Optional[str],
@@ -264,12 +255,9 @@ def telemetry_scope(
         logger.started(message, details, attachment)
         yield logger
         logger.completed()
-    except Failure:
-        logger.canceled(message="Unhandled exception has occurred.")
-        raise
     except Exception as e:  # noqa
         logger.failed(message="Unhandled exception has occurred.")
-        raise Failure from e  # wrap the original exception in Failure to keep failing and prevent logging it multiple times
+        raise
     finally:
         _scope.reset(token)
 
