@@ -3,6 +3,5 @@ from .wiretap import (
     SerializeDetails,
     MultiFormatter,
     telemetry,
-    telemetry_scope,
-    Cancellation
+    begin_activity,
 )

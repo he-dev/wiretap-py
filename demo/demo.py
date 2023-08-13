@@ -14,11 +14,11 @@ from wiretap_sqlserver.sqlserverhandler import SqlServerOdbcConnectionString
 INSERT = """
 INSERT INTO dev.wiretap_log(
     [instance],
-    [parent], 
-    [node], 
+    [parent_id], 
+    [unique_id], 
     [timestamp], 
-    [scope], 
-    [status], 
+    [activity], 
+    [trace], 
     [level], 
     [elapsed], 
     [message],
@@ -26,11 +26,11 @@ INSERT INTO dev.wiretap_log(
     [attachment]
 ) VALUES (
     :instance, 
-    :parent, 
-    :node, 
+    :parent_id, 
+    :unique_id, 
     :timestamp, 
-    :scope, 
-    :status, 
+    :activity, 
+    :trace, 
     :level, 
     :elapsed, 
     :message,
@@ -57,7 +57,7 @@ def configure_logging():
                 ".": {
                     "formats": {
                         "classic": "{asctime}.{msecs:03.0f} | {levelname} | {module}.{funcName} | {message}",
-                        "wiretap": "{asctime}.{msecs:03.0f} {indent} {module}.{funcName} | {status} | {elapsed:.3f}s | {message} | {details} | {attachment}"
+                        "wiretap": "{asctime}.{msecs:03.0f} {indent} {module}.{funcName} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}"
                     },
                     "indent": ".",
                     "values": {"instance": "demo-1"}
@@ -95,8 +95,8 @@ def configure_logging():
         },
         "loggers": {
             "": {
-                # "handlers": ["console", "file", "sqlserver"],
-                "handlers": ["console", "file"],
+                "handlers": ["console", "file", "sqlserver"],
+                # "handlers": ["console", "file"],
                 # "handlers": ["file"],
                 # "handlers": ["console", "file", "memory"],
                 "level": "DEBUG"
@@ -123,10 +123,10 @@ def include_args_and_result_formatted(a: int, b: int) -> int:
     return a + b
 
 
-@wiretap.telemetry(message="This is a start messag!")
+@wiretap.telemetry(message="This is a start message!")
 def use_message(logger: wiretap.Logger = None):
-    logger.running("This is a running message!")
-    logger.canceled("This is a canceled message!")
+    logger.log_info("This is an info message!")
+    logger.log_noop("This is a noop message!")
 
 
 @wiretap.telemetry(include_args=True)
@@ -140,16 +140,6 @@ def include_args_without_formatting(a: int, b: int):
 
 
 @wiretap.telemetry()
-def cancel_this_function_without_result():
-    raise wiretap.Cancellation("This was canceled!")
-
-
-@wiretap.telemetry(include_result=True)
-def cancel_this_function_with_result():
-    raise wiretap.Cancellation("This was canceled!", result=8)
-
-
-@wiretap.telemetry()
 def cancel_this_function_because_of_iteration_stop(logger: wiretap.Logger = None):
     @wiretap.telemetry()
     def numbers() -> Iterator[int]:
@@ -159,16 +149,16 @@ def cancel_this_function_because_of_iteration_stop(logger: wiretap.Logger = None
         yield 3
 
     for x in numbers():
-        logger.running(details=dict(x=x))
+        logger.log_info(details=dict(x=x))
 
 
 @wiretap.telemetry()
 def foo(value: int, logger: wiretap.Logger = None, **kwargs) -> int:
-    logger.running(details=dict(name=f"sync-{value}"))
+    logger.log_info(details=dict(name=f"sync-{value}"))
     logging.info("This is a classic message!")
     # raise ValueError("Test!")
     qux(value)
-    return logger.completed(message="This went smooth!", result=3, result_format=".1f")
+    return logger.log_end(message="This went smooth!", result=3, result_format=".1f")
 
 
 @wiretap.telemetry(include_args=dict(value=".2f", bar=lambda x: f"{x}-callable"), include_result=True)
@@ -179,34 +169,34 @@ def fzz(value: int, logger: wiretap.Logger = None) -> int:
 
 @wiretap.telemetry()
 def qux(value: int, scope: wiretap.Logger = None):
-    scope.running(details=dict(name=f"sync-{value}"))
+    scope.log_info(details=dict(name=f"sync-{value}"))
     # raise ValueError("Test!")
 
 
 @wiretap.telemetry()
 async def bar(value: int, scope: wiretap.Logger = None):
-    scope.running(details=dict(name=f"sync-{value}"))
+    scope.log_info(details=dict(name=f"sync-{value}"))
     await asyncio.sleep(2.0)
     foo(0)
 
 
 @wiretap.telemetry()
 async def baz(value: int, scope: wiretap.Logger = None):
-    scope.running(details=dict(name=f"sync-{value}"))
+    scope.log_info(details=dict(name=f"sync-{value}"))
     await asyncio.sleep(3.0)
 
 
 def flow_test():
-    with wiretap.telemetry_scope(module=None, name="outer") as outer:
-        outer.running(details=dict(foo=1))
-        with wiretap.telemetry_scope(module=None, name="inner") as inner:
-            inner.running(details=dict(bar=2))
+    with wiretap.begin_activity(module=None, name="outer") as outer:
+        outer.log_info(details=dict(foo=1))
+        with wiretap.begin_activity(module=None, name="inner") as inner:
+            inner.log_info(details=dict(bar=2))
 
         try:
             raise ValueError
         except:
             # outer.canceled(reason="Testing suppressing exceptions.")
-            outer.failed()
+            outer.log_error()
 
 
 async def main_async():
@@ -283,6 +273,4 @@ if __name__ == "__main__":
     use_message()
     include_args_without_logger(1, 2)
     include_args_without_formatting(3, 4)
-    cancel_this_function_without_result()
-    cancel_this_function_with_result()
     cancel_this_function_because_of_iteration_stop()

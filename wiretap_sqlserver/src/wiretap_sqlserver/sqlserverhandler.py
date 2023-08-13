@@ -10,22 +10,22 @@ import sqlalchemy  # type: ignore
 
 DEFAULT_INSERT = """
 INSERT INTO dev.wiretap_log(
-    [parent], 
-    [node], 
+    [parent_id], 
+    [unique_id], 
     [timestamp], 
-    [scope], 
-    [status], 
+    [activity], 
+    [trace], 
     [level], 
     [elapsed], 
     [message],
     [details],
     [attachment]
 ) VALUES (
-    :parent, 
-    :node, 
+    :parent_id, 
+    :unique_id, 
     :timestamp, 
-    :scope, 
-    :status, 
+    :activity, 
+    :trace, 
     :level, 
     :elapsed, 
     :message,
@@ -37,9 +37,9 @@ INSERT INTO dev.wiretap_log(
 
 @runtime_checkable
 class _LogRecordExt(Protocol):
-    parent: uuid.UUID | None
-    node: uuid.UUID
-    status: str
+    parent_id: uuid.UUID | None
+    unique_id: uuid.UUID
+    trace: str
     elapsed: float
     details: str | None
     attachment: str | None
@@ -56,11 +56,11 @@ class SqlServerHandler(Handler):
         atexit.register(self._cleanup)
 
     def emit(self, record: logging.LogRecord):
-        is_ext = hasattr(record, "status")
+        is_ext = hasattr(record, "trace")
 
         params = {
             "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc),
-            "scope": ".".join(n for n in [record.module, record.funcName] if n is not None),
+            "activity": ".".join(n for n in [record.module, record.funcName] if n is not None),
             "level": record.levelname,
             "message": record.message if hasattr(record, "message") and record.message != str(None) else None,
         }
@@ -70,9 +70,9 @@ class SqlServerHandler(Handler):
 
         if is_ext:
             params = params | {
-                "parent": recext.parent.__str__() if recext.parent else None,
-                "node": recext.node.__str__(),
-                "status": recext.status.lower(),
+                "parent_id": recext.parent_id.__str__() if recext.parent_id else None,
+                "unique_id": recext.unique_id.__str__(),
+                "trace": recext.trace.lower(),
                 "elapsed": recext.elapsed,
                 "details": recext.details,
                 "attachment": recext.attachment
@@ -83,9 +83,9 @@ class SqlServerHandler(Handler):
 
         else:
             params = params | {
-                "parent": None,
-                "node": None,
-                "status": None,
+                "parent_id": None,
+                "unique_id": None,
+                "trace": None,
                 "elapsed": None,
                 "details": None,
                 "attachment": None
