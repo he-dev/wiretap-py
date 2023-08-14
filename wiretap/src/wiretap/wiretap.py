@@ -6,6 +6,7 @@ import functools
 import inspect
 import json
 import logging
+import re
 import sys
 import uuid
 from collections.abc import Generator
@@ -20,7 +21,7 @@ TValue = TypeVar("TValue")
 
 DEFAULT_FORMATS: Dict[str, str] = {
     "classic": "{asctime}.{msecs:03.0f} | {levelname} | {module}.{funcName} | {message}",
-    "wiretap": "{asctime}.{msecs:03.0f} {indent} {module}.{funcName} | {trace} | {elapsed:.3f}s | {message} | {details} | node://{parent}/{node} | {attachment}",
+    "wiretap": "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {details} | node://{parent_id}/{unique_id} | {attachment}",
 }
 
 _scope: ContextVar[Optional["Logger"]] = ContextVar("_scope", default=None)
@@ -97,10 +98,10 @@ def create_args_details(args: dict[str, Any], args_format: FormatOptions | dict[
 
     if isinstance(args_format, dict):
         # format each arg individually
-        return {"args": {key: multi_format(args.get(key, None), args_format[key]) for key in args_format}}
+        return {key: multi_format(args.get(key, None), args_format[key]) for key in args_format}
     else:
         # format all args with common format
-        return {"args": {key: multi_format(args.get(key, None), args_format) for key in args}}
+        return {key: multi_format(args.get(key, None), args_format) for key in args}
 
 
 def create_result_details(result: Any | None, result_format: FormatOptions | dict[str, FormatOptions]) -> dict[str, Any]:
@@ -111,9 +112,9 @@ def create_result_details(result: Any | None, result_format: FormatOptions | dic
         return {}
 
     if isinstance(result_format, dict):
-        return {"result": {key: multi_format(result, result_format[key]) for key in result_format}}
+        return {key: multi_format(result, result_format[key]) for key in result_format}
     else:
-        return {"result": multi_format(result, result_format)}
+        return {"value": multi_format(result, result_format)}
 
 
 class ActivityComplete(Exception):
@@ -136,116 +137,76 @@ class Logger:
     def elapsed(self) -> float:
         return timer() - self._start
 
-    def log_start(
-            self,
-            message: Optional[str] = None,
-            details: Optional[dict[str, Any]] = None,
-            attachment: Optional[Any] = None
-    ):
-        self._logger.setLevel(logging.INFO)
-        self._start = timer()
-        self._log_trace(message, details, attachment)
+    def log_begin(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self._log_trace(logging.INFO, message, (details | {}) | {"$module": self.module}, attachment)
 
-    def log_info(
-            self,
-            message: Optional[str] = None,
-            details: Optional[dict[str, Any]] = None,
-            attachment: Optional[Any] = None
-    ):
-        self._logger.setLevel(logging.DEBUG)
-        self._log_trace(message, details, attachment)
+    def log_args(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self._log_trace(logging.DEBUG, message, details, attachment)
 
-    def log_end(
-            self,
-            message: Optional[str] = None,
-            details: Optional[dict[str, Any]] = None,
-            attachment: Optional[Any] = None,
-            result: Optional[TValue] = None,
-            result_format: FormatOptions | dict[str, FormatOptions] = None
-    ) -> Optional[TValue]:
-        self._logger.setLevel(logging.INFO)
-        self._log_trace(message, details, attachment, result, result_format, is_final=True)
-        return result
+    def log_info(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self._log_trace(logging.DEBUG, message, details, attachment)
 
-    def log_noop(
-            self,
-            message: Optional[str] = None,
-            details: Optional[dict[str, Any]] = None,
-            attachment: Optional[Any] = None,
-            result: Optional[TValue] = None,
-            result_format: FormatOptions | dict[str, FormatOptions] = None
-    ) -> Optional[TValue]:
-        self._logger.setLevel(logging.DEBUG)
-        self._log_trace(message, details, attachment, result, result_format, is_final=True)
-        return result
+    def log_metric(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self._log_trace(logging.DEBUG, message, details, attachment)
 
-    def log_break(
-            self,
-            message: Optional[str] = None,
-            details: Optional[dict[str, Any]] = None,
-            attachment: Optional[Any] = None,
-            result: Optional[TValue] = None,
-            result_format: FormatOptions | dict[str, FormatOptions] = None
-    ) -> Optional[TValue]:
-        self._logger.setLevel(logging.DEBUG)
-        self._log_trace(message, details, attachment, result, result_format, is_final=True)
-        return result
+    def log_request(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self._log_trace(logging.DEBUG, message, details, attachment)
 
-    def log_error(
-            self,
-            message: Optional[str] = None,
-            details: Optional[dict[str, Any]] = None,
-            attachment: Optional[Any] = None,
-            result: Optional[TValue] = None,
-            result_format: FormatOptions | dict[str, FormatOptions] = None
-    ) -> Optional[TValue]:
-        self._logger.setLevel(logging.ERROR)
+    def log_response(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self._log_trace(logging.DEBUG, message, details, attachment)
 
+    def log_result(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self._log_trace(logging.DEBUG, message, details, attachment)
+
+    def log_noop(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self._log_trace(logging.DEBUG, message, details, attachment, is_final=True)
+
+    def log_break(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self._log_trace(logging.DEBUG, message, details, attachment, is_final=True)
+
+    def log_end(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self._log_trace(logging.INFO, message, details, attachment, is_final=True)
+
+    def log_error(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
         # process the exception only if it's not Failure
         exc_cls, exc, exc_tb = sys.exc_info()
         if all((exc_cls, exc, exc_tb)):
             # the first 3 frames are the decorator traces; let's get rid of them
             while exc_tb.tb_next:
                 exc_tb = exc_tb.tb_next
-            self._log_trace(message, details, attachment, result, result_format, (exc_cls, exc, exc_tb), is_final=True)
+            self._log_trace(logging.ERROR, message, details, attachment, is_final=True, exc_info=(exc_cls, exc, exc_tb))
         else:
-            self._log_trace(message, details, attachment, result, result_format, is_final=True)
+            self._log_trace(logging.ERROR, message, details, attachment, is_final=True)
 
-        return result
+    def _log_trace(self, level: int, message: Optional[str], details: Optional[dict[str, Any]], attachment: Optional[Any], is_final: bool = False, **kwargs, ):
+        self._logger.setLevel(level)
 
-    def _log_trace(
-            self,
-            message: Optional[str],
-            details: Optional[dict[str, Any]],
-            attachment: Optional[Any],
-            result: Optional[TValue] = None,
-            result_format: FormatOptions | dict[str, FormatOptions] = None,
-            exc_info: Optional[tuple[type[BaseException], BaseException, TracebackType | None]] = None,
-            is_final: bool = False
-    ):
-        trace = inspect.stack()[1][3][4:]  # skip the 'log_' prefix
+        trace = inspect.stack()[1][3]
+        trace = re.sub("^log_", "", trace, flags=re.IGNORECASE)  # remove the 'log_' prefix
 
         if self.is_complete:
             raise ActivityComplete(f"Cannot trace '{trace}' because the '{self.activity}' activity is complete.")
 
         self.is_complete = is_final
 
-        details = (details or {}) | create_result_details(result, result_format)
-
         record_actions = [
             functools.partial(_set_module_name, name=self.module),
             functools.partial(_set_func_name, name=self.activity),
         ]
+
+        extra = {
+            "parent_id": self.parent.id if self.parent else None,
+            "unique_id": self.id,
+            "activity": self.activity,
+            "trace": trace,
+            "elapsed": self.elapsed,
+            "details": (details or {}),
+            "attachment": attachment,
+            "_depth": self.depth
+        }
+
         with _use_custom_log_record_factory(*record_actions):
-            self._logger.log(level=self._logger.level, msg=message, exc_info=exc_info, extra={
-                "parent_id": self.parent.id if self.parent else None,
-                "unique_id": self.id,
-                "trace": trace,
-                "elapsed": self.elapsed,
-                "details": details or {},
-                "attachment": attachment,
-                "_depth": self.depth
-            })
+            self._logger.log(level=self._logger.level, msg=message, exc_info=kwargs.get("exc_info", None), extra=extra)
 
     def __iter__(self):
         current = self
@@ -266,7 +227,7 @@ def begin_activity(
     logger = Logger(module, name, _scope.get())
     token = _scope.set(logger)
     try:
-        logger.log_start(message, details, attachment)
+        logger.log_begin(message, details, attachment)
         yield logger
         if not logger.is_complete:
             logger.log_end()
@@ -320,12 +281,17 @@ def telemetry(
         if asyncio.iscoroutinefunction(decoratee):
             @functools.wraps(decoratee)
             async def decorator(*decoratee_args, **decoratee_kwargs):
-                args_details = create_args_details(params(*decoratee_args, **decoratee_kwargs), args_format) | (details or {})
-                with begin_activity(module_name, scope_name, message=message, details=args_details, attachment=attachment) as activity:
+                with begin_activity(module_name, scope_name, message=message, details=details or {}, attachment=attachment) as activity:
+                    args_details = create_args_details(params(*decoratee_args, **decoratee_kwargs), args_format)
+                    if include_args and args_details:
+                        activity.log_args(details=args_details)
                     inject_logger(activity, decoratee_kwargs)
                     result = await decoratee(*decoratee_args, **decoratee_kwargs)
                     if not activity.is_complete:
-                        activity.log_end(result=result, result_format=result_format)
+                        result_details = create_result_details(result, result_format)
+                        if include_result and result_details:
+                            activity.log_result(details=result_details)
+                        activity.log_end()
                     return result
 
             decorator.__signature__ = inspect.signature(decoratee)
@@ -334,12 +300,17 @@ def telemetry(
         else:
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
-                args_details = create_args_details(params(*decoratee_args, **decoratee_kwargs), args_format) | (details or {})
-                with begin_activity(module_name, scope_name, message=message, details=args_details, attachment=attachment) as activity:
+                with begin_activity(module_name, scope_name, message=message, details=details or {}, attachment=attachment) as activity:
+                    args_details = create_args_details(params(*decoratee_args, **decoratee_kwargs), args_format) if include_args else {}
+                    if args_details:
+                        activity.log_args(details=args_details)
                     inject_logger(activity, decoratee_kwargs)
                     result = decoratee(*decoratee_args, **decoratee_kwargs)
                     if not activity.is_complete:
-                        activity.log_end(result=result, result_format=result_format)
+                        result_details = create_result_details(result, result_format) if include_result else {}
+                        if result_details:
+                            activity.log_result(details=result_details)
+                        activity.log_end()
                     return result
 
             decorator.__signature__ = inspect.signature(decoratee)

@@ -57,7 +57,7 @@ def configure_logging():
                 ".": {
                     "formats": {
                         "classic": "{asctime}.{msecs:03.0f} | {levelname} | {module}.{funcName} | {message}",
-                        "wiretap": "{asctime}.{msecs:03.0f} {indent} {module}.{funcName} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}"
+                        "wiretap": "{asctime}.{msecs:03.0f} {indent} {funcName} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}"
                     },
                     "indent": ".",
                     "values": {"instance": "demo-1"}
@@ -158,7 +158,9 @@ def foo(value: int, logger: wiretap.Logger = None, **kwargs) -> int:
     logging.info("This is a classic message!")
     # raise ValueError("Test!")
     qux(value)
-    return logger.log_end(message="This went smooth!", result=3, result_format=".1f")
+    result = 3
+    logger.log_result(message="This went smooth!", details=dict(value=f"{result:.1f}"))
+    return result
 
 
 @wiretap.telemetry(include_args=dict(value=".2f", bar=lambda x: f"{x}-callable"), include_result=True)

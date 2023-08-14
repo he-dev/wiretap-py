@@ -39,6 +39,7 @@ INSERT INTO dev.wiretap_log(
 class _LogRecordExt(Protocol):
     parent_id: uuid.UUID | None
     unique_id: uuid.UUID
+    activity: str
     trace: str
     elapsed: float
     details: str | None
@@ -60,7 +61,7 @@ class SqlServerHandler(Handler):
 
         params = {
             "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc),
-            "activity": ".".join(n for n in [record.module, record.funcName] if n is not None),
+            #"activity": ".".join(n for n in [record.module, record.funcName] if n is not None),
             "level": record.levelname,
             "message": record.message if hasattr(record, "message") and record.message != str(None) else None,
         }
@@ -72,6 +73,7 @@ class SqlServerHandler(Handler):
             params = params | {
                 "parent_id": recext.parent_id.__str__() if recext.parent_id else None,
                 "unique_id": recext.unique_id.__str__(),
+                "activity": recext.activity,
                 "trace": recext.trace.lower(),
                 "elapsed": recext.elapsed,
                 "details": recext.details,
@@ -85,6 +87,7 @@ class SqlServerHandler(Handler):
             params = params | {
                 "parent_id": None,
                 "unique_id": None,
+                "activity": None,
                 "trace": None,
                 "elapsed": None,
                 "details": None,

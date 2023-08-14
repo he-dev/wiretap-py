@@ -26,3 +26,5 @@ end;
 
 truncate table wiretap_log;
 
+select convert(uniqueidentifier, '1c07e690d6d74972831fd45c1a761e7f');
+
