@@ -14,7 +14,7 @@ from contextvars import ContextVar
 from datetime import datetime, date
 from timeit import default_timer as timer
 from types import TracebackType
-from typing import Dict, Callable, Any, Protocol, Optional, Iterator, TypeVar, TypeAlias, Generic
+from typing import Dict, Callable, Any, Protocol, Optional, Iterator, TypeVar, TypeAlias, Generic, ContextManager
 
 FormatOptions: TypeAlias = str | Callable[[Any], Any] | None
 TValue = TypeVar("TValue")
@@ -121,6 +121,10 @@ class ActivityComplete(Exception):
     pass
 
 
+class LogError(Exception):
+    pass
+
+
 class Logger:
 
     def __init__(self, module: Optional[str], activity: str, parent: Optional["Logger"] = None):
@@ -129,54 +133,29 @@ class Logger:
         self.activity = activity
         self.parent = parent
         self.depth = sum(1 for _ in self)
-        self.is_complete = False
         self._start = timer()
         self._logger = logging.getLogger(f"{module}.{activity}")
+        self._traces: set[str] = set()
 
     @property
     def elapsed(self) -> float:
         return timer() - self._start
 
-    def log_begin(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self.log_trace(None, message, details, attachment, logging.INFO)
+    @property
+    def initial(self) -> "_Initial":
+        return Logger._Initial(self)
 
-    def log_args(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self.log_trace(None, message, details, attachment, logging.DEBUG)
+    @property
+    def unique(self) -> "_Unique":
+        return Logger._Unique(self)
 
-    def log_info(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self.log_trace(None, message, details, attachment, logging.DEBUG)
+    @property
+    def active(self) -> "_Active":
+        return Logger._Active(self)
 
-    def log_item(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self.log_trace(None, message, details, attachment, logging.DEBUG)
-
-    def log_omit(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self.log_trace(None, message, details, attachment, logging.DEBUG)
-
-    def log_metric(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self.log_trace(None, message, details, attachment, logging.DEBUG)
-
-    def log_result(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self.log_trace(None, message, details, attachment, logging.DEBUG)
-
-    def log_noop(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self.log_trace(None, message, details, attachment, logging.INFO, is_final=True)
-
-    def log_abort(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self.log_trace(None, message, details, attachment, logging.INFO, is_final=True)
-
-    def log_end(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self.log_trace(None, message, details, attachment, logging.INFO, is_final=True)
-
-    def log_error(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        # process the exception only if it's not Failure
-        exc_cls, exc, exc_tb = sys.exc_info()
-        if all((exc_cls, exc, exc_tb)):
-            # the first 3 frames are the decorator traces; let's get rid of them
-            while exc_tb.tb_next:
-                exc_tb = exc_tb.tb_next
-            self.log_trace(None, message, details, attachment, logging.ERROR, is_final=True, exc_info=(exc_cls, exc, exc_tb))
-        else:
-            self.log_trace(None, message, details, attachment, logging.ERROR, is_final=True)
+    @property
+    def final(self) -> "_Final":
+        return Logger._Final(self)
 
     def log_trace(
             self,
@@ -185,20 +164,19 @@ class Logger:
             details: Optional[dict[str, Any]] = None,
             attachment: Optional[Any] = None,
             level: int = logging.DEBUG,
-            is_final: bool = False,
+            track_as: Optional[str] = None,
             **kwargs
     ):
         """Allows to log any other trace by specifying a custom name."""
 
+        if kwargs.get("ignore_if_logged", False) and "final" in self._traces:
+            return
+
+        self._assure_trace_order(track_as)
         self._logger.setLevel(level)
 
         trace = name or inspect.stack()[1][3]
         trace = re.sub("^log_", "", trace, flags=re.IGNORECASE)  # remove the 'log_' prefix
-
-        if self.is_complete:
-            raise ActivityComplete(f"Cannot trace '{trace}' because the '{self.activity}' activity is complete.")
-
-        self.is_complete = is_final
 
         record_actions = [
             functools.partial(_set_module_name, name=self.module),
@@ -220,11 +198,83 @@ class Logger:
         with _use_custom_log_record_factory(*record_actions):
             self._logger.log(level=self._logger.level, msg=message, exc_info=kwargs.get("exc_info", None), extra=extra)
 
+    def _assure_trace_order(self, trace: Optional[str]):
+        if not trace:
+            return
+
+        if "final" in self._traces:
+            raise LogError(f"You cannot log any more traces.")
+
+        if trace in self._traces:
+            raise LogError(f"You can log '{trace}' only once.")
+
+        if trace != "initial" and "initial" not in self._traces:
+            raise LogError(f"You need to log an initial trace first.")
+
+        self._traces.add(trace)
+
     def __iter__(self):
         current = self
         while current:
             yield current
             current = current.parent
+
+    class _Initial:
+        def __init__(self, logger: "Logger"):
+            self._logger = logger
+
+        def log_begin(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+            self._logger.log_trace(None, message, details, attachment, logging.INFO, track_as="initial")
+
+    class _Unique:
+        def __init__(self, logger: "Logger"):
+            self._logger = logger
+
+        def log_args(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+            self._logger.log_trace(None, message, details, attachment, logging.DEBUG, track_as="args")
+
+        def log_result(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+            self._logger.log_trace(None, message, details, attachment, logging.DEBUG, track_as="result")
+
+    class _Active:
+        def __init__(self, logger: "Logger"):
+            self._logger = logger
+
+        def log_info(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+            self._logger.log_trace(None, message, details, attachment, logging.DEBUG)
+
+        def log_item(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+            self._logger.log_trace(None, message, details, attachment, logging.DEBUG)
+
+        def log_omit(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+            self._logger.log_trace(None, message, details, attachment, logging.DEBUG)
+
+        def log_metric(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+            self._logger.log_trace(None, message, details, attachment, logging.DEBUG)
+
+    class _Final:
+        def __init__(self, logger: "Logger"):
+            self._logger = logger
+
+        def log_noop(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+            self._logger.log_trace(None, message, details, attachment, logging.INFO, track_as="final")
+
+        def log_abort(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+            self._logger.log_trace(None, message, details, attachment, logging.INFO, track_as="final")
+
+        def log_end(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None, **kwargs) -> None:
+            self._logger.log_trace(None, message, details, attachment, logging.INFO, track_as="final", **kwargs)
+
+        def log_error(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None, **kwargs) -> None:
+            # process the exception only if it's not Failure
+            exc_cls, exc, exc_tb = sys.exc_info()
+            if all((exc_cls, exc, exc_tb)):
+                # the first 3 frames are the decorator traces; let's get rid of them
+                while exc_tb.tb_next:
+                    exc_tb = exc_tb.tb_next
+                self._logger.log_trace(None, message, details, attachment, logging.ERROR, track_as="final", exc_info=(exc_cls, exc, exc_tb), **kwargs)
+            else:
+                self._logger.log_trace(None, message, details, attachment, logging.ERROR, track_as="final", **kwargs)
 
 
 @contextlib.contextmanager
@@ -234,18 +284,16 @@ def begin_activity(
         message: Optional[str] = None,
         details: Optional[dict[str, Any]] = None,
         attachment: Optional[Any] = None
-) -> Iterator[Logger]:
+) -> ContextManager[Logger]:
     """Begins a new activity context."""
     logger = Logger(module, name, _scope.get())
     token = _scope.set(logger)
     try:
-        logger.log_begin(message, details, attachment)
+        logger.initial.log_begin(message, details, attachment)
         yield logger
-        if not logger.is_complete:
-            logger.log_end()
+        logger.final.log_end(ignore_if_logged=True)
     except Exception as e:  # noqa
-        if not logger.is_complete:
-            logger.log_error(message="Unhandled exception has occurred.")
+        logger.final.log_error(message="Unhandled exception has occurred.", ignore_if_logged=True)
         raise
     finally:
         _scope.reset(token)
@@ -295,17 +343,16 @@ def telemetry(
         if asyncio.iscoroutinefunction(decoratee):
             @functools.wraps(decoratee)
             async def decorator(*decoratee_args, **decoratee_kwargs):
-                with begin_activity(module_name, scope_name, message=message, details=details or {}, attachment=attachment) as activity:
+                with begin_activity(module_name, scope_name, message=message, details=details or {}, attachment=attachment) as logger:
                     args_details = create_args_details(params(*decoratee_args, **decoratee_kwargs), args_format)
                     if include_args and args_details:
-                        activity.log_args(details=args_details)
-                    inject_logger(activity, decoratee_kwargs)
+                        logger.unique.log_args(details=args_details)
+                    inject_logger(logger, decoratee_kwargs)
                     result = await decoratee(*decoratee_args, **decoratee_kwargs)
-                    if not activity.is_complete:
-                        result_details = create_result_details(result, result_format)
-                        if include_result and result_details:
-                            activity.log_result(details=result_details)
-                        activity.log_end()
+                    result_details = create_result_details(result, result_format)
+                    if include_result and result_details:
+                        logger.unique.log_result(details=result_details)
+                    logger.final.log_end(ignore_if_logged=True)
                     return result
 
             decorator.__signature__ = inspect.signature(decoratee)
@@ -314,17 +361,16 @@ def telemetry(
         else:
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
-                with begin_activity(module_name, scope_name, message=message, details=details or {}, attachment=attachment) as activity:
+                with begin_activity(module_name, scope_name, message=message, details=details or {}, attachment=attachment) as logger:
                     args_details = create_args_details(params(*decoratee_args, **decoratee_kwargs), args_format) if include_args else {}
                     if args_details:
-                        activity.log_args(details=args_details)
-                    inject_logger(activity, decoratee_kwargs)
+                        logger.unique.log_args(details=args_details)
+                    inject_logger(logger, decoratee_kwargs)
                     result = decoratee(*decoratee_args, **decoratee_kwargs)
-                    if not activity.is_complete:
-                        result_details = create_result_details(result, result_format) if include_result else {}
-                        if result_details:
-                            activity.log_result(details=result_details)
-                        activity.log_end()
+                    result_details = create_result_details(result, result_format) if include_result else {}
+                    if result_details:
+                        logger.unique.log_result(details=result_details)
+                    logger.final.log_end(ignore_if_logged=True)
                     return result
 
             decorator.__signature__ = inspect.signature(decoratee)
@@ -334,7 +380,7 @@ def telemetry(
 
 
 @contextlib.contextmanager
-def _use_custom_log_record_factory(*actions: Callable[[logging.LogRecord], None]) -> Generator[None, None, None]:
+def _use_custom_log_record_factory(*actions: Callable[[logging.LogRecord], None]) -> ContextManager[None]:
     default = logging.getLogRecordFactory()
 
     def custom(*args, **kwargs):

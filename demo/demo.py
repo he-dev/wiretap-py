@@ -128,8 +128,8 @@ def include_args_and_result_formatted(a: int, b: int) -> int:
 
 @wiretap.telemetry(message="This is a start message!")
 def use_message(logger: wiretap.Logger = None):
-    logger.log_info("This is an info message!")
-    logger.log_noop("This is a noop message!")
+    logger.active.log_info("This is an info message!")
+    logger.final.log_noop("This is a noop message!")
 
 
 @wiretap.telemetry()
@@ -157,17 +157,17 @@ def cancel_this_function_because_of_iteration_stop(logger: wiretap.Logger = None
         yield 3
 
     for x in numbers():
-        logger.log_info(details=dict(x=x))
+        logger.active.log_info(details=dict(x=x))
 
 
 @wiretap.telemetry()
 def foo(value: int, logger: wiretap.Logger = None, **kwargs) -> int:
-    logger.log_info(details=dict(name=f"sync-{value}"))
+    logger.active.log_info(details=dict(name=f"sync-{value}"))
     logging.info("This is a classic message!")
     # raise ValueError("Test!")
     qux(value)
     result = 3
-    logger.log_result(message="This went smooth!", details=dict(value=f"{result:.1f}"))
+    logger.unique.log_result(message="This went smooth!", details=dict(value=f"{result:.1f}"))
     return result
 
 
@@ -179,34 +179,34 @@ def fzz(value: int, logger: wiretap.Logger = None) -> int:
 
 @wiretap.telemetry()
 def qux(value: int, scope: wiretap.Logger = None):
-    scope.log_info(details=dict(name=f"sync-{value}"))
+    scope.active.log_info(details=dict(name=f"sync-{value}"))
     # raise ValueError("Test!")
 
 
 @wiretap.telemetry()
 async def bar(value: int, scope: wiretap.Logger = None):
-    scope.log_info(details=dict(name=f"sync-{value}"))
+    scope.active.log_info(details=dict(name=f"sync-{value}"))
     await asyncio.sleep(2.0)
     foo(0)
 
 
 @wiretap.telemetry()
 async def baz(value: int, scope: wiretap.Logger = None):
-    scope.log_info(details=dict(name=f"sync-{value}"))
+    scope.active.log_info(details=dict(name=f"sync-{value}"))
     await asyncio.sleep(3.0)
 
 
 def flow_test():
     with wiretap.begin_activity(module=None, name="outer") as outer:
-        outer.log_info(details=dict(foo=1))
+        outer.active.log_info(details=dict(foo=1))
         with wiretap.begin_activity(module=None, name="inner") as inner:
-            inner.log_info(details=dict(bar=2))
+            inner.active.log_info(details=dict(bar=2))
 
         try:
             raise ValueError
         except:
             # outer.canceled(reason="Testing suppressing exceptions.")
-            outer.log_error()
+            outer.final.log_error()
 
 
 async def main_async():
