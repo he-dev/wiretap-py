@@ -304,7 +304,8 @@ def telemetry(
         include_result: bool | FormatOptions | dict[str, FormatOptions] = False,
         message: Optional[str] = None,
         details: Optional[dict[str, Any]] = None,
-        attachment: Optional[Any] = None
+        attachment: Optional[Any] = None,
+        override: bool = False
 ):
     """Provides telemetry for the decorated function."""
 
