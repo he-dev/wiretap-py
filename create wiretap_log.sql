@@ -13,6 +13,7 @@ begin
         [parent_id] uniqueidentifier null,
         [unique_id] uniqueidentifier null,
         [timestamp] datetime2(3) not null,
+        [subject] nvarchar(200) not null,
         [activity] nvarchar(200) not null,
         [level] nvarchar(50) not null,
         [trace] nvarchar(50) null,

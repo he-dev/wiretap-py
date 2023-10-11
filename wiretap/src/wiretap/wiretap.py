@@ -138,34 +138,34 @@ class Logger:
         return timer() - self._start
 
     def log_begin(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(logging.INFO, message, (details | {}) | {"$module": self.module}, attachment)
+        self.log_trace(None, message, details, attachment, logging.INFO)
 
     def log_args(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(logging.DEBUG, message, details, attachment)
+        self.log_trace(None, message, details, attachment, logging.DEBUG)
 
     def log_info(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(logging.DEBUG, message, details, attachment)
+        self.log_trace(None, message, details, attachment, logging.DEBUG)
+
+    def log_item(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self.log_trace(None, message, details, attachment, logging.DEBUG)
+
+    def log_omit(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self.log_trace(None, message, details, attachment, logging.DEBUG)
 
     def log_metric(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(logging.DEBUG, message, details, attachment)
-
-    def log_request(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(logging.DEBUG, message, details, attachment)
-
-    def log_response(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(logging.DEBUG, message, details, attachment)
+        self.log_trace(None, message, details, attachment, logging.DEBUG)
 
     def log_result(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(logging.DEBUG, message, details, attachment)
+        self.log_trace(None, message, details, attachment, logging.DEBUG)
 
     def log_noop(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(logging.DEBUG, message, details, attachment, is_final=True)
+        self.log_trace(None, message, details, attachment, logging.INFO, is_final=True)
 
-    def log_break(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(logging.DEBUG, message, details, attachment, is_final=True)
+    def log_abort(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self.log_trace(None, message, details, attachment, logging.INFO, is_final=True)
 
     def log_end(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(logging.INFO, message, details, attachment, is_final=True)
+        self.log_trace(None, message, details, attachment, logging.INFO, is_final=True)
 
     def log_error(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
         # process the exception only if it's not Failure
@@ -174,14 +174,25 @@ class Logger:
             # the first 3 frames are the decorator traces; let's get rid of them
             while exc_tb.tb_next:
                 exc_tb = exc_tb.tb_next
-            self._log_trace(logging.ERROR, message, details, attachment, is_final=True, exc_info=(exc_cls, exc, exc_tb))
+            self.log_trace(None, message, details, attachment, logging.ERROR, is_final=True, exc_info=(exc_cls, exc, exc_tb))
         else:
-            self._log_trace(logging.ERROR, message, details, attachment, is_final=True)
+            self.log_trace(None, message, details, attachment, logging.ERROR, is_final=True)
 
-    def _log_trace(self, level: int, message: Optional[str], details: Optional[dict[str, Any]], attachment: Optional[Any], is_final: bool = False, **kwargs, ):
+    def log_trace(
+            self,
+            name: Optional[str],
+            message: Optional[str] = None,
+            details: Optional[dict[str, Any]] = None,
+            attachment: Optional[Any] = None,
+            level: int = logging.DEBUG,
+            is_final: bool = False,
+            **kwargs
+    ):
+        """Allows to log any other trace by specifying a custom name."""
+
         self._logger.setLevel(level)
 
-        trace = inspect.stack()[1][3]
+        trace = name or inspect.stack()[1][3]
         trace = re.sub("^log_", "", trace, flags=re.IGNORECASE)  # remove the 'log_' prefix
 
         if self.is_complete:
@@ -197,6 +208,7 @@ class Logger:
         extra = {
             "parent_id": self.parent.id if self.parent else None,
             "unique_id": self.id,
+            "subject": self.module,
             "activity": self.activity,
             "trace": trace,
             "elapsed": self.elapsed,
@@ -263,6 +275,8 @@ def telemetry(
         module = inspect.getmodule(decoratee)
         module_name = module.__name__ if module else None
         scope_name = decoratee.__name__
+
+        # print(decoratee.__name__)
 
         def inject_logger(logger: Logger, d: Dict):
             """Injects Logger if required."""

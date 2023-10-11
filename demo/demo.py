@@ -4,6 +4,7 @@ import logging.config
 import logging.handlers
 import asyncio
 import multiprocessing
+import demo2
 from typing import Iterator
 
 import wiretap
@@ -17,6 +18,7 @@ INSERT INTO dev.wiretap_log(
     [parent_id], 
     [unique_id], 
     [timestamp], 
+    [subject],
     [activity], 
     [trace], 
     [level], 
@@ -29,6 +31,7 @@ INSERT INTO dev.wiretap_log(
     :parent_id, 
     :unique_id, 
     :timestamp, 
+    :subject,
     :activity, 
     :trace, 
     :level, 
@@ -57,7 +60,7 @@ def configure_logging():
                 ".": {
                     "formats": {
                         "classic": "{asctime}.{msecs:03.0f} | {levelname} | {module}.{funcName} | {message}",
-                        "wiretap": "{asctime}.{msecs:03.0f} {indent} {funcName} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}"
+                        "wiretap": "{asctime}.{msecs:03.0f} {indent} {subject}/{activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}"
                     },
                     "indent": ".",
                     "values": {"instance": "demo-1"}
@@ -127,6 +130,11 @@ def include_args_and_result_formatted(a: int, b: int) -> int:
 def use_message(logger: wiretap.Logger = None):
     logger.log_info("This is an info message!")
     logger.log_noop("This is a noop message!")
+
+
+@wiretap.telemetry()
+def use_module():
+    demo2.another_module()
 
 
 @wiretap.telemetry(include_args=True)
@@ -276,3 +284,4 @@ if __name__ == "__main__":
     include_args_without_logger(1, 2)
     include_args_without_formatting(3, 4)
     cancel_this_function_because_of_iteration_stop()
+    use_module()
