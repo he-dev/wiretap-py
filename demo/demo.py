@@ -116,18 +116,18 @@ def include_neither_args_nor_result(a: int, b: int) -> int:
     return a + b
 
 
-@wiretap.telemetry(include_args=True, include_result=True)
+@wiretap.telemetry(include_args=dict(a=None, b=None), include_result="")
 def include_args_and_result(a: int, b: int) -> int:
     return a + b
 
 
-@wiretap.telemetry(include_args=".1f", include_result=".3f")
+@wiretap.telemetry(include_args=dict(a=".1f", b=".1f"), include_result=".3f")
 def include_args_and_result_formatted(a: int, b: int) -> int:
     return a + b
 
 
 @wiretap.telemetry(message="This is a start message!")
-def use_message(logger: wiretap.Logger = None):
+def use_message(logger: wiretap.TraceLogger = None):
     logger.active.log_info("This is an info message!")
     logger.final.log_noop("This is a noop message!")
 
@@ -137,7 +137,7 @@ def use_module():
     demo2.another_module()
 
 
-@wiretap.telemetry(include_args=True)
+@wiretap.telemetry(include_args=dict(a=None, b=None))
 def include_args_without_logger(a: int, b: int, logger: wiretap.Logger = None):
     return a + b
 
@@ -148,7 +148,7 @@ def include_args_without_formatting(a: int, b: int):
 
 
 @wiretap.telemetry()
-def cancel_this_function_because_of_iteration_stop(logger: wiretap.Logger = None):
+def cancel_this_function_because_of_iteration_stop(logger: wiretap.TraceLogger = None):
     @wiretap.telemetry()
     def numbers() -> Iterator[int]:
         yield 1
@@ -161,13 +161,13 @@ def cancel_this_function_because_of_iteration_stop(logger: wiretap.Logger = None
 
 
 @wiretap.telemetry()
-def foo(value: int, logger: wiretap.Logger = None, **kwargs) -> int:
+def foo(value: int, logger: wiretap.TraceLogger = None, **kwargs) -> int:
     logger.active.log_info(details=dict(name=f"sync-{value}"))
     logging.info("This is a classic message!")
     # raise ValueError("Test!")
     qux(value)
     result = 3
-    logger.unique.log_result(message="This went smooth!", details=dict(value=f"{result:.1f}"))
+    logger.final.log_result(message="This went smooth!", details=dict(value=f"{result:.1f}"))
     return result
 
 
@@ -178,28 +178,28 @@ def fzz(value: int, logger: wiretap.Logger = None) -> int:
 
 
 @wiretap.telemetry()
-def qux(value: int, scope: wiretap.Logger = None):
+def qux(value: int, scope: wiretap.TraceLogger = None):
     scope.active.log_info(details=dict(name=f"sync-{value}"))
     # raise ValueError("Test!")
 
 
 @wiretap.telemetry()
-async def bar(value: int, scope: wiretap.Logger = None):
+async def bar(value: int, scope: wiretap.TraceLogger = None):
     scope.active.log_info(details=dict(name=f"sync-{value}"))
     await asyncio.sleep(2.0)
     foo(0)
 
 
 @wiretap.telemetry()
-async def baz(value: int, scope: wiretap.Logger = None):
+async def baz(value: int, scope: wiretap.TraceLogger = None):
     scope.active.log_info(details=dict(name=f"sync-{value}"))
     await asyncio.sleep(3.0)
 
 
 def flow_test():
-    with wiretap.begin_activity(module=None, name="outer") as outer:
+    with wiretap.begin_telemetry(module=None, name="outer") as outer:
         outer.active.log_info(details=dict(foo=1))
-        with wiretap.begin_activity(module=None, name="inner") as inner:
+        with wiretap.begin_telemetry(module=None, name="inner") as inner:
             inner.active.log_info(details=dict(bar=2))
 
         try:
