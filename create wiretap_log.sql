@@ -16,8 +16,8 @@ begin
         [subject] nvarchar(200) not null,
         [activity] nvarchar(200) not null,
         [level] nvarchar(50) not null,
-        [trace] nvarchar(50) null,
-        [elapsed] decimal(10, 3) null,
+        [trace] nvarchar(50) not null,
+        [elapsed] decimal(10, 3) not null,
         [message] nvarchar(1000) null,
         [details] nvarchar(max) null,
         [attachment] nvarchar(max) null
@@ -25,7 +25,7 @@ begin
 end;
 
 
-truncate table wiretap_log;
+truncate table dev.wiretap_log;
 
 select convert(uniqueidentifier, '1c07e690d6d74972831fd45c1a761e7f');
 

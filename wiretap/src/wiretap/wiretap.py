@@ -11,59 +11,22 @@ import sys
 import uuid
 from collections.abc import Generator
 from contextvars import ContextVar
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from timeit import default_timer as timer
 from types import TracebackType
 from typing import Dict, Callable, Any, Protocol, Optional, Iterator, TypeVar, TypeAlias, Generic, ContextManager, Type
+from . import filters
+from .data import LoggerMeta, current_logger, LogRecordExtra
 
-FormatOptions: TypeAlias = str | Callable[[Any], Any]
-TValue = TypeVar("TValue")
-
-DEFAULT_FORMATS: Dict[str, str] = {
-    "classic": "{asctime}.{msecs:03.0f} | {levelname} | {module}.{funcName} | {message}",
-    "wiretap": "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {details} | node://{parent_id}/{unique_id} | {attachment}",
-}
-
-_scope: ContextVar[Optional["Logger"]] = ContextVar("_scope", default=None)
+logging.root.addFilter(filter=filters.TimestampField())
+logging.root.addFilter(filter=filters.LevelField())
+logging.root.addFilter(filter=filters.ExtraFields())
+logging.root.addFilter(filter=filters.SerializeDetailsField())
 
 
-class SerializeDetails(Protocol):
-    def __call__(self, value: Optional[Dict[str, Any]]) -> str | None: ...
-
-
-class SerializeDetailsToJson(SerializeDetails):
-    def __call__(self, value: Optional[Dict[str, Any]]) -> str | None:
-        return json.dumps(value, sort_keys=True, allow_nan=False, cls=_JsonDateTimeEncoder) if value else None
-
-
-class _JsonDateTimeEncoder(json.JSONEncoder):
-    def default(self, o: Any) -> Any:
-        if isinstance(o, (date, datetime)):
-            return o.isoformat()
-
-
-class MultiFormatter(logging.Formatter):
-    formats: Dict[str, str] = {}
-    indent: str = "."
-    values: Optional[Dict[str, Any]] = None
-    serialize_details: SerializeDetails = SerializeDetailsToJson()
-
-    def format(self, record: logging.LogRecord) -> str:
-        record.levelname = record.levelname.lower()
-        record.__dict__.update(self.values or {})  # Unpack values.
-
-        if hasattr(record, "details") and isinstance(record.details, dict):
-            record.indent = self.indent * record.__dict__.pop("_depth", 1)
-            record.details = self.serialize_details(record.details)
-
-        # determine which format to use
-        format_key = "wiretap" if hasattr(record, "trace") else "classic"
-
-        # use custom format if specified or the default one
-        format_str = self.formats[format_key] if format_key in self.formats else DEFAULT_FORMATS[format_key]
-        self._style._fmt = format_str
-
-        return super().format(record)
+# class TestFormatter(logging.Formatter):
+#    def format(self, record: logging.LogRecord) -> str:
+#        return super().format(record)
 
 
 def create_args_details(args: Optional[dict[str, Any]], args_format: Optional[dict[str, Optional[str]]]) -> dict[str, Any]:
@@ -91,16 +54,21 @@ def create_result_details(result: Optional[Any], result_format: Optional[str]) -
 ExcInfo: TypeAlias = tuple[Type[BaseException], BaseException, TracebackType]
 
 
-class Logger:
+class Logger(LoggerMeta):
 
-    def __init__(self, module: Optional[str], activity: str, parent: Optional["Logger"] = None):
+    def __init__(self, subject: Optional[str], activity: str, parent: Optional[LoggerMeta] = None):
         self.id = uuid.uuid4()
-        self.module = module
+        self.subject = subject
         self.activity = activity
         self.parent = parent
         self.depth = sum(1 for _ in self)
         self._start = timer()
-        self._logger = logging.getLogger(f"{module}.{activity}")
+        self._logger = logging.getLogger(f"{subject}.{activity}")
+
+        self._logger.addFilter(filter=filters.TimestampField())
+        self._logger.addFilter(filter=filters.LevelField())
+        self._logger.addFilter(filter=filters.ExtraFields())
+        self._logger.addFilter(filter=filters.SerializeDetailsField())
 
     @property
     def elapsed(self) -> float:
@@ -117,20 +85,18 @@ class Logger:
     ):
         self._logger.setLevel(level)
 
-        extra = {
-            "parent_id": self.parent.id if self.parent else None,
-            "unique_id": self.id,
-            "subject": self.module,
-            "activity": self.activity,
-            "trace": name,
-            "elapsed": self.elapsed,
-            "details": (details or {}),
-            "attachment": attachment,
-            "_depth": self.depth
-        }
+        extra = LogRecordExtra(
+            parent_id=self.parent.id if self.parent else None,
+            unique_id=self.id,
+            subject=self.subject,
+            activity=self.activity,
+            trace=name,
+            elapsed=self.elapsed,
+            details=(details or {}),
+            attachment=attachment
+        )
 
-        with _use_custom_log_record(_set_module_name(self.module), _set_func_name(self.activity)):
-            self._logger.log(level=level, msg=message, exc_info=exc_info, extra=extra)
+        self._logger.log(level=level, msg=message, exc_info=exc_info, extra=vars(extra))
 
     def __iter__(self):
         current = self
@@ -245,16 +211,16 @@ class TraceLogger:
 
 @contextlib.contextmanager
 def begin_telemetry(
-        module: Optional[str],
-        name: str,
+        subject: Optional[str],
+        activity: str,
         message: Optional[str] = None,
         details: Optional[dict[str, Any]] = None,
         attachment: Optional[Any] = None
 ) -> ContextManager[TraceLogger]:
     """Begins a new activity context."""
-    logger = Logger(module, name, _scope.get())
+    logger = Logger(subject, activity, current_logger.get())
     tracer = TraceLogger(logger)
-    token = _scope.set(logger)
+    token = current_logger.set(logger)
     try:
         tracer.initial.log_begin(message, details, attachment)
         yield tracer
@@ -263,7 +229,7 @@ def begin_telemetry(
         tracer.final.log_error(message="Unhandled exception has occurred.")
         raise
     finally:
-        _scope.reset(token)
+        current_logger.reset(token)
 
 
 def telemetry(
@@ -277,8 +243,8 @@ def telemetry(
 
     def factory(decoratee):
         module = inspect.getmodule(decoratee)
-        module_name = module.__name__ if module else None
-        scope_name = decoratee.__name__
+        subject = module.__name__ if module else None
+        activity = decoratee.__name__
 
         # print(decoratee.__name__)
 
@@ -302,7 +268,7 @@ def telemetry(
             @functools.wraps(decoratee)
             async def decorator(*decoratee_args, **decoratee_kwargs):
                 args_details = create_args_details(params(*decoratee_args, **decoratee_kwargs), include_args)
-                with begin_telemetry(module_name, scope_name, message=message, details=(details or {}) | args_details, attachment=attachment) as logger:
+                with begin_telemetry(subject, activity, message=message, details=(details or {}) | args_details, attachment=attachment) as logger:
                     inject_logger(logger.default, decoratee_kwargs)
                     result = await decoratee(*decoratee_args, **decoratee_kwargs)
                     logger.final.log_end(details=create_result_details(result, include_result))
@@ -315,7 +281,7 @@ def telemetry(
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
                 args_details = create_args_details(params(*decoratee_args, **decoratee_kwargs), include_args)
-                with begin_telemetry(module_name, scope_name, message=message, details=(details or {}) | args_details, attachment=attachment) as logger:
+                with begin_telemetry(subject, activity, message=message, details=(details or {}) | args_details, attachment=attachment) as logger:
                     inject_logger(logger.default, decoratee_kwargs)
                     result = decoratee(*decoratee_args, **decoratee_kwargs)
                     logger.final.log_end(details=create_result_details(result, include_result))
@@ -325,34 +291,3 @@ def telemetry(
             return decorator
 
     return factory
-
-
-@contextlib.contextmanager
-def _use_custom_log_record(*actions: Callable[[logging.LogRecord], None]) -> ContextManager[None]:
-    default = logging.getLogRecordFactory()
-
-    def custom(*args, **kwargs):
-        record = default(*args, **kwargs)
-        for action in actions:
-            action(record)
-        return record
-
-    logging.setLogRecordFactory(custom)
-    try:
-        yield
-    finally:
-        logging.setLogRecordFactory(default)
-
-
-def _set_func_name(name: str):
-    def set_value(record: logging.LogRecord):
-        record.funcName = name
-
-    return set_value
-
-
-def _set_module_name(name: str):
-    def set_value(record: logging.LogRecord):
-        record.module = name
-
-    return set_value

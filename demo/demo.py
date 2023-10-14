@@ -6,6 +6,7 @@ import asyncio
 import multiprocessing
 import demo2
 from typing import Iterator
+from datetime import datetime, timezone
 
 import wiretap
 import wiretap_sqlserver.sqlserverhandler
@@ -54,24 +55,33 @@ def configure_logging():
             #    "defaults": {"status": "<status>", "correlation": "<correlation>", "extra": "<extra>"}
             # },
             "wiretap": {
-                "()": wiretap.MultiFormatter,
+                "()": logging.Formatter,
                 "style": "{",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
-                ".": {
-                    "formats": {
-                        "classic": "{asctime}.{msecs:03.0f} | {levelname} | {module}.{funcName} | {message}",
-                        "wiretap": "{asctime}.{msecs:03.0f} {indent} {subject}/{activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}"
-                    },
-                    "indent": ".",
-                    "values": {"instance": "demo-1"}
-                }
+                "fmt": "{asctime}.{msecs:03.0f} {indent} {subject}/{activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}",
+            }
+        },
+        "filters": {
+            "instance": {
+                "()": wiretap.filters.ConstField,
+                "name": "instance",
+                "value": "demo-1"
+            },
+            "indent": {
+                "()": wiretap.filters.IndentField,
+                "char": "_"
+            },
+            "timestamp_local": {
+                "()": wiretap.filters.TimestampField,
+                "tz": datetime.now(timezone.utc).astimezone().tzinfo
             }
         },
         "handlers": {
             "console": {
                 "class": "logging.StreamHandler",
                 "formatter": "wiretap",
-                "level": "DEBUG"
+                "level": "DEBUG",
+                "filters": ["indent", "timestamp_local"]
             },
             "file": {
                 "class": "logging.handlers.TimedRotatingFileHandler",
@@ -87,7 +97,8 @@ def configure_logging():
                 "connection_string": SqlServerOdbcConnectionString.standard(server="localhost,1433", database="master", username="sa", password="MSSQL2022!"),
                 "insert": INSERT,
                 "level": "DEBUG",
-                "formatter": "wiretap"
+                "formatter": "wiretap",
+                "filters": ["instance"]
             },
             "memory": {
                 "class": "logging.handlers.MemoryHandler",
@@ -135,6 +146,11 @@ def use_message(logger: wiretap.TraceLogger = None):
 @wiretap.telemetry()
 def use_module():
     demo2.another_module()
+
+
+@wiretap.telemetry()
+def uses_default_logger():
+    logging.info(msg="This is a classic log.")
 
 
 @wiretap.telemetry(include_args=dict(a=None, b=None))
@@ -197,9 +213,9 @@ async def baz(value: int, scope: wiretap.TraceLogger = None):
 
 
 def flow_test():
-    with wiretap.begin_telemetry(module=None, name="outer") as outer:
+    with wiretap.begin_telemetry(subject=None, activity="outer") as outer:
         outer.active.log_info(details=dict(foo=1))
-        with wiretap.begin_telemetry(module=None, name="inner") as inner:
+        with wiretap.begin_telemetry(subject=None, activity="inner") as inner:
             inner.active.log_info(details=dict(bar=2))
 
         try:
@@ -285,3 +301,4 @@ if __name__ == "__main__":
     include_args_without_formatting(3, 4)
     cancel_this_function_because_of_iteration_stop()
     use_module()
+    uses_default_logger()

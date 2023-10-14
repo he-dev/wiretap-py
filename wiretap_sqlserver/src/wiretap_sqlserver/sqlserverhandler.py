@@ -8,6 +8,8 @@ from typing import Any, Dict, Protocol, runtime_checkable, cast
 
 import sqlalchemy  # type: ignore
 
+import wiretap
+
 DEFAULT_INSERT = """
 INSERT INTO dev.wiretap_log(
     [parent_id], 
@@ -39,6 +41,7 @@ INSERT INTO dev.wiretap_log(
 class _LogRecordExt(Protocol):
     parent_id: uuid.UUID | None
     unique_id: uuid.UUID
+    timestamp: datetime
     subject: str
     activity: str
     trace: str
@@ -58,48 +61,33 @@ class SqlServerHandler(Handler):
         atexit.register(self._cleanup)
 
     def emit(self, record: logging.LogRecord):
-        is_ext = hasattr(record, "trace")
+        extra = cast(_LogRecordExt, record)
 
-        params = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc),
-            #"activity": ".".join(n for n in [record.module, record.funcName] if n is not None),
+        insert_params = {
+            "parent_id": extra.parent_id.__str__() if extra.parent_id else None,
+            "unique_id": extra.unique_id.__str__(),
+            "timestamp": extra.timestamp,
+            "subject": extra.subject,
+            "activity": extra.activity,
+            "trace": extra.trace.lower(),
             "level": record.levelname,
-            "message": record.message if hasattr(record, "message") and record.message != str(None) else None,
+            "elapsed": extra.elapsed,
+            "message": record.message if hasattr(record, "message") and record.message != str(None) else None,  # Prevent empty string messages.
+            "details": extra.details,
+            "attachment": extra.attachment
         }
 
-        recext = cast(_LogRecordExt, record)
-        params = params | (self.formatter.values or {} if hasattr(self.formatter, "values") else {})
+        if record.exc_text:
+            insert_params["attachment"] = insert_params["attachment"] + "\n\n" + record.exc_text if insert_params["attachment"] else record.exc_text
 
-        if is_ext:
-            params = params | {
-                "parent_id": recext.parent_id.__str__() if recext.parent_id else None,
-                "unique_id": recext.unique_id.__str__(),
-                "subject": recext.subject,
-                "activity": recext.activity,
-                "trace": recext.trace.lower(),
-                "elapsed": recext.elapsed,
-                "details": recext.details,
-                "attachment": recext.attachment
-            }
-
-            if record.exc_text:
-                params["attachment"] = params["attachment"] + "\n\n" + record.exc_text if params["attachment"] else record.exc_text
-
-        else:
-            params = params | {
-                "parent_id": None,
-                "unique_id": None,
-                "subject": None,
-                "activity": None,
-                "trace": None,
-                "elapsed": None,
-                "details": None,
-                "attachment": None
-            }
+        # Append custom fields if any.
+        for f in self.filters:
+            if isinstance(f, wiretap.filters.ConstField):
+                insert_params[f.name] = f.value
 
         try:
             with self.engine.connect() as c:
-                c.execute(self.insert, params)
+                c.execute(self.insert, insert_params)
                 c.commit()
         except:  # noqa
             # Disable this handler if an error occurs.
