@@ -1,5 +1,6 @@
 import dataclasses
 import uuid
+from datetime import datetime
 from contextvars import ContextVar
 from typing import Protocol, Optional, Any
 
@@ -10,16 +11,39 @@ class LoggerMeta(Protocol):
     id: uuid.UUID
     subject: str
     activity: str
-    elapsed: float
+
+    @property
+    def elapsed(self) -> float: return ...
+
     depth: int
     parent: "LoggerMeta"
 
 
-current_logger: ContextVar[Optional[LoggerMeta]] = ContextVar("current_logger", default=None)
+class TracerMeta(Protocol):
+    logger: LoggerMeta
+    traces: set[str]
+
+
+current_tracer: ContextVar[Optional[TracerMeta]] = ContextVar("current_tracer", default=None)
 
 
 @dataclasses.dataclass
-class LogRecordExtra:
+class ContextExtra:
+    parent_id: uuid.UUID | None
+    unique_id: uuid.UUID | None
+    subject: str
+    activity: str
+
+
+@dataclasses.dataclass
+class TraceExtra:
+    trace: str
+    elapsed: float
+    details: dict[str, Any] | None
+    attachment: str | None
+
+
+class DefaultExtra(Protocol):
     parent_id: uuid.UUID | None
     unique_id: uuid.UUID | None
     subject: str
@@ -28,3 +52,13 @@ class LogRecordExtra:
     elapsed: float
     details: dict[str, Any] | None
     attachment: str | None
+
+
+class InitialExtra(Protocol):
+    inputs: dict[str, Any] | None
+    inputs_spec: dict[str, str | None] | None
+
+
+class FinalExtra(Protocol):
+    output: Any | None
+    output_spec: str | None

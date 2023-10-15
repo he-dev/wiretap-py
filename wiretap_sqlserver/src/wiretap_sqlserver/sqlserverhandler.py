@@ -63,6 +63,13 @@ class SqlServerHandler(Handler):
     def emit(self, record: logging.LogRecord):
         extra = cast(_LogRecordExt, record)
 
+        details = None
+        if isinstance(extra.details, dict) and extra.details:
+            details = str(extra.details)
+
+        if isinstance(extra.details, str) and extra.details != "{}":
+            details = extra.details
+
         insert_params = {
             "parent_id": extra.parent_id.__str__() if extra.parent_id else None,
             "unique_id": extra.unique_id.__str__(),
@@ -73,16 +80,16 @@ class SqlServerHandler(Handler):
             "level": record.levelname,
             "elapsed": extra.elapsed,
             "message": record.message if hasattr(record, "message") and record.message != str(None) else None,  # Prevent empty string messages.
-            "details": extra.details,
+            "details": details,
             "attachment": extra.attachment
         }
 
         if record.exc_text:
             insert_params["attachment"] = insert_params["attachment"] + "\n\n" + record.exc_text if insert_params["attachment"] else record.exc_text
 
-        # Append custom fields if any.
+        # Append const extras.
         for f in self.filters:
-            if isinstance(f, wiretap.filters.ConstField):
+            if isinstance(f, wiretap.filters.AddConstExtra):
                 insert_params[f.name] = f.value
 
         try:

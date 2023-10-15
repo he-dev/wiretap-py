@@ -63,17 +63,23 @@ def configure_logging():
         },
         "filters": {
             "instance": {
-                "()": wiretap.filters.ConstField,
+                "()": wiretap.filters.AddConstExtra,
                 "name": "instance",
                 "value": "demo-1"
             },
             "indent": {
-                "()": wiretap.filters.IndentField,
+                "()": wiretap.filters.AddIndentExtra,
                 "char": "_"
             },
             "timestamp_local": {
-                "()": wiretap.filters.TimestampField,
-                "tz": datetime.now(timezone.utc).astimezone().tzinfo
+                "()": wiretap.filters.AddTimestampExtra,
+                "tz": "local"
+            },
+            "strip_exc_info": {
+                "()": wiretap.filters.StripExcInfo
+            },
+            "serialize_details": {
+                "()": wiretap.filters.SerializeDetailsExtra
             }
         },
         "handlers": {
@@ -81,7 +87,7 @@ def configure_logging():
                 "class": "logging.StreamHandler",
                 "formatter": "wiretap",
                 "level": "DEBUG",
-                "filters": ["indent", "timestamp_local"]
+                "filters": ["indent", "timestamp_local", "strip_exc_info"]
             },
             "file": {
                 "class": "logging.handlers.TimedRotatingFileHandler",
@@ -98,7 +104,7 @@ def configure_logging():
                 "insert": INSERT,
                 "level": "DEBUG",
                 "formatter": "wiretap",
-                "filters": ["instance"]
+                "filters": ["instance", "strip_exc_info", "serialize_details"]
             },
             "memory": {
                 "class": "logging.handlers.MemoryHandler",
@@ -139,7 +145,7 @@ def include_args_and_result_formatted(a: int, b: int) -> int:
 
 @wiretap.telemetry(message="This is a start message!")
 def use_message(logger: wiretap.TraceLogger = None):
-    logger.active.log_info("This is an info message!")
+    logger.other.log_info("This is an info message!")
     logger.final.log_noop("This is a noop message!")
 
 
@@ -158,7 +164,7 @@ def include_args_without_logger(a: int, b: int, logger: wiretap.Logger = None):
     return a + b
 
 
-@wiretap.telemetry(include_args=dict(a=None, b=None))
+@wiretap.telemetry(include_args=dict(a=None, b=None), include_result=True)
 def include_args_without_formatting(a: int, b: int):
     return a + b
 
@@ -173,12 +179,12 @@ def cancel_this_function_because_of_iteration_stop(logger: wiretap.TraceLogger =
         yield 3
 
     for x in numbers():
-        logger.active.log_info(details=dict(x=x))
+        logger.other.log_info(details=dict(x=x))
 
 
 @wiretap.telemetry()
 def foo(value: int, logger: wiretap.TraceLogger = None, **kwargs) -> int:
-    logger.active.log_info(details=dict(name=f"sync-{value}"))
+    logger.other.log_info(details=dict(name=f"sync-{value}"))
     logging.info("This is a classic message!")
     # raise ValueError("Test!")
     qux(value)
@@ -195,28 +201,28 @@ def fzz(value: int, logger: wiretap.Logger = None) -> int:
 
 @wiretap.telemetry()
 def qux(value: int, scope: wiretap.TraceLogger = None):
-    scope.active.log_info(details=dict(name=f"sync-{value}"))
+    scope.other.log_info(details=dict(name=f"sync-{value}"))
     # raise ValueError("Test!")
 
 
 @wiretap.telemetry()
 async def bar(value: int, scope: wiretap.TraceLogger = None):
-    scope.active.log_info(details=dict(name=f"sync-{value}"))
+    scope.other.log_info(details=dict(name=f"sync-{value}"))
     await asyncio.sleep(2.0)
     foo(0)
 
 
 @wiretap.telemetry()
 async def baz(value: int, scope: wiretap.TraceLogger = None):
-    scope.active.log_info(details=dict(name=f"sync-{value}"))
+    scope.other.log_info(details=dict(name=f"sync-{value}"))
     await asyncio.sleep(3.0)
 
 
 def flow_test():
-    with wiretap.begin_telemetry(subject=None, activity="outer") as outer:
-        outer.active.log_info(details=dict(foo=1))
-        with wiretap.begin_telemetry(subject=None, activity="inner") as inner:
-            inner.active.log_info(details=dict(bar=2))
+    with wiretap.begin_telemetry(subject="outer", activity="outer") as outer:
+        outer.other.log_info(details=dict(foo=1))
+        with wiretap.begin_telemetry(subject="outer", activity="inner") as inner:
+            inner.other.log_info(details=dict(bar=2))
 
         try:
             raise ValueError
@@ -286,13 +292,13 @@ if __name__ == "__main__":
 
     # fzz(7)
 
-    # flow_test()
     # print(foo(1, bar="baz"))
 
     foo_e()
 
     # blub(1, 2)
 
+    flow_test()
     include_neither_args_nor_result(1, 2)
     include_args_and_result(1, 2)
     include_args_and_result_formatted(1, 2)

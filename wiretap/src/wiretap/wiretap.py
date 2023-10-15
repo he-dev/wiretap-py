@@ -16,39 +16,16 @@ from timeit import default_timer as timer
 from types import TracebackType
 from typing import Dict, Callable, Any, Protocol, Optional, Iterator, TypeVar, TypeAlias, Generic, ContextManager, Type
 from . import filters
-from .data import LoggerMeta, current_logger, LogRecordExtra
+from .data import LoggerMeta, current_tracer, TraceExtra
 
-logging.root.addFilter(filter=filters.TimestampField())
-logging.root.addFilter(filter=filters.LevelField())
-logging.root.addFilter(filter=filters.ExtraFields())
-logging.root.addFilter(filter=filters.SerializeDetailsField())
-
+logging.root.addFilter(filters.LowerLevelName())
+logging.root.addFilter(filters.AddTimestampExtra())
+logging.root.addFilter(filters.AddContextExtra())
+logging.root.addFilter(filters.AddTraceExtra())
 
 # class TestFormatter(logging.Formatter):
 #    def format(self, record: logging.LogRecord) -> str:
 #        return super().format(record)
-
-
-def create_args_details(args: Optional[dict[str, Any]], args_format: Optional[dict[str, Optional[str]]]) -> dict[str, Any]:
-    if not args:
-        return {}
-
-    if not args_format:
-        return {}
-
-    result = {key: format(args[key], args_format[key] or "") for key in args_format if not args[key] is None}
-    return {"args": result} if result else {}
-
-
-def create_result_details(result: Optional[Any], result_format: Optional[str]) -> dict[str, Any]:
-    if result is None:
-        return {}
-
-    if result_format is None:
-        return {}
-
-    result = format(result_format or "")
-    return {"result": result} if result else {}
 
 
 ExcInfo: TypeAlias = tuple[Type[BaseException], BaseException, TracebackType]
@@ -65,10 +42,13 @@ class Logger(LoggerMeta):
         self._start = timer()
         self._logger = logging.getLogger(f"{subject}.{activity}")
 
-        self._logger.addFilter(filter=filters.TimestampField())
-        self._logger.addFilter(filter=filters.LevelField())
-        self._logger.addFilter(filter=filters.ExtraFields())
-        self._logger.addFilter(filter=filters.SerializeDetailsField())
+        self._logger.addFilter(filters.LowerLevelName())
+        self._logger.addFilter(filters.AddTimestampExtra())
+        self._logger.addFilter(filters.AddContextExtra())
+        self._logger.addFilter(filters.AddTraceExtra())
+        self._logger.addFilter(filters.FormatArgs())
+        self._logger.addFilter(filters.FormatResult())
+        self._logger.addFilter(filters.SkipDuplicateTrace())
 
     @property
     def elapsed(self) -> float:
@@ -81,22 +61,21 @@ class Logger(LoggerMeta):
             details: Optional[dict[str, Any]] = None,
             attachment: Optional[Any] = None,
             level: int = logging.DEBUG,
-            exc_info: Optional[ExcInfo] = None
+            exc_info: Optional[ExcInfo | bool] = None,
+            extra: Optional[dict[str, Any]] = None
     ):
         self._logger.setLevel(level)
 
-        extra = LogRecordExtra(
-            parent_id=self.parent.id if self.parent else None,
-            unique_id=self.id,
-            subject=self.subject,
-            activity=self.activity,
+        trace_extra = TraceExtra(
             trace=name,
             elapsed=self.elapsed,
             details=(details or {}),
             attachment=attachment
         )
 
-        self._logger.log(level=level, msg=message, exc_info=exc_info, extra=vars(extra))
+        extra = (extra or {}) | vars(trace_extra)
+
+        self._logger.log(level=level, msg=message, exc_info=exc_info, extra=extra)
 
     def __iter__(self):
         current = self
@@ -112,21 +91,22 @@ class LogTrace(Protocol):
             details: Optional[dict[str, Any]] = None,
             attachment: Optional[Any] = None,
             level: int = logging.DEBUG,
-            exc_info: Optional[ExcInfo] = None,
-            group: Optional[str] = None
+            exc_info: Optional[ExcInfo | bool] = None,
+            group: Optional[str] = None,
+            extra: Optional[dict[str, Any]] = None
     ):
         pass
 
 
-class _InitialTraceLogger:
+class InitialTraceLogger:
     def __init__(self, log_trace: LogTrace):
         self._log_trace = log_trace
 
-    def log_begin(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(message, details, attachment, logging.INFO, group="initial")
+    def log_begin(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None, inputs: Optional[dict[str, Any]] = None, inputs_spec: Optional[dict[str, str | Callable | None]] = None) -> None:
+        self._log_trace(message, details, attachment, logging.INFO, group="initial", extra=dict(inputs=inputs, inputs_spec=inputs_spec))
 
 
-class _ExtraTraceLogger:
+class OtherTraceLogger:
     def __init__(self, log_trace: LogTrace):
         self._log_trace = log_trace
 
@@ -143,7 +123,7 @@ class _ExtraTraceLogger:
         self._log_trace(message, details, attachment, logging.DEBUG)
 
 
-class _FinalTraceLogger:
+class FinalTraceLogger:
     def __init__(self, log_trace: LogTrace):
         self._log_trace = log_trace
 
@@ -153,42 +133,33 @@ class _FinalTraceLogger:
     def log_abort(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
         self._log_trace(message, details, attachment, logging.INFO, group="final")
 
-    def log_end(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(message, details, attachment, logging.INFO, group="final")
+    def log_end(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None, output: Optional[Any] = None, output_spec: Optional[str | Callable | None] = None) -> None:
+        self._log_trace(message, details, attachment, logging.INFO, group="final", extra=dict(output=output, output_spec=output_spec))
 
     def log_error(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(message, details, attachment, logging.ERROR, group="final", exc_info=_FinalTraceLogger._create_exc_info())
-
-    @staticmethod
-    def _create_exc_info() -> Optional[ExcInfo]:
-        exc_cls, exc, exc_tb = sys.exc_info()
-        if all((exc_cls, exc, exc_tb)):
-            # the first 3 frames are the decorator traces; let's get rid of them
-            while exc_tb.tb_next:
-                exc_tb = exc_tb.tb_next
-            return exc_cls, exc, exc_tb
+        self._log_trace(message, details, attachment, logging.ERROR, group="final", exc_info=True)
 
 
 class TraceLogger:
     def __init__(self, logger: Logger):
-        self._logger = logger
-        self._traces: set[str] = set()
+        self.logger = logger
+        self.traces: set[str] = set()
 
     @property
-    def initial(self) -> _InitialTraceLogger:
-        return _InitialTraceLogger(self._log_trace)
+    def initial(self) -> InitialTraceLogger:
+        return InitialTraceLogger(self._log_trace)
 
     @property
-    def active(self) -> _ExtraTraceLogger:
-        return _ExtraTraceLogger(self._log_trace)
+    def other(self) -> OtherTraceLogger:
+        return OtherTraceLogger(self._log_trace)
 
     @property
-    def final(self) -> _FinalTraceLogger:
-        return _FinalTraceLogger(self._log_trace)
+    def final(self) -> FinalTraceLogger:
+        return FinalTraceLogger(self._log_trace)
 
     @property
     def default(self) -> Logger:
-        return self._logger
+        return self.logger
 
     def _log_trace(
             self,
@@ -196,50 +167,60 @@ class TraceLogger:
             details: Optional[dict[str, Any]] = None,
             attachment: Optional[Any] = None,
             level: int = logging.DEBUG,
-            exc_info: Optional[ExcInfo] = None,
-            group: Optional[str] = None
+            exc_info: Optional[ExcInfo | bool] = None,
+            group: Optional[str] = None,
+            extra: Optional[dict[str, Any]] = None
     ):
-        if group in self._traces:
-            return
-
         name = inspect.stack()[1][3]
         name = re.sub("^log_", "", name, flags=re.IGNORECASE)
 
-        self._logger.log_trace(name, message, details, attachment, level, exc_info)
-        self._traces.add(group)
+        self.logger.log_trace(name, message, details, attachment, level, exc_info, extra)
+        self.traces.add(group)
+
+
+@contextlib.contextmanager
+def telemetry_context(
+        subject: str,
+        activity: str
+) -> ContextManager[TraceLogger]:
+    parent = current_tracer.get()
+    logger = Logger(subject, activity, parent.logger if parent else None)
+    tracer = TraceLogger(logger)
+    token = current_tracer.set(tracer)
+    try:
+        yield tracer
+    except Exception as e:  # noqa
+        tracer.final.log_error(message="Unhandled exception has occurred.")
+        raise
+    finally:
+        current_tracer.reset(token)
 
 
 @contextlib.contextmanager
 def begin_telemetry(
-        subject: Optional[str],
+        subject: str,
         activity: str,
         message: Optional[str] = None,
         details: Optional[dict[str, Any]] = None,
         attachment: Optional[Any] = None
 ) -> ContextManager[TraceLogger]:
-    """Begins a new activity context."""
-    logger = Logger(subject, activity, current_logger.get())
-    tracer = TraceLogger(logger)
-    token = current_logger.set(logger)
-    try:
+    with telemetry_context(subject, activity) as tracer:
         tracer.initial.log_begin(message, details, attachment)
         yield tracer
         tracer.final.log_end()
-    except Exception as e:  # noqa
-        tracer.final.log_error(message="Unhandled exception has occurred.")
-        raise
-    finally:
-        current_logger.reset(token)
 
 
 def telemetry(
         include_args: Optional[dict[str, Optional[str]]] = None,
-        include_result: Optional[str] = None,
+        include_result: Optional[str | bool] = None,
         message: Optional[str] = None,
         details: Optional[dict[str, Any]] = None,
         attachment: Optional[Any] = None
 ):
     """Provides telemetry for the decorated function."""
+
+    if isinstance(include_result, bool) and include_result:
+        include_result = ""
 
     def factory(decoratee):
         module = inspect.getmodule(decoratee)
@@ -248,15 +229,15 @@ def telemetry(
 
         # print(decoratee.__name__)
 
-        def inject_logger(logger: Logger, d: Dict):
+        def inject_logger(logger: TraceLogger, d: Dict):
             """Injects Logger if required."""
             for n, t in inspect.getfullargspec(decoratee).annotations.items():
                 if t is Logger:
-                    d[n] = logger
+                    d[n] = logger.default
                 if t is TraceLogger:
-                    d[n] = TraceLogger(logger)
+                    d[n] = logger
 
-        def params(*decoratee_args, **decoratee_kwargs) -> Dict[str, Any]:
+        def get_args(*decoratee_args, **decoratee_kwargs) -> dict[str, Any]:
             # Zip arg names and their indexes up to the number of args of the decoratee_args.
             arg_pairs = zip(inspect.getfullargspec(decoratee).args, range(len(decoratee_args)))
             # Turn arg_pairs into a dictionary and combine it with decoratee_kwargs.
@@ -267,11 +248,12 @@ def telemetry(
         if asyncio.iscoroutinefunction(decoratee):
             @functools.wraps(decoratee)
             async def decorator(*decoratee_args, **decoratee_kwargs):
-                args_details = create_args_details(params(*decoratee_args, **decoratee_kwargs), include_args)
-                with begin_telemetry(subject, activity, message=message, details=(details or {}) | args_details, attachment=attachment) as logger:
-                    inject_logger(logger.default, decoratee_kwargs)
+                args = get_args(*decoratee_args, **decoratee_kwargs)
+                with telemetry_context(subject, activity) as logger:
+                    logger.initial.log_begin(message=message, details=details or {}, attachment=attachment, inputs=args, inputs_spec=include_args)
+                    inject_logger(logger, decoratee_kwargs)
                     result = await decoratee(*decoratee_args, **decoratee_kwargs)
-                    logger.final.log_end(details=create_result_details(result, include_result))
+                    logger.final.log_end(output=result, output_spec=include_result)
                     return result
 
             decorator.__signature__ = inspect.signature(decoratee)
@@ -280,11 +262,12 @@ def telemetry(
         else:
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
-                args_details = create_args_details(params(*decoratee_args, **decoratee_kwargs), include_args)
-                with begin_telemetry(subject, activity, message=message, details=(details or {}) | args_details, attachment=attachment) as logger:
-                    inject_logger(logger.default, decoratee_kwargs)
+                args = get_args(*decoratee_args, **decoratee_kwargs)
+                with telemetry_context(subject, activity) as logger:
+                    logger.initial.log_begin(message=message, details=details or {}, attachment=attachment, inputs=args, inputs_spec=include_args)
+                    inject_logger(logger, decoratee_kwargs)
                     result = decoratee(*decoratee_args, **decoratee_kwargs)
-                    logger.final.log_end(details=create_result_details(result, include_result))
+                    logger.final.log_end(output=result, output_spec=include_result)
                     return result
 
             decorator.__signature__ = inspect.signature(decoratee)
