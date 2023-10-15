@@ -1,20 +1,13 @@
 import asyncio
 import contextlib
-import dataclasses
-import enum
 import functools
 import inspect
-import json
 import logging
 import re
-import sys
 import uuid
-from collections.abc import Generator
-from contextvars import ContextVar
-from datetime import datetime, date, timezone
 from timeit import default_timer as timer
 from types import TracebackType
-from typing import Dict, Callable, Any, Protocol, Optional, Iterator, TypeVar, TypeAlias, Generic, ContextManager, Type
+from typing import Dict, Callable, Any, Protocol, Optional, TypeAlias, ContextManager, Type
 from . import filters
 from .data import LoggerMeta, current_tracer, TraceExtra
 
@@ -22,11 +15,6 @@ logging.root.addFilter(filters.LowerLevelName())
 logging.root.addFilter(filters.AddTimestampExtra())
 logging.root.addFilter(filters.AddContextExtra())
 logging.root.addFilter(filters.AddTraceExtra())
-
-# class TestFormatter(logging.Formatter):
-#    def format(self, record: logging.LogRecord) -> str:
-#        return super().format(record)
-
 
 ExcInfo: TypeAlias = tuple[Type[BaseException], BaseException, TracebackType]
 
@@ -226,8 +214,6 @@ def telemetry(
         module = inspect.getmodule(decoratee)
         subject = module.__name__ if module else None
         activity = decoratee.__name__
-
-        # print(decoratee.__name__)
 
         def inject_logger(logger: TraceLogger, d: Dict):
             """Injects Logger if required."""

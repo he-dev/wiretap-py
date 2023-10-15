@@ -2,39 +2,13 @@ import atexit
 import logging
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from logging import Handler
-from typing import Any, Dict, Protocol, runtime_checkable, cast
+from typing import Protocol, runtime_checkable, cast
 
 import sqlalchemy  # type: ignore
 
 import wiretap
-
-DEFAULT_INSERT = """
-INSERT INTO dev.wiretap_log(
-    [parent_id], 
-    [unique_id], 
-    [timestamp], 
-    [activity], 
-    [trace], 
-    [level], 
-    [elapsed], 
-    [message],
-    [details],
-    [attachment]
-) VALUES (
-    :parent_id, 
-    :unique_id, 
-    :timestamp, 
-    :activity, 
-    :trace, 
-    :level, 
-    :elapsed, 
-    :message,
-    :details, 
-    :attachment
-)
-"""
 
 
 @runtime_checkable
@@ -52,7 +26,7 @@ class _LogRecordExt(Protocol):
 
 class SqlServerHandler(Handler):
 
-    def __init__(self, connection_string: str, insert: str = DEFAULT_INSERT):
+    def __init__(self, connection_string: str, insert: str):
         super().__init__()
         connection_url = sqlalchemy.engine.URL.create("mssql+pyodbc", query={"odbc_connect": connection_string})
         self.engine = sqlalchemy.create_engine(connection_url)

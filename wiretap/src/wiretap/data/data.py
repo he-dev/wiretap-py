@@ -1,6 +1,5 @@
 import dataclasses
 import uuid
-from datetime import datetime
 from contextvars import ContextVar
 from typing import Protocol, Optional, Any
 
@@ -8,6 +7,8 @@ DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elaps
 
 
 class LoggerMeta(Protocol):
+    """Represents the properties of the default logger."""
+
     id: uuid.UUID
     subject: str
     activity: str
@@ -20,6 +21,8 @@ class LoggerMeta(Protocol):
 
 
 class TracerMeta(Protocol):
+    """Represents the properties of the trace logger."""
+
     logger: LoggerMeta
     traces: set[str]
 

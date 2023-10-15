@@ -4,13 +4,11 @@ from datetime import datetime, date, timezone
 from typing import Dict, Callable, Any, Protocol, Optional, cast
 from ..data import current_tracer, ContextExtra, TraceExtra, InitialExtra, DefaultExtra, FinalExtra
 
-INCLUDE = 1
-
 
 class AddConstExtra(logging.Filter):
     def __init__(self, name: str, value: Any):
         self.value = value
-        super().__init__(name)
+        super().__init__(f"add_{name}")
 
     def filter(self, record: logging.LogRecord) -> bool:
         setattr(record, self.name, self.value)
@@ -19,7 +17,7 @@ class AddConstExtra(logging.Filter):
 
 class AddTimestampExtra(logging.Filter):
     def __init__(self, tz: str = "utc"):
-        super().__init__("timestamp")
+        super().__init__("add_timestamp")
         match tz.casefold().strip():
             case "utc":
                 self.tz = timezone.utc
@@ -33,7 +31,7 @@ class AddTimestampExtra(logging.Filter):
 
 class LowerLevelName(logging.Filter):
     def __init__(self):
-        super().__init__("level")
+        super().__init__("lower_level")
 
     def filter(self, record: logging.LogRecord) -> bool:
         setattr(record, self.name, record.levelname.lower())
@@ -42,7 +40,7 @@ class LowerLevelName(logging.Filter):
 
 class AddIndentExtra(logging.Filter):
     def __init__(self, char: str = "."):
-        super().__init__("indent")
+        super().__init__("add_indent")
         self.char = char
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -80,7 +78,7 @@ class SerializeDetailsExtra(logging.Filter):
 
 class AddContextExtra(logging.Filter):
     def __init__(self):
-        super().__init__("context_extra")
+        super().__init__("add_context_extra")
 
     def filter(self, record: logging.LogRecord) -> bool:
         current = current_tracer.get().logger
@@ -99,7 +97,7 @@ class AddContextExtra(logging.Filter):
 
 class AddTraceExtra(logging.Filter):
     def __init__(self):
-        super().__init__("trace_extra")
+        super().__init__("add_trace_extra")
 
     def filter(self, record: logging.LogRecord) -> bool:
         current = current_tracer.get().logger
