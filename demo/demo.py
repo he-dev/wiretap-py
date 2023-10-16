@@ -7,7 +7,6 @@ import asyncio
 import multiprocessing
 import demo2
 from typing import Iterator, Protocol
-from datetime import datetime, timezone
 
 import wiretap
 import wiretap_sqlserver.sqlserverhandler
@@ -81,6 +80,12 @@ def configure_logging():
             },
             "serialize_details": {
                 "()": wiretap.filters.SerializeDetailsExtra
+            },
+            "context_extra": {
+                "()": wiretap.filters.AddContextExtra
+            },
+            "trace_extra": {
+                "()": wiretap.filters.AddTraceExtra
             }
         },
         "handlers": {
@@ -88,7 +93,13 @@ def configure_logging():
                 "class": "logging.StreamHandler",
                 "formatter": "wiretap",
                 "level": "DEBUG",
-                "filters": ["indent", "timestamp_local", "strip_exc_info"]
+                "filters": [
+                    "indent",
+                    "timestamp_local",
+                    "strip_exc_info",
+                    "context_extra",
+                    "trace_extra"
+                ]
             },
             "file": {
                 "class": "logging.handlers.TimedRotatingFileHandler",
@@ -105,7 +116,13 @@ def configure_logging():
                 "connection_string": SqlServerOdbcConnectionString.standard(server="localhost,1433", database="master", username="sa", password="MSSQL2022!"),
                 "insert": INSERT,
                 "level": "DEBUG",
-                "filters": ["instance", "strip_exc_info", "serialize_details"],
+                "filters": [
+                    "instance",
+                    "strip_exc_info",
+                    "serialize_details",
+                    "context_extra",
+                    "trace_extra"
+                ],
                 ".": {
                     "extra_params": ["instance"]
                 }

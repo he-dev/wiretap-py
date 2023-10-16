@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import datetime, date, timezone
 from typing import Dict, Callable, Any, Protocol, Optional, cast
-from ..data import current_tracer, ContextExtra, TraceExtra, InitialExtra, DefaultExtra, FinalExtra
+from ..types import current_tracer, ContextExtra, TraceExtra, InitialExtra, DefaultExtra, FinalExtra
 
 
 class AddConstExtra(logging.Filter):
@@ -46,10 +46,8 @@ class AddIndentExtra(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         tracer = current_tracer.get()
         logger = tracer.default if tracer else None
-        if tracer:
-            setattr(record, self.name, self.char * (logger.depth or 1))
-        else:
-            setattr(record, self.name, self.char)
+        indent = self.char * (logger.depth or 1) if tracer else self.char
+        setattr(record, self.name, indent)
         return True
 
 

@@ -2,26 +2,23 @@ import atexit
 import logging
 import sys
 import uuid
+import sqlalchemy  # type: ignore
 from datetime import datetime
 from logging import Handler
 from typing import Protocol, runtime_checkable, cast
-
-import sqlalchemy  # type: ignore
-
-import wiretap
+from wiretap.types import DefaultExtra
 
 
-@runtime_checkable
-class _LogRecordExt(Protocol):
-    parent_id: uuid.UUID | None
-    unique_id: uuid.UUID
-    timestamp: datetime
-    subject: str
-    activity: str
-    trace: str
-    elapsed: float
-    details: str | None
-    attachment: str | None
+# class _LogRecordExt(Protocol):
+#     parent_id: uuid.UUID | None
+#     unique_id: uuid.UUID
+#     timestamp: datetime
+#     subject: str
+#     activity: str
+#     trace: str
+#     elapsed: float
+#     details: str | None
+#     attachment: str | None
 
 
 class SqlServerHandler(Handler):
@@ -36,7 +33,7 @@ class SqlServerHandler(Handler):
         atexit.register(self._cleanup)
 
     def emit(self, record: logging.LogRecord):
-        extra = cast(_LogRecordExt, record)
+        extra = cast(DefaultExtra, record)
 
         details = None
         if isinstance(extra.details, dict) and extra.details:

@@ -1,27 +1,22 @@
-import logging
+from logging import DEBUG
 import dataclasses
 import uuid
-from contextvars import ContextVar
+from datetime import datetime
 from types import TracebackType
 from typing import Protocol, Optional, Any, TypeAlias, Type, Callable
-
-DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {details} | node://{parent_id}/{unique_id} | {attachment}"
 
 ExcInfo: TypeAlias = tuple[Type[BaseException], BaseException, TracebackType]
 
 
 class Logger(Protocol):
-    """Represents the default logger."""
-
     id: uuid.UUID
     subject: str
     activity: str
+    depth: int
+    parent: Optional["Logger"]
 
     @property
     def elapsed(self) -> float: return ...  # noqa
-
-    depth: int
-    parent: Optional["Logger"]
 
     def log_trace(
             self,
@@ -29,7 +24,7 @@ class Logger(Protocol):
             message: Optional[str] = None,
             details: Optional[dict[str, Any]] = None,
             attachment: Optional[Any] = None,
-            level: int = logging.DEBUG,
+            level: int = DEBUG,
             exc_info: Optional[ExcInfo | bool] = None,
             extra: Optional[dict[str, Any]] = None
     ): ...
@@ -40,9 +35,6 @@ class Tracer(Protocol):
 
     default: Logger
     traces: set[str]
-
-
-current_tracer: ContextVar[Optional[Tracer]] = ContextVar("current_tracer", default=None)
 
 
 @dataclasses.dataclass
@@ -64,6 +56,7 @@ class TraceExtra:
 class DefaultExtra(Protocol):
     parent_id: uuid.UUID | None
     unique_id: uuid.UUID
+    timestamp: datetime
     subject: str
     activity: str
     trace: str
