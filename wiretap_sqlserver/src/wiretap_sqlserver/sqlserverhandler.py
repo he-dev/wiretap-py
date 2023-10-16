@@ -25,6 +25,7 @@ class _LogRecordExt(Protocol):
 
 
 class SqlServerHandler(Handler):
+    extra_params: list[str] = list()
 
     def __init__(self, connection_string: str, insert: str):
         super().__init__()
@@ -61,10 +62,9 @@ class SqlServerHandler(Handler):
         if record.exc_text:
             insert_params["attachment"] = insert_params["attachment"] + "\n\n" + record.exc_text if insert_params["attachment"] else record.exc_text
 
-        # Append const extras.
-        for f in self.filters:
-            if isinstance(f, wiretap.filters.AddConstExtra):
-                insert_params[f.name] = f.value
+        for p in self.extra_params:
+            assert hasattr(record, p)
+            insert_params[p] = record.__dict__[p]
 
         try:
             with self.engine.connect() as c:

@@ -1,3 +1,4 @@
+import dataclasses
 import inspect
 import logging
 import logging.config
@@ -5,7 +6,7 @@ import logging.handlers
 import asyncio
 import multiprocessing
 import demo2
-from typing import Iterator
+from typing import Iterator, Protocol
 from datetime import datetime, timezone
 
 import wiretap
@@ -99,12 +100,15 @@ def configure_logging():
             },
             "sqlserver": {
                 # "class": "wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
-                "class": "wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
+                #"class": "wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
+                "()": wiretap_sqlserver.sqlserverhandler.SqlServerHandler,
                 "connection_string": SqlServerOdbcConnectionString.standard(server="localhost,1433", database="master", username="sa", password="MSSQL2022!"),
                 "insert": INSERT,
                 "level": "DEBUG",
-                "formatter": "wiretap",
-                "filters": ["instance", "strip_exc_info", "serialize_details"]
+                "filters": ["instance", "strip_exc_info", "serialize_details"],
+                ".": {
+                    "extra_params": ["instance"]
+                }
             },
             "memory": {
                 "class": "logging.handlers.MemoryHandler",
@@ -160,7 +164,7 @@ def uses_default_logger():
 
 
 @wiretap.telemetry(include_args=dict(a=None, b=None))
-def include_args_without_logger(a: int, b: int, logger: wiretap.Logger = None):
+def include_args_without_logger(a: int, b: int, logger: wiretap.BasicLogger = None):
     return a + b
 
 
@@ -194,7 +198,7 @@ def foo(value: int, logger: wiretap.TraceLogger = None, **kwargs) -> int:
 
 
 @wiretap.telemetry(include_args=dict(value=".2f", bar=lambda x: f"{x}-callable"), include_result=True)
-def fzz(value: int, logger: wiretap.Logger = None) -> int:
+def fzz(value: int, logger: wiretap.BasicLogger = None) -> int:
     # return logger.completed(3, wiretap.FormatResultDetails())
     return 3
 
@@ -286,9 +290,15 @@ def blub(a):
     pass
 
 
+@dataclasses.dataclass
+class Home(Protocol):
+    foo: int
+
 if __name__ == "__main__":
     # asyncio.run(main())
     # main_proc()
+
+    #h = Home(2)
 
     # fzz(7)
 

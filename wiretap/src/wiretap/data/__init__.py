@@ -1,11 +1,13 @@
 from .data import (
-    LoggerMeta,
-    TracerMeta,
+    Logger,
+    Tracer,
     ContextExtra,
     TraceExtra,
     InitialExtra,
     DefaultExtra,
     FinalExtra,
     current_tracer,
-    DEFAULT_FORMAT
+    DEFAULT_FORMAT,
+    ExcInfo
 )
+

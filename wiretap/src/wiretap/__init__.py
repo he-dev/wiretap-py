@@ -1,7 +1,7 @@
 from . import data
 from . import filters
 from .wiretap import (
-    Logger,
+    BasicLogger,
     TraceLogger,
     telemetry,
     begin_telemetry,

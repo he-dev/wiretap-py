@@ -1,39 +1,54 @@
+import logging
 import dataclasses
 import uuid
 from contextvars import ContextVar
-from typing import Protocol, Optional, Any
+from types import TracebackType
+from typing import Protocol, Optional, Any, TypeAlias, Type, Callable
 
 DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {details} | node://{parent_id}/{unique_id} | {attachment}"
 
+ExcInfo: TypeAlias = tuple[Type[BaseException], BaseException, TracebackType]
 
-class LoggerMeta(Protocol):
-    """Represents the properties of the default logger."""
+
+class Logger(Protocol):
+    """Represents the default logger."""
 
     id: uuid.UUID
     subject: str
     activity: str
 
     @property
-    def elapsed(self) -> float: return ...
+    def elapsed(self) -> float: return ...  # noqa
 
     depth: int
-    parent: "LoggerMeta"
+    parent: Optional["Logger"]
+
+    def log_trace(
+            self,
+            name: str,
+            message: Optional[str] = None,
+            details: Optional[dict[str, Any]] = None,
+            attachment: Optional[Any] = None,
+            level: int = logging.DEBUG,
+            exc_info: Optional[ExcInfo | bool] = None,
+            extra: Optional[dict[str, Any]] = None
+    ): ...
 
 
-class TracerMeta(Protocol):
+class Tracer(Protocol):
     """Represents the properties of the trace logger."""
 
-    logger: LoggerMeta
+    default: Logger
     traces: set[str]
 
 
-current_tracer: ContextVar[Optional[TracerMeta]] = ContextVar("current_tracer", default=None)
+current_tracer: ContextVar[Optional[Tracer]] = ContextVar("current_tracer", default=None)
 
 
 @dataclasses.dataclass
 class ContextExtra:
     parent_id: uuid.UUID | None
-    unique_id: uuid.UUID | None
+    unique_id: uuid.UUID
     subject: str
     activity: str
 
@@ -48,7 +63,7 @@ class TraceExtra:
 
 class DefaultExtra(Protocol):
     parent_id: uuid.UUID | None
-    unique_id: uuid.UUID | None
+    unique_id: uuid.UUID
     subject: str
     activity: str
     trace: str
@@ -59,9 +74,9 @@ class DefaultExtra(Protocol):
 
 class InitialExtra(Protocol):
     inputs: dict[str, Any] | None
-    inputs_spec: dict[str, str | None] | None
+    inputs_spec: dict[str, str | Callable | None] | None
 
 
 class FinalExtra(Protocol):
     output: Any | None
-    output_spec: str | None
+    output_spec: str | Callable | None
