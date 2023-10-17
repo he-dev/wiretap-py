@@ -9,7 +9,6 @@ from .types import (
     InitialExtra,
     DefaultExtra,
     FinalExtra,
-    DEFAULT_FORMAT,
     ExcInfo
 )
 

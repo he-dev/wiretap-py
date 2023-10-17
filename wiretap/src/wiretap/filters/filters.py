@@ -138,6 +138,7 @@ class FormatArgs(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         initial = cast(InitialExtra, record)
+        default = cast(DefaultExtra, record)
         can_format = \
             hasattr(record, "inputs") and \
             hasattr(record, "inputs_spec") and \
@@ -148,16 +149,20 @@ class FormatArgs(logging.Filter):
             for k, f in initial.inputs_spec.items():
                 try:
                     arg = initial.inputs[k]
-                    if arg is not None:
+                    while arg is not None:
                         f = f or ""
+
                         if isinstance(f, str):
                             args[k] = format(arg, f)
+                            break
+
                         if isinstance(f, Callable):
                             args[k] = f(arg)
+                            break
+
+                        raise ValueError(f"Cannot format arg <{k}> of <{default.activity}> in module <{default.subject}> because its spec is invalid. It must be: [str | Callable].")
                 except KeyError as e:
-                    source_fun = record.__dict__.get('activity', None) or record.funcName
-                    source_mod = record.__dict__.get('subject', None) or record.module
-                    raise KeyError(f"Cannot format arg <{k}> because <{source_fun}> in module <{source_mod}> does not have a parameter with this name.") from e
+                    raise KeyError(f"Cannot format arg <{k}> because <{default.activity}> in module <{default.subject}> does not have a parameter with this name.") from e
             if args:
                 cast(DefaultExtra, record).details["args"] = args
 
@@ -169,22 +174,29 @@ class FormatResult(logging.Filter):
         super().__init__("format_result")
 
     def filter(self, record: logging.LogRecord) -> bool:
+        default = cast(DefaultExtra, record)
         final = cast(FinalExtra, record)
         can_format = \
             hasattr(record, "output") and \
             hasattr(record, "output_spec") and \
             final.output is not None and \
             final.output_spec is not None
-        if can_format:
-            result: str = ""
+        result: str = ""
+        while can_format:
             f = final.output_spec
+
             if isinstance(f, str):
                 result = format(final.output, f)
+                break
+
             if isinstance(f, Callable):
                 result = f(final.output)
+                break
 
-            if result:
-                cast(DefaultExtra, record).details["result"] = result
+            raise ValueError(f"Cannot format the result of <{default.activity}> in module <{default.subject}> because its spec is invalid. It must be: [str | Callable].")
+
+        if result:
+            default.details["result"] = result
 
         return True
 
