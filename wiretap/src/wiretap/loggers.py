@@ -61,8 +61,7 @@ class LogTrace(Protocol):
             attachment: Optional[Any] = None,
             level: int = logging.DEBUG,
             exc_info: Optional[ExcInfo | bool] = None,
-            extra: Optional[dict[str, Any]] = None,
-            group: Optional[str] = None
+            extra: Optional[dict[str, Any]] = None
     ):
         pass
 
@@ -72,7 +71,7 @@ class InitialTraceLogger:
         self._log_trace = log_trace
 
     def log_begin(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None, inputs: Optional[dict[str, Any]] = None, inputs_spec: Optional[dict[str, str | Callable | None]] = None) -> None:
-        self._log_trace(message, details, attachment, logging.INFO, group="initial", extra=dict(inputs=inputs, inputs_spec=inputs_spec))
+        self._log_trace(message, details, attachment, logging.INFO, extra=dict(source="initial", inputs=inputs, inputs_spec=inputs_spec))
 
 
 class OtherTraceLogger:
@@ -100,22 +99,22 @@ class FinalTraceLogger:
         self._log_trace = log_trace
 
     def log_noop(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(message, details, attachment, logging.INFO, group="final")
+        self._log_trace(message, details, attachment, logging.INFO, extra=dict(source="final"))
 
     def log_abort(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(message, details, attachment, logging.INFO, group="final")
+        self._log_trace(message, details, attachment, logging.WARN, extra=dict(source="final"))
 
     def log_end(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None, output: Optional[T] = None, output_spec: Optional[str | Callable[[T], Any] | None] = None) -> None:
-        self._log_trace(message, details, attachment, logging.INFO, group="final", extra=dict(output=output, output_spec=output_spec))
+        self._log_trace(message, details, attachment, logging.INFO, extra=dict(source="final", output=output, output_spec=output_spec))
 
     def log_error(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(message, details, attachment, logging.ERROR, group="final", exc_info=True)
+        self._log_trace(message, details, attachment, logging.ERROR, extra=dict(source="final"), exc_info=True)
 
 
 class TraceLogger(Tracer):
     def __init__(self, logger: BasicLogger):
         self.default = logger
-        self.traces: set[str] = set()
+        self.sources: set[str] = set()
 
     @property
     def initial(self) -> InitialTraceLogger:
@@ -136,12 +135,29 @@ class TraceLogger(Tracer):
             attachment: Optional[Any] = None,
             level: int = logging.DEBUG,
             exc_info: Optional[ExcInfo | bool] = None,
-            extra: Optional[dict[str, Any]] = None,
-            group: Optional[str] = None
+            extra: Optional[dict[str, Any]] = None
     ):
-        name = inspect.stack()[1][3]
-        name = re.sub("^log_", "", name, flags=re.IGNORECASE)
+        if self._suppress_source((extra or {}).pop("source", None)):
+            return
 
-        self.default.log_trace(name, message, details, attachment, level, exc_info, extra)
-        if group:
-            self.traces.add(group)
+        self.default.log_trace(
+            TraceLogger._trace_name(),
+            message,
+            details,
+            attachment,
+            level,
+            exc_info,
+            extra
+        )
+
+    def _suppress_source(self, source: str) -> bool:
+        try:
+            return source in self.sources
+        finally:
+            if source:
+                self.sources.add(source)
+
+    @staticmethod
+    def _trace_name():
+        name = inspect.stack()[2][3]
+        return re.sub("^log_", "", name, flags=re.IGNORECASE)

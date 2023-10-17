@@ -201,11 +201,3 @@ class FormatResult(logging.Filter):
         return True
 
 
-class SkipDuplicateTrace(logging.Filter):
-    def __init__(self):
-        super().__init__("skip_duplicate_trace")
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        tracer = current_tracer.get()
-        trace_extra = cast(DefaultExtra, record)
-        return trace_extra.trace not in tracer.traces

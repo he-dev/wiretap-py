@@ -34,7 +34,7 @@ class Tracer(Protocol):
     """Represents the properties of the trace logger."""
 
     default: Logger
-    traces: set[str]
+    sources: set[str]
 
 
 @dataclasses.dataclass

@@ -9,6 +9,5 @@ from .filters import (
     SerializeDetailsExtra,
     StripExcInfo,
     FormatArgs,
-    FormatResult,
-    SkipDuplicateTrace
+    FormatResult
 )

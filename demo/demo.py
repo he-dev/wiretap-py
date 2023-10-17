@@ -43,110 +43,107 @@ INSERT INTO dev.wiretap_log(
 )
 """
 
-
-def configure_logging():
-    logging.config.dictConfig({
-        "version": 1,
-        "formatters": {
-            # "console": {
-            #    "style": "{",
-            #    "format": "{asctime}.{msecs:.0f} | {module}.{funcName} | {status}",
-            #    "datefmt": "%Y-%m-%d %H:%M:%S",
-            #    "defaults": {"status": "<status>", "correlation": "<correlation>", "extra": "<extra>"}
-            # },
-            "wiretap": {
-                "()": logging.Formatter,
-                "style": "{",
-                "datefmt": "%Y-%m-%d %H:%M:%S",
-                "fmt": "{asctime}.{msecs:03.0f} {indent} {subject}/{activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}",
-            }
-        },
-        "filters": {
-            "instance": {
-                "()": wiretap.filters.AddConstExtra,
-                "name": "instance",
-                "value": "demo-1"
-            },
-            "indent": {
-                "()": wiretap.filters.AddIndentExtra,
-                "char": "_"
-            },
-            "timestamp_local": {
-                "()": wiretap.filters.AddTimestampExtra,
-                "tz": "local"
-            },
-            "strip_exc_info": {
-                "()": wiretap.filters.StripExcInfo
-            },
-            "serialize_details": {
-                "()": wiretap.filters.SerializeDetailsExtra
-            },
-            "context_extra": {
-                "()": wiretap.filters.AddContextExtra
-            },
-            "trace_extra": {
-                "()": wiretap.filters.AddTraceExtra
-            }
-        },
-        "handlers": {
-            "console": {
-                "class": "logging.StreamHandler",
-                "formatter": "wiretap",
-                "level": "DEBUG",
-                "filters": [
-                    "indent",
-                    "timestamp_local",
-                    "strip_exc_info",
-                    "context_extra",
-                    "trace_extra"
-                ]
-            },
-            "file": {
-                "class": "logging.handlers.TimedRotatingFileHandler",
-                "when": "d",
-                "interval": 1,
-                "filename": r"c:\temp\wiretap.log",
-                "formatter": "wiretap",
-                "level": "DEBUG"
-            },
-            "sqlserver": {
-                # "class": "wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
-                #"class": "wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
-                "()": wiretap_sqlserver.sqlserverhandler.SqlServerHandler,
-                "connection_string": SqlServerOdbcConnectionString.standard(server="localhost,1433", database="master", username="sa", password="MSSQL2022!"),
-                "insert": INSERT,
-                "level": "DEBUG",
-                "filters": [
-                    "instance",
-                    "strip_exc_info",
-                    "serialize_details",
-                    "context_extra",
-                    "trace_extra"
-                ],
-                ".": {
-                    "extra_params": ["instance"]
-                }
-            },
-            "memory": {
-                "class": "logging.handlers.MemoryHandler",
-                "capacity": 100,
-                "formatter": "wiretap",
-                "level": "DEBUG"
-            }
-        },
-        "loggers": {
-            "": {
-                "handlers": ["console", "file", "sqlserver"],
-                # "handlers": ["console", "file"],
-                # "handlers": ["file"],
-                # "handlers": ["console", "file", "memory"],
-                "level": "DEBUG"
-            }
+config = {
+    "version": 1,
+    "formatters": {
+        # "console": {
+        #    "style": "{",
+        #    "format": "{asctime}.{msecs:.0f} | {module}.{funcName} | {status}",
+        #    "datefmt": "%Y-%m-%d %H:%M:%S",
+        #    "defaults": {"status": "<status>", "correlation": "<correlation>", "extra": "<extra>"}
+        # },
+        "wiretap": {
+            "()": logging.Formatter,
+            "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+            "fmt": "{asctime}.{msecs:03.0f} {indent} {subject}/{activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}",
         }
-    })
+    },
+    "filters": {
+        "instance": {
+            "()": wiretap.filters.AddConstExtra,
+            "name": "instance",
+            "value": "demo-1"
+        },
+        "indent": {
+            "()": wiretap.filters.AddIndentExtra,
+            "char": "_"
+        },
+        "timestamp_local": {
+            "()": wiretap.filters.AddTimestampExtra,
+            "tz": "local"
+        },
+        "strip_exc_info": {
+            "()": wiretap.filters.StripExcInfo
+        },
+        "serialize_details": {
+            "()": wiretap.filters.SerializeDetailsExtra
+        },
+        "context_extra": {
+            "()": wiretap.filters.AddContextExtra
+        },
+        "trace_extra": {
+            "()": wiretap.filters.AddTraceExtra
+        }
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "wiretap",
+            "level": "DEBUG",
+            "filters": [
+                "indent",
+                "timestamp_local",
+                "strip_exc_info",
+                # "context_extra",
+                # "trace_extra"
+            ]
+        },
+        "file": {
+            "class": "logging.handlers.TimedRotatingFileHandler",
+            "when": "d",
+            "interval": 1,
+            "filename": r"c:\temp\wiretap.log",
+            "formatter": "wiretap",
+            "level": "DEBUG"
+        },
+        "sqlserver": {
+            # "class": "wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
+            # "class": "wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
+            "()": wiretap_sqlserver.sqlserverhandler.SqlServerHandler,
+            "connection_string": SqlServerOdbcConnectionString.standard(server="localhost,1433", database="master", username="sa", password="MSSQL2022!"),
+            "insert": INSERT,
+            "level": "DEBUG",
+            "filters": [
+                "instance",
+                "strip_exc_info",
+                "serialize_details",
+                # "context_extra",
+                # "trace_extra"
+            ],
+            ".": {
+                "extra_params": ["instance"]
+            }
+        },
+        "memory": {
+            "class": "logging.handlers.MemoryHandler",
+            "capacity": 100,
+            "formatter": "wiretap",
+            "level": "DEBUG"
+        }
+    },
+    "loggers": {
+        "": {
+            "handlers": ["console", "file", "sqlserver"],
+            # "handlers": ["console", "file"],
+            # "handlers": ["file"],
+            # "handlers": ["console", "file", "memory"],
+            "level": "DEBUG"
+        }
+    }
+}
 
-
-configure_logging()
+wiretap.dict_config(config)
 
 
 @wiretap.telemetry()
@@ -178,6 +175,11 @@ def use_module():
 @wiretap.telemetry()
 def uses_default_logger():
     logging.info(msg="This is a classic log.")
+
+
+@wiretap.telemetry()
+def trace_only_once(logger: wiretap.TraceLogger = None):
+    logger.final.log_end(message="Trace this only once!")
 
 
 @wiretap.telemetry(include_args=dict(a=None, b=None))
@@ -311,11 +313,12 @@ def blub(a):
 class Home(Protocol):
     foo: int
 
+
 if __name__ == "__main__":
     # asyncio.run(main())
     # main_proc()
 
-    #h = Home(2)
+    # h = Home(2)
 
     # fzz(7)
 
@@ -335,3 +338,4 @@ if __name__ == "__main__":
     cancel_this_function_because_of_iteration_stop()
     use_module()
     uses_default_logger()
+    trace_only_once()
