@@ -30,8 +30,7 @@ class BasicLogger(Logger):
             details: Optional[dict[str, Any]] = None,
             attachment: Optional[Any] = None,
             level: int = logging.DEBUG,
-            exc_info: Optional[ExcInfo | bool] = None,
-            extra: Optional[dict[str, Any]] = None
+            exc_info: Optional[ExcInfo | bool] = None
     ):
         self._logger.setLevel(level)
 
@@ -42,9 +41,7 @@ class BasicLogger(Logger):
             attachment=attachment
         )
 
-        extra = (extra or {}) | vars(trace_extra)
-
-        self._logger.log(level=level, msg=message, exc_info=exc_info, extra=extra)
+        self._logger.log(level=level, msg=message, exc_info=exc_info, extra=vars(trace_extra))
 
     def __iter__(self):
         current = self
@@ -60,8 +57,7 @@ class LogTrace(Protocol):
             details: Optional[dict[str, Any]] = None,
             attachment: Optional[Any] = None,
             level: int = logging.DEBUG,
-            exc_info: Optional[ExcInfo | bool] = None,
-            extra: Optional[dict[str, Any]] = None
+            exc_info: Optional[ExcInfo | bool] = None
     ):
         pass
 
@@ -71,7 +67,7 @@ class InitialTraceLogger:
         self._log_trace = log_trace
 
     def log_begin(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None, inputs: Optional[dict[str, Any]] = None, inputs_spec: Optional[dict[str, str | Callable | None]] = None) -> None:
-        self._log_trace(message, details, attachment, logging.INFO, extra=dict(source="initial", inputs=inputs, inputs_spec=inputs_spec))
+        self._log_trace(message, details or {} | dict(source="initial", inputs=inputs, inputs_spec=inputs_spec), attachment, logging.INFO)
 
 
 class OtherTraceLogger:
@@ -99,16 +95,16 @@ class FinalTraceLogger:
         self._log_trace = log_trace
 
     def log_noop(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(message, details, attachment, logging.INFO, extra=dict(source="final"))
+        self._log_trace(message, details or {} | dict(source="final"), attachment, logging.INFO)
 
     def log_abort(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(message, details, attachment, logging.WARN, extra=dict(source="final"))
+        self._log_trace(message, details or {} | dict(source="final"), attachment, logging.WARN)
 
     def log_end(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None, output: Optional[T] = None, output_spec: Optional[str | Callable[[T], Any] | None] = None) -> None:
-        self._log_trace(message, details, attachment, logging.INFO, extra=dict(source="final", output=output, output_spec=output_spec))
+        self._log_trace(message, details or {} | dict(source="final", output=output, output_spec=output_spec), attachment, logging.INFO)
 
     def log_error(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(message, details, attachment, logging.ERROR, extra=dict(source="final"), exc_info=True)
+        self._log_trace(message, details or {} | dict(source="final"), attachment, logging.ERROR, exc_info=True)
 
 
 class TraceLogger(Tracer):
@@ -134,10 +130,9 @@ class TraceLogger(Tracer):
             details: Optional[dict[str, Any]] = None,
             attachment: Optional[Any] = None,
             level: int = logging.DEBUG,
-            exc_info: Optional[ExcInfo | bool] = None,
-            extra: Optional[dict[str, Any]] = None
+            exc_info: Optional[ExcInfo | bool] = None
     ):
-        if self._suppress_source((extra or {}).pop("source", None)):
+        if self._suppress_source((details or {}).pop("source", None)):
             return
 
         self.default.log_trace(
@@ -146,8 +141,7 @@ class TraceLogger(Tracer):
             details,
             attachment,
             level,
-            exc_info,
-            extra
+            exc_info
         )
 
     def _suppress_source(self, source: str) -> bool:

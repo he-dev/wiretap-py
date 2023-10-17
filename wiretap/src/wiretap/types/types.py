@@ -25,14 +25,11 @@ class Logger(Protocol):
             details: Optional[dict[str, Any]] = None,
             attachment: Optional[Any] = None,
             level: int = DEBUG,
-            exc_info: Optional[ExcInfo | bool] = None,
-            extra: Optional[dict[str, Any]] = None
+            exc_info: Optional[ExcInfo | bool] = None
     ): ...
 
 
 class Tracer(Protocol):
-    """Represents the properties of the trace logger."""
-
     default: Logger
     sources: set[str]
 
