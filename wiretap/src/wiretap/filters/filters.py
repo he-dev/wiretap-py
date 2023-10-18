@@ -137,34 +137,35 @@ class FormatArgs(logging.Filter):
         super().__init__("format_args")
 
     def filter(self, record: logging.LogRecord) -> bool:
-        initial = cast(InitialExtra, record)
         default = cast(DefaultExtra, record)
-        can_format = \
-            hasattr(record, "inputs") and \
-            hasattr(record, "inputs_spec") and \
-            initial.inputs and \
-            initial.inputs_spec
+        args_native = default.details.pop("args_native", None)
+        args_format = default.details.pop("args_format", None)
+        can_format = args_native and args_format
         if can_format:
-            args = {}
-            for k, f in initial.inputs_spec.items():
+            if isinstance(args_format, bool):
+                args_format = {k: "" for k in args_native}
+
+            args_formatted = {}
+            for arg_name, arg_format in args_format.items():
                 try:
-                    arg = initial.inputs[k]
+                    arg = args_native[arg_name]
                     while arg is not None:
-                        f = f or ""
 
-                        if isinstance(f, str):
-                            args[k] = format(arg, f)
+                        arg_format = arg_format or ""
+
+                        if isinstance(arg_format, str):
+                            args_formatted[arg_name] = format(arg, arg_format)
                             break
 
-                        if isinstance(f, Callable):
-                            args[k] = f(arg)
+                        if isinstance(arg_format, Callable):
+                            args_formatted[arg_name] = arg_format(arg)
                             break
 
-                        raise ValueError(f"Cannot format arg <{k}> of <{default.activity}> in module <{default.subject}> because its spec is invalid. It must be: [str | Callable].")
+                        raise ValueError(f"Cannot format arg <{arg_name}> of <{default.activity}> in module <{default.subject}> because its spec is invalid. It must be: [str | Callable].")
                 except KeyError as e:
-                    raise KeyError(f"Cannot format arg <{k}> because <{default.activity}> in module <{default.subject}> does not have a parameter with this name.") from e
-            if args:
-                cast(DefaultExtra, record).details["args"] = args
+                    raise KeyError(f"Cannot format arg <{arg_name}> because <{default.activity}> in module <{default.subject}> does not have a parameter with this name.") from e
+            if args_formatted:
+                cast(DefaultExtra, record).details["args"] = args_formatted
 
         return True
 
@@ -175,29 +176,30 @@ class FormatResult(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         default = cast(DefaultExtra, record)
-        final = cast(FinalExtra, record)
-        can_format = \
-            hasattr(record, "output") and \
-            hasattr(record, "output_spec") and \
-            final.output is not None and \
-            final.output_spec is not None
-        result: str = ""
-        while can_format:
-            f = final.output_spec
+        result_native = default.details.pop("result_native", None)
+        result_format = default.details.pop("result_format", None)
 
-            if isinstance(f, str):
-                result = format(final.output, f)
+        result_formatted: str = ""
+        while result_native is not None:
+            if isinstance(result_format, bool):
+                if not result_format:
+                    break
+                else:
+                    result_format = ""
+
+            result_format = result_format or ""
+
+            if isinstance(result_format, str):
+                result_formatted = format(result_native, result_format)
                 break
 
-            if isinstance(f, Callable):
-                result = f(final.output)
+            if isinstance(result_format, Callable):
+                result_formatted = result_format(result_native)
                 break
 
             raise ValueError(f"Cannot format the result of <{default.activity}> in module <{default.subject}> because its spec is invalid. It must be: [str | Callable].")
 
-        if result:
-            default.details["result"] = result
+        if result_formatted:
+            default.details["result"] = result_formatted
 
         return True
-
-

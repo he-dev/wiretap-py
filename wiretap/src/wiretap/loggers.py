@@ -16,12 +16,17 @@ class BasicLogger(Logger):
         self.activity = activity
         self.parent = parent
         self.depth = parent.depth + 1 if parent else 1  # sum(1 for _ in self)
-        self._start = timer()
+        self._start: float | None = None
         self._logger = logging.getLogger(f"{subject}.{activity}")
 
     @property
     def elapsed(self) -> float:
-        return timer() - self._start
+        """Gets the current elapsed time in seconds or 0 if called for the first time."""
+        if self._start:
+            return timer() - self._start
+        else:
+            self._start = timer()
+            return .0
 
     def log_trace(
             self,
@@ -66,8 +71,8 @@ class InitialTraceLogger:
     def __init__(self, log_trace: LogTrace):
         self._log_trace = log_trace
 
-    def log_begin(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None, inputs: Optional[dict[str, Any]] = None, inputs_spec: Optional[dict[str, str | Callable | None]] = None) -> None:
-        self._log_trace(message, details or {} | dict(source="initial", inputs=inputs, inputs_spec=inputs_spec), attachment, logging.INFO)
+    def log_begin(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self._log_trace(message, details, attachment, logging.INFO)
 
 
 class OtherTraceLogger:
@@ -100,8 +105,8 @@ class FinalTraceLogger:
     def log_abort(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
         self._log_trace(message, details or {} | dict(source="final"), attachment, logging.WARN)
 
-    def log_end(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None, output: Optional[T] = None, output_spec: Optional[str | Callable[[T], Any] | None] = None) -> None:
-        self._log_trace(message, details or {} | dict(source="final", output=output, output_spec=output_spec), attachment, logging.INFO)
+    def log_end(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+        self._log_trace(message, details, attachment, logging.INFO)
 
     def log_error(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
         self._log_trace(message, details or {} | dict(source="final"), attachment, logging.ERROR, exc_info=True)
@@ -132,7 +137,7 @@ class TraceLogger(Tracer):
             level: int = logging.DEBUG,
             exc_info: Optional[ExcInfo | bool] = None
     ):
-        if self._suppress_source((details or {}).pop("source", None)):
+        if self._unique_source_logged((details or {}).pop("source", None)):
             return
 
         self.default.log_trace(
@@ -144,7 +149,7 @@ class TraceLogger(Tracer):
             exc_info
         )
 
-    def _suppress_source(self, source: str) -> bool:
+    def _unique_source_logged(self, source: str) -> bool:
         try:
             return source in self.sources
         finally:

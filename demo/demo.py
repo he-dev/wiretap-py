@@ -151,7 +151,7 @@ def include_neither_args_nor_result(a: int, b: int) -> int:
     return a + b
 
 
-@wiretap.telemetry(include_args=dict(a=None, b=None), include_result="")
+@wiretap.telemetry(include_args=True, include_result=True)
 def include_args_and_result(a: int, b: int) -> int:
     return a + b
 

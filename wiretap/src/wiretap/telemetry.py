@@ -2,7 +2,7 @@ import asyncio
 import contextlib
 import functools
 import inspect
-from typing import Dict, Any, Optional, ContextManager
+from typing import Dict, Any, Optional, ContextManager, Callable
 
 from .types import current_tracer
 from .loggers import BasicLogger, TraceLogger
@@ -41,16 +41,15 @@ def begin_telemetry(
 
 
 def telemetry(
-        include_args: Optional[dict[str, Optional[str]]] = None,
-        include_result: Optional[str | bool] = None,
+        include_args: Optional[dict[str, str | Callable | None] | bool] = False,
+        include_result: Optional[str | Callable | bool] = False,
         message: Optional[str] = None,
         details: Optional[dict[str, Any]] = None,
         attachment: Optional[Any] = None
 ):
     """Provides telemetry for the decorated function."""
 
-    if isinstance(include_result, bool) and include_result:
-        include_result = ""
+    details = details or {}
 
     def factory(decoratee):
         module = inspect.getmodule(decoratee)
@@ -78,10 +77,10 @@ def telemetry(
             async def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(*decoratee_args, **decoratee_kwargs)
                 with telemetry_context(subject, activity) as logger:
-                    logger.initial.log_begin(message=message, details=details or {}, attachment=attachment, inputs=args, inputs_spec=include_args)
+                    logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
                     inject_logger(logger, decoratee_kwargs)
                     result = await decoratee(*decoratee_args, **decoratee_kwargs)
-                    logger.final.log_end(output=result, output_spec=include_result)
+                    logger.final.log_end(details=dict(result_native=result, result_format=include_result))
                     return result
 
             decorator.__signature__ = inspect.signature(decoratee)
@@ -92,10 +91,10 @@ def telemetry(
             def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(*decoratee_args, **decoratee_kwargs)
                 with telemetry_context(subject, activity) as logger:
-                    logger.initial.log_begin(message=message, details=details or {}, attachment=attachment, inputs=args, inputs_spec=include_args)
+                    logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
                     inject_logger(logger, decoratee_kwargs)
                     result = decoratee(*decoratee_args, **decoratee_kwargs)
-                    logger.final.log_end(output=result, output_spec=include_result)
+                    logger.final.log_end(details=dict(result_native=result, result_format=include_result))
                     return result
 
             decorator.__signature__ = inspect.signature(decoratee)
