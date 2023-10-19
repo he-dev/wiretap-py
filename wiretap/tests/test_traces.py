@@ -261,7 +261,7 @@ def test_can_log_begin_extra(dumpster: Dumpster):
 
     dumpster.assert_record_count(2)
     dumpster.assert_record_values(0, trace="begin", message="This is a begin.", details=dict(foo="bar"), attachment="baz")
-    dumpster.assert_record_values(1, trace="end")
+    dumpster.assert_record_values(1, trace="end", attachment=None)
 
 
 def test_can_log_const_extra(dumpster: Dumpster):
