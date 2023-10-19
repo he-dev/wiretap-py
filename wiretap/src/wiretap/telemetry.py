@@ -45,7 +45,8 @@ def telemetry(
         include_result: Optional[str | Callable | bool] = False,
         message: Optional[str] = None,
         details: Optional[dict[str, Any]] = None,
-        attachment: Optional[Any] = None
+        attachment: Optional[Any] = None,
+        auto_begin=True
 ):
     """Provides telemetry for the decorated function."""
 
@@ -77,7 +78,8 @@ def telemetry(
             async def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(*decoratee_args, **decoratee_kwargs)
                 with telemetry_context(subject, activity) as logger:
-                    logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
+                    if auto_begin:
+                        logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
                     inject_logger(logger, decoratee_kwargs)
                     result = await decoratee(*decoratee_args, **decoratee_kwargs)
                     logger.final.log_end(details=dict(result_native=result, result_format=include_result))
@@ -91,7 +93,8 @@ def telemetry(
             def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(*decoratee_args, **decoratee_kwargs)
                 with telemetry_context(subject, activity) as logger:
-                    logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
+                    if auto_begin:
+                        logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
                     inject_logger(logger, decoratee_kwargs)
                     result = decoratee(*decoratee_args, **decoratee_kwargs)
                     logger.final.log_end(details=dict(result_native=result, result_format=include_result))

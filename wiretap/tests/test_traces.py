@@ -83,7 +83,7 @@ class Dumpster:
 
     @staticmethod
     def assert_record_count(expected: int):
-        assert expected == len(Dumpster.logs())
+        assert len(Dumpster.logs()) == expected
 
     @staticmethod
     def assert_record_values(index: int, **expected):
@@ -94,7 +94,7 @@ class Dumpster:
         assert e_keys == a_keys, "Some keys are missing!"
 
         actual = {k: record.__dict__[k] for k, v in expected.items()}
-        assert expected == actual, "Some values aren't equal!"
+        assert actual == expected, "Some values aren't equal!"
 
 
 @pytest.fixture(autouse=True)
@@ -155,3 +155,122 @@ def test_can_log_other_traces(dumpster: Dumpster):
     dumpster.assert_record_values(3, trace="skip", message="This is a skip.")
     dumpster.assert_record_values(4, trace="metric", message="This is a metric.")
     dumpster.assert_record_values(5, trace="end")
+
+
+def test_can_suppress_duplicate_traces(dumpster: Dumpster):
+    @wiretap.telemetry()
+    def case05(logger: wiretap.TraceLogger = None):
+        logger.final.log_end(message="This is the end.")
+
+    case05()
+
+    dumpster.assert_record_count(2)
+    dumpster.assert_record_values(0, trace="begin")
+    dumpster.assert_record_values(1, trace="end", message="This is the end.")
+
+
+def test_can_log_noop(dumpster: Dumpster):
+    @wiretap.telemetry()
+    def case06(logger: wiretap.TraceLogger = None):
+        logger.final.log_noop()
+
+    case06()
+
+    dumpster.assert_record_count(2)
+    dumpster.assert_record_values(0, trace="begin")
+    dumpster.assert_record_values(1, trace="noop")
+
+
+def test_can_log_abort(dumpster: Dumpster):
+    @wiretap.telemetry()
+    def case07(logger: wiretap.TraceLogger = None):
+        logger.final.log_abort()
+
+    case07()
+
+    dumpster.assert_record_count(2)
+    dumpster.assert_record_values(0, trace="begin")
+    dumpster.assert_record_values(1, trace="abort")
+
+
+def test_can_log_error(dumpster: Dumpster):
+    @wiretap.telemetry()
+    def case08(logger: wiretap.TraceLogger = None):
+        raise ZeroDivisionError
+
+    try:
+        case08()
+    except:
+        pass
+
+    dumpster.assert_record_count(2)
+    dumpster.assert_record_values(0, trace="begin")
+    dumpster.assert_record_values(1, trace="error", message="Unhandled exception has occurred.")
+    assert isinstance(dumpster.logs()[1].exc_info[1], ZeroDivisionError)
+
+
+def test_can_disable_begin(dumpster: Dumpster):
+    @wiretap.telemetry(auto_begin=False)
+    def case09(logger: wiretap.TraceLogger = None):
+        logger.initial.log_begin(message="This is a begin.")
+        logger.final.log_end(message="This is an end.")
+
+    case09()
+
+    dumpster.assert_record_count(2)
+    dumpster.assert_record_values(0, trace="begin", message="This is a begin.")
+    dumpster.assert_record_values(1, trace="end", message="This is an end.")
+
+
+def test_can_format_args_and_result_by_str(dumpster: Dumpster):
+    @wiretap.telemetry(include_args=dict(x=".1"), include_result=".2")
+    def case10(x: float):
+        return x
+
+    case10(0.15)
+
+    dumpster.assert_record_count(2)
+    dumpster.assert_record_values(0, trace="begin", details=dict(args=dict(x="0.1")))
+    dumpster.assert_record_values(1, trace="end", details=dict(result="0.15"))
+
+
+def test_can_format_args_and_result_by_callable(dumpster: Dumpster):
+    def one_dec_place(value):
+        return format(value, ".1")
+
+    def two_dec_places(value):
+        return format(value, ".2")
+
+    @wiretap.telemetry(include_args=dict(x=one_dec_place), include_result=two_dec_places)
+    def case11(x: float):
+        return x
+
+    case11(0.15)
+
+    dumpster.assert_record_count(2)
+    dumpster.assert_record_values(0, trace="begin", details=dict(args=dict(x="0.1")))
+    dumpster.assert_record_values(1, trace="end", details=dict(result="0.15"))
+
+
+def test_can_log_begin_extra(dumpster: Dumpster):
+    @wiretap.telemetry(message="This is a begin.", details=dict(foo="bar"), attachment="baz")
+    def case12():
+        pass
+
+    case12()
+
+    dumpster.assert_record_count(2)
+    dumpster.assert_record_values(0, trace="begin", message="This is a begin.", details=dict(foo="bar"), attachment="baz")
+    dumpster.assert_record_values(1, trace="end")
+
+
+def test_can_log_const_extra(dumpster: Dumpster):
+    @wiretap.telemetry()
+    def case13():
+        pass
+
+    case13()
+
+    dumpster.assert_record_count(2)
+    dumpster.assert_record_values(0, trace="begin", const_extra="const_value")
+    dumpster.assert_record_values(1, trace="end", const_extra="const_value")

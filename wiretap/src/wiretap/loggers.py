@@ -72,7 +72,7 @@ class InitialTraceLogger:
         self._log_trace = log_trace
 
     def log_begin(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(message, details, attachment, logging.INFO)
+        self._log_trace(message, (details or {}) | dict(source="initial"), attachment, logging.INFO)
 
 
 class OtherTraceLogger:
@@ -100,16 +100,16 @@ class FinalTraceLogger:
         self._log_trace = log_trace
 
     def log_noop(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(message, details or {} | dict(source="final"), attachment, logging.INFO)
+        self._log_trace(message, (details or {}) | dict(source="final"), attachment, logging.INFO)
 
     def log_abort(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(message, details or {} | dict(source="final"), attachment, logging.WARN)
+        self._log_trace(message, (details or {}) | dict(source="final"), attachment, logging.WARN)
 
     def log_end(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(message, details, attachment, logging.INFO)
+        self._log_trace(message, (details or {}) | dict(source="final"), attachment, logging.INFO)
 
     def log_error(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._log_trace(message, details or {} | dict(source="final"), attachment, logging.ERROR, exc_info=True)
+        self._log_trace(message, (details or {}) | dict(source="final"), attachment, logging.ERROR, exc_info=True)
 
 
 class TraceLogger(Tracer):
@@ -137,7 +137,7 @@ class TraceLogger(Tracer):
             level: int = logging.DEBUG,
             exc_info: Optional[ExcInfo | bool] = None
     ):
-        if self._unique_source_logged((details or {}).pop("source", None)):
+        if self._is_duplicate_source((details or {}).pop("source", None)):
             return
 
         self.default.log_trace(
@@ -149,7 +149,7 @@ class TraceLogger(Tracer):
             exc_info
         )
 
-    def _unique_source_logged(self, source: str) -> bool:
+    def _is_duplicate_source(self, source: str) -> bool:
         try:
             return source in self.sources
         finally:
