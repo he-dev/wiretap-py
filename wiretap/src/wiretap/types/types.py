@@ -8,15 +8,22 @@ from typing import Protocol, Optional, Any, TypeAlias, Type, Callable
 ExcInfo: TypeAlias = tuple[Type[BaseException], BaseException, TracebackType]
 
 
+class Metric(Protocol):
+    def __float__(self): ...
+
+
+class Node(Protocol):
+    id: uuid.UUID
+    depth: int
+
+
 class Logger(Protocol):
     id: uuid.UUID
     subject: str
     activity: str
     depth: int
     parent: Optional["Logger"]
-
-    @property
-    def elapsed(self) -> float: return ...  # noqa
+    elapsed: Metric
 
     def log_trace(
             self,
@@ -27,11 +34,6 @@ class Logger(Protocol):
             level: int = DEBUG,
             exc_info: Optional[ExcInfo | bool] = None
     ): ...
-
-
-class Tracer(Protocol):
-    default: Logger
-    sources: set[str]
 
 
 @dataclasses.dataclass

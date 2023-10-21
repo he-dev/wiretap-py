@@ -2,28 +2,31 @@ import asyncio
 import contextlib
 import functools
 import inspect
+from contextvars import ContextVar
 from typing import Dict, Any, Optional, ContextManager, Callable
 
-from .types import current_tracer
+from .types import current_logger
 from .loggers import BasicLogger, TraceLogger
 
+
+# current_tracer: ContextVar[Optional[TraceLogger]] = ContextVar("current_tracer", default=None)
 
 @contextlib.contextmanager
 def telemetry_context(
         subject: str,
         activity: str
 ) -> ContextManager[TraceLogger]:  # noqa
-    parent = current_tracer.get()
-    logger = BasicLogger(subject, activity, parent.default if parent else None)
+    parent = current_logger.get()
+    logger = BasicLogger(subject, activity, parent)
     tracer = TraceLogger(logger)
-    token = current_tracer.set(tracer)
+    token = current_logger.set(logger)
     try:
         yield tracer
     except Exception as e:  # noqa
         tracer.final.log_error(message="Unhandled exception has occurred.")
         raise
     finally:
-        current_tracer.reset(token)
+        current_logger.reset(token)
 
 
 @contextlib.contextmanager

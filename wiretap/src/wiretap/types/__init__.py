@@ -3,13 +3,14 @@ from typing import Optional
 
 from .types import (
     Logger,
-    Tracer,
     ContextExtra,
     TraceExtra,
     InitialExtra,
     DefaultExtra,
     FinalExtra,
-    ExcInfo
+    ExcInfo,
+    Node,
+    Metric,
 )
 
-current_tracer: ContextVar[Optional[Tracer]] = ContextVar("current_tracer", default=None)
+current_logger: ContextVar[Optional[Logger]] = ContextVar("current_logger", default=None)

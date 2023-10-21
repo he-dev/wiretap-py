@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import datetime, date, timezone
 from typing import Dict, Callable, Any, Protocol, Optional, cast
-from ..types import current_tracer, ContextExtra, TraceExtra, InitialExtra, DefaultExtra, FinalExtra
+from ..types import current_logger, ContextExtra, TraceExtra, DefaultExtra
 
 
 class AddConstExtra(logging.Filter):
@@ -44,9 +44,8 @@ class AddIndentExtra(logging.Filter):
         self.char = char
 
     def filter(self, record: logging.LogRecord) -> bool:
-        tracer = current_tracer.get()
-        logger = tracer.default if tracer else None
-        indent = self.char * (logger.depth or 1) if tracer else self.char
+        logger = current_logger.get()
+        indent = self.char * (logger.depth or 1) if logger else self.char
         setattr(record, self.name, indent)
         return True
 
@@ -82,8 +81,7 @@ class AddContextExtra(logging.Filter):
         super().__init__("context")
 
     def filter(self, record: logging.LogRecord) -> bool:
-        tracer = current_tracer.get()
-        logger = tracer.default if tracer else None
+        logger = current_logger.get()
         context_extra = ContextExtra(
             parent_id=logger.parent.id if logger and logger.parent else None,
             unique_id=logger.id if logger else None,
@@ -102,12 +100,11 @@ class AddTraceExtra(logging.Filter):
         super().__init__("trace")
 
     def filter(self, record: logging.LogRecord) -> bool:
-        tracer = current_tracer.get()
-        logger = tracer.default if tracer else None
+        logger = current_logger.get()
         if not hasattr(record, self.name):
             trace_extra = TraceExtra(
                 trace="info",
-                elapsed=logger.elapsed if logger else 0,
+                elapsed=float(logger.elapsed) if logger else 0,
                 details={},
                 attachment=None
             )
