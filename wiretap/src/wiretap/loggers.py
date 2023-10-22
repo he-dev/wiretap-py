@@ -1,11 +1,10 @@
 import inspect
 import logging
 import re
-import uuid
 from timeit import default_timer as timer
-from typing import Any, Optional, Iterator
+from typing import Any, Optional
 
-from .types import TraceExtra, ExcInfo, Node, Metric
+from .types import TraceExtra, ExcInfo, Metric
 
 
 class Elapsed(Metric):
@@ -24,14 +23,11 @@ class Elapsed(Metric):
         return self.current
 
 
-class BasicLogger(Node):
+class BasicLogger:
 
-    def __init__(self, subject: str, activity: str, parent: Optional[Node] = None):
-        self.id = uuid.uuid4()
+    def __init__(self, subject: str, activity: str):
         self.subject = subject
         self.activity = activity
-        self.parent = parent
-        self.depth = parent.depth + 1 if parent else 1  # sum(1 for _ in self)
         self.elapsed = Elapsed()
         self._logger = logging.getLogger(f"{subject}.{activity}")
 
@@ -52,12 +48,6 @@ class BasicLogger(Node):
         )
 
         self._logger.log(level=level, msg=message, exc_info=exc_info, extra=vars(trace_extra))
-
-    def __iter__(self) -> Iterator[Node]:
-        current = self
-        while current:
-            yield current
-            current = current.parent
 
 
 class Used:

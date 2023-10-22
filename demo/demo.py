@@ -77,7 +77,7 @@ config = {
             "()": wiretap.filters.StripExcInfo
         },
         "serialize_details": {
-            "()": wiretap.filters.SerializeDetailsExtra
+            "()": wiretap.filters.SerializeDetailsToJson
         },
         "context_extra": {
             "()": wiretap.filters.AddContextExtra

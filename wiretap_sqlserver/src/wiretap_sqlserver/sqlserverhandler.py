@@ -1,28 +1,16 @@
 import atexit
 import logging
 import sys
-import uuid
 import sqlalchemy  # type: ignore
-from datetime import datetime
 from logging import Handler
-from typing import Protocol, runtime_checkable, cast
+from typing import cast
+
 from wiretap.types import DefaultExtra
-
-
-# class _LogRecordExt(Protocol):
-#     parent_id: uuid.UUID | None
-#     unique_id: uuid.UUID
-#     timestamp: datetime
-#     subject: str
-#     activity: str
-#     trace: str
-#     elapsed: float
-#     details: str | None
-#     attachment: str | None
 
 
 class SqlServerHandler(Handler):
     extra_params: list[str] = list()
+    details_extra = "details_json"
 
     def __init__(self, connection_string: str, insert: str):
         super().__init__()
@@ -34,14 +22,6 @@ class SqlServerHandler(Handler):
 
     def emit(self, record: logging.LogRecord):
         extra = cast(DefaultExtra, record)
-
-        details = None
-        if isinstance(extra.details, dict) and extra.details:
-            details = str(extra.details)
-
-        if isinstance(extra.details, str) and extra.details != "{}":
-            details = extra.details
-
         insert_params = {
             "parent_id": extra.parent_id.__str__() if extra.parent_id else None,
             "unique_id": extra.unique_id.__str__(),
@@ -49,10 +29,10 @@ class SqlServerHandler(Handler):
             "subject": extra.subject,
             "activity": extra.activity,
             "trace": extra.trace.lower(),
-            "level": record.levelname,
+            "level": record.levelname.lower(),
             "elapsed": extra.elapsed,
             "message": record.message if hasattr(record, "message") and record.message != str(None) else None,  # Prevent empty string messages.
-            "details": details,
+            "details": record.__dict__[self.details_extra] if hasattr(record, self.details_extra) else None,
             "attachment": extra.attachment
         }
 

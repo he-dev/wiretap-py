@@ -6,7 +6,7 @@ from .filters import (
     AddTraceExtra,
     AddIndentExtra,
     SerializeDetails,
-    SerializeDetailsExtra,
+    SerializeDetailsToJson,
     StripExcInfo,
     FormatArgs,
     FormatResult,

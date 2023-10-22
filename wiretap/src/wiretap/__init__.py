@@ -1,3 +1,6 @@
+import logging
+from typing import Optional
+
 from . import types
 from . import filters
 from .loggers import (
@@ -20,8 +23,8 @@ DEFAULT_FILTERS = [
 ]
 
 
-def dict_config(data: dict):
+def dict_config(data: dict, default_filters: Optional[list[logging.Filter]] = None):
     import logging.config
     logging.config.dictConfig(data)
     for handler in logging.root.handlers:
-        handler.filters = DEFAULT_FILTERS + handler.filters
+        handler.filters = (default_filters or DEFAULT_FILTERS) + handler.filters

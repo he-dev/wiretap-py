@@ -60,19 +60,13 @@ class _JsonDateTimeEncoder(json.JSONEncoder):
             return o.isoformat()
 
 
-class SerializeDetailsToJson(SerializeDetails):
-    def __call__(self, value: Optional[Dict[str, Any]]) -> str | None:
-        return json.dumps(value, sort_keys=True, allow_nan=False, cls=_JsonDateTimeEncoder) if value else None
-
-
-class SerializeDetailsExtra(logging.Filter):
-    def __init__(self, serialize: SerializeDetails = SerializeDetailsToJson()):
-        super().__init__("details")
-        self.serialize = serialize
+class SerializeDetailsToJson(logging.Filter):
+    def __init__(self):
+        super().__init__("serialize_details_to_json")
 
     def filter(self, record: logging.LogRecord) -> bool:
-        if hasattr(record, self.name) and record.details:
-            record.details = self.serialize(record.details)
+        if hasattr(record, "details") and record.details:
+            record.__dict__["details_json"] = json.dumps(record.details, sort_keys=True, allow_nan=False, cls=_JsonDateTimeEncoder)
         return True
 
 
@@ -85,8 +79,8 @@ class AddContextExtra(logging.Filter):
         context_extra = ContextExtra(
             parent_id=logger.parent.id if logger and logger.parent else None,
             unique_id=logger.id if logger else None,
-            subject=logger.subject if logger else record.module,
-            activity=logger.activity if logger else record.funcName
+            subject=logger.value.subject if logger else record.module,
+            activity=logger.value.activity if logger else record.funcName
         )
         extra = vars(context_extra)
         for k, v in extra.items():
@@ -104,7 +98,7 @@ class AddTraceExtra(logging.Filter):
         if not hasattr(record, self.name):
             trace_extra = TraceExtra(
                 trace="info",
-                elapsed=float(logger.elapsed) if logger else 0,
+                elapsed=float(logger.value.elapsed) if logger else 0,
                 details={},
                 attachment=None
             )

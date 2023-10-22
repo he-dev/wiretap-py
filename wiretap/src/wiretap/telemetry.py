@@ -2,14 +2,11 @@ import asyncio
 import contextlib
 import functools
 import inspect
-from contextvars import ContextVar
 from typing import Dict, Any, Optional, ContextManager, Callable
 
-from .types import current_logger
+from .types import current_logger, Node
 from .loggers import BasicLogger, TraceLogger
 
-
-# current_tracer: ContextVar[Optional[TraceLogger]] = ContextVar("current_tracer", default=None)
 
 @contextlib.contextmanager
 def telemetry_context(
@@ -17,9 +14,9 @@ def telemetry_context(
         activity: str
 ) -> ContextManager[TraceLogger]:  # noqa
     parent = current_logger.get()
-    logger = BasicLogger(subject, activity, parent)
+    logger = BasicLogger(subject, activity)
     tracer = TraceLogger(logger)
-    token = current_logger.set(logger)
+    token = current_logger.set(Node(logger, parent))
     try:
         yield tracer
     except Exception as e:  # noqa

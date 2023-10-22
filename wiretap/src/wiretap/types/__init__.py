@@ -5,12 +5,10 @@ from .types import (
     Logger,
     ContextExtra,
     TraceExtra,
-    InitialExtra,
     DefaultExtra,
-    FinalExtra,
     ExcInfo,
     Node,
     Metric,
 )
 
-current_logger: ContextVar[Optional[Logger]] = ContextVar("current_logger", default=None)
+current_logger: ContextVar[Optional[Node[Logger]]] = ContextVar("current_logger", default=None)
