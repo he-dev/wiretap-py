@@ -3,12 +3,12 @@ import logging
 import re
 import uuid
 from timeit import default_timer as timer
-from typing import Any, Optional
+from typing import Any, Optional, Iterator
 
-from .types import TraceExtra, ExcInfo, Node
+from .types import TraceExtra, ExcInfo, Node, Metric
 
 
-class Elapsed:
+class Elapsed(Metric):
     _start: float | None = None
 
     @property
@@ -33,7 +33,6 @@ class BasicLogger(Node):
         self.parent = parent
         self.depth = parent.depth + 1 if parent else 1  # sum(1 for _ in self)
         self.elapsed = Elapsed()
-        self._start: float | None = None
         self._logger = logging.getLogger(f"{subject}.{activity}")
 
     def log_trace(
@@ -45,8 +44,6 @@ class BasicLogger(Node):
             level: int = logging.DEBUG,
             exc_info: Optional[ExcInfo | bool] = None
     ):
-        self._logger.setLevel(level)
-
         trace_extra = TraceExtra(
             trace=name,
             elapsed=float(self.elapsed),
@@ -56,7 +53,7 @@ class BasicLogger(Node):
 
         self._logger.log(level=level, msg=message, exc_info=exc_info, extra=vars(trace_extra))
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Node]:
         current = self
         while current:
             yield current

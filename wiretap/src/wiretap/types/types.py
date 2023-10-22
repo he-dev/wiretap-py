@@ -15,6 +15,7 @@ class Metric(Protocol):
 class Node(Protocol):
     id: uuid.UUID
     depth: int
+    parent: "Node"
 
 
 class Logger(Protocol):
