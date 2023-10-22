@@ -1,26 +1,8 @@
-import inspect
 import logging
-import re
-from timeit import default_timer as timer
 from typing import Any, Optional
 
-from .types import TraceExtra, ExcInfo, Metric
-
-
-class Elapsed(Metric):
-    _start: float | None = None
-
-    @property
-    def current(self) -> float:
-        """Gets the current elapsed time in seconds or 0 if called for the first time."""
-        if self._start:
-            return timer() - self._start
-        else:
-            self._start = timer()
-            return .0
-
-    def __float__(self):
-        return self.current
+from .parts import Elapsed, Used, TraceNameByCaller
+from .types import TraceExtra, ExcInfo
 
 
 class BasicLogger:
@@ -48,26 +30,6 @@ class BasicLogger:
         )
 
         self._logger.log(level=level, msg=message, exc_info=exc_info, extra=vars(trace_extra))
-
-
-class Used:
-    state = False
-
-    def __bool__(self):
-        try:
-            return self.state
-        finally:
-            self.state = True
-
-
-class TraceNameByCaller:
-
-    def __init__(self):
-        caller = inspect.stack()[1][3]
-        self.value = re.sub("^log_", "", caller, flags=re.IGNORECASE)
-
-    def __str__(self):
-        return self.value
 
 
 class InitialTrace:
