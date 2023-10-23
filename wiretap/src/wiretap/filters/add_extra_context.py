@@ -1,6 +1,7 @@
 import logging
 
-from ..types import current_logger, ContextExtra
+from ..types import ContextExtra
+from ..session import current_logger
 
 
 class AddContextExtra(logging.Filter):

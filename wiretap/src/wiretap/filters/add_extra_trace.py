@@ -1,6 +1,7 @@
 import logging
 
-from ..types import current_logger, TraceExtra
+from ..types import TraceExtra
+from ..session import current_logger
 
 
 class AddTraceExtra(logging.Filter):

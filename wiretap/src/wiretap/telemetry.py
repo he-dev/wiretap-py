@@ -2,16 +2,33 @@ import asyncio
 import contextlib
 import functools
 import inspect
-from typing import Dict, Any, Optional, ContextManager, Callable
+from typing import Dict, Any, Optional, ContextManager, Callable, Protocol
 
-from .types import current_logger, Node
 from .loggers import BasicLogger, TraceLogger
+from .session import current_logger
+from .types import Node
+
+
+class LogAbortOn:
+    def __init__(self, *error_types: type[Exception]):
+        self.error_types = error_types
+
+    def __call__(self, exc: Exception, logger: TraceLogger) -> bool:
+        if any((isinstance(exc, t) for t in self.error_types)):
+            logger.final.log_abort(message="Unable to complete.")
+            return True
+        return False
+
+
+class OnError(Protocol):
+    def __call__(self, exc: Exception, logger: TraceLogger) -> bool: ...
 
 
 @contextlib.contextmanager
 def telemetry_context(
         subject: str,
-        activity: str
+        activity: str,
+        on_error: Optional[OnError] = None
 ) -> ContextManager[TraceLogger]:  # noqa
     parent = current_logger.get()
     logger = BasicLogger(subject, activity)
@@ -20,7 +37,8 @@ def telemetry_context(
     try:
         yield tracer
     except Exception as e:  # noqa
-        tracer.final.log_error(message="Unhandled exception has occurred.")
+        if not on_error or not on_error(e, tracer):
+            tracer.final.log_error(message="Unhandled exception has occurred.")
         raise
     finally:
         current_logger.reset(token)
@@ -41,12 +59,14 @@ def begin_telemetry(
 
 
 def telemetry(
+        activity_alias: Optional[str] = None,
         include_args: Optional[dict[str, str | Callable | None] | bool] = False,
         include_result: Optional[str | Callable | bool] = False,
         message: Optional[str] = None,
         details: Optional[dict[str, Any]] = None,
         attachment: Optional[Any] = None,
-        auto_begin=True
+        auto_begin=True,
+        on_error: Optional[OnError] = None
 ):
     """Provides telemetry for the decorated function."""
 
@@ -55,7 +75,7 @@ def telemetry(
     def factory(decoratee):
         module = inspect.getmodule(decoratee)
         subject = module.__name__ if module else None
-        activity = decoratee.__name__
+        activity = activity_alias or decoratee.__name__
 
         def inject_logger(logger: TraceLogger, d: Dict):
             """Injects Logger if required."""
@@ -77,7 +97,7 @@ def telemetry(
             @functools.wraps(decoratee)
             async def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(*decoratee_args, **decoratee_kwargs)
-                with telemetry_context(subject, activity) as logger:
+                with telemetry_context(subject, activity, on_error) as logger:
                     if auto_begin:
                         logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
                     inject_logger(logger, decoratee_kwargs)
@@ -92,7 +112,7 @@ def telemetry(
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(*decoratee_args, **decoratee_kwargs)
-                with telemetry_context(subject, activity) as logger:
+                with telemetry_context(subject, activity, on_error) as logger:
                     if auto_begin:
                         logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
                     inject_logger(logger, decoratee_kwargs)

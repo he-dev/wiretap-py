@@ -274,3 +274,18 @@ def test_can_log_const_extra(dumpster: Dumpster):
     dumpster.assert_record_count(2)
     dumpster.assert_record_values(0, trace="begin", const_extra="const_value")
     dumpster.assert_record_values(1, trace="end", const_extra="const_value")
+
+
+def test_can_log_abort_on_exception(dumpster: Dumpster):
+    @wiretap.telemetry(on_error=wiretap.LogAbortOn(ZeroDivisionError))
+    def case14():
+        raise ZeroDivisionError()
+
+    try:
+        case14()
+    except:  # noqa
+        pass
+
+    dumpster.assert_record_count(2)
+    dumpster.assert_record_values(0, trace="begin", )
+    dumpster.assert_record_values(1, trace="abort", message="Unable to complete.")

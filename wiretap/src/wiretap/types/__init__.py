@@ -27,9 +27,6 @@ class Logger(Protocol):
     ): ...
 
 
-current_logger: ContextVar[Optional[Node[Logger]]] = ContextVar("current_logger", default=None)
-
-
 @dataclasses.dataclass
 class ContextExtra:
     parent_id: uuid.UUID | None

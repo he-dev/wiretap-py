@@ -1,6 +1,6 @@
 import logging
 
-from ..types import current_logger
+from ..session import current_logger
 
 
 class AddIndentExtra(logging.Filter):
