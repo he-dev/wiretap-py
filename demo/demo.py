@@ -77,12 +77,6 @@ config = {
         },
         "serialize_details": {
             "()": wiretap.filters.SerializeDetailsToJson
-        },
-        "context_extra": {
-            "()": wiretap.filters.AddNodeExtra
-        },
-        "trace_extra": {
-            "()": wiretap.filters.AddTraceExtra
         }
     },
     "handlers": {
