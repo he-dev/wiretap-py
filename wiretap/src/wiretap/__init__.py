@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Optional, Callable
 
 from . import types
 from . import filters
@@ -7,9 +7,9 @@ from . import session
 from .loggers import BasicLogger, TraceLogger
 from .telemetry import telemetry, begin_telemetry, LogAbortWhen
 
-DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {details} | node://{parent_id}/{unique_id} | {attachment}"
+DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}"
 
-DEFAULT_FILTERS = [
+DEFAULT_FILTERS: list[logging.Filter | Callable[[logging.LogRecord], bool]] = [
     filters.AddTimestampExtra(tz="utc"),
     filters.AddActivityExtra(),
     filters.AddNodeExtra(),
@@ -19,7 +19,7 @@ DEFAULT_FILTERS = [
 ]
 
 
-def dict_config(data: dict, default_filters: Optional[list[logging.Filter]] = None):
+def dict_config(data: dict, default_filters: Optional[list[logging.Filter | Callable[[logging.LogRecord], bool]]] = None):
     import logging.config
     logging.config.dictConfig(data)
     for handler in logging.root.handlers:

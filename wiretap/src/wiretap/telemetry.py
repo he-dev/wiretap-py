@@ -1,36 +1,38 @@
 import asyncio
 import contextlib
+import dataclasses
 import functools
 import inspect
 from pathlib import Path
-from typing import Any, Optional, ContextManager, Callable, Protocol
+from typing import Any, Optional, Callable, Protocol, Iterator
 
 from .loggers import BasicLogger, TraceLogger
 from .session import current_logger
 from .types import Node, Source
 
 
-class LogAbortWhen:
-    def __init__(self, *error_types: type[Exception]):
-        self.error_types = error_types
+class OnError(Protocol):
+    def __call__(self, exc: BaseException, logger: TraceLogger) -> bool: ...
 
-    def __call__(self, exc: Exception, logger: TraceLogger) -> bool:
-        if any((isinstance(exc, t) for t in self.error_types)):
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class LogAbortWhen(OnError):
+    exceptions: type[BaseException] | tuple[type[BaseException], ...]
+
+    def __call__(self, exc: BaseException, logger: TraceLogger) -> bool:
+        if isinstance(exc, self.exceptions):
             logger.final.log_abort(message=f"Unable to complete due to <{type(exc).__name__}>: {str(exc) or '<N/A>'}")
             return True
-        return False
-
-
-class OnError(Protocol):
-    def __call__(self, exc: Exception, logger: TraceLogger) -> bool: ...
+        else:
+            return False
 
 
 @contextlib.contextmanager
 def telemetry_context(
         activity: str,
         source: Source,
-        on_error: Optional[OnError] = None,
-) -> ContextManager[TraceLogger]:  # noqa
+        on_error: Optional[OnError] = None
+) -> Iterator[TraceLogger]:  # | ContextManager[TraceLogger]:  # noqa
     parent = current_logger.get()
     logger = BasicLogger(activity)
     tracer = TraceLogger(logger)
@@ -52,7 +54,7 @@ def begin_telemetry(
         message: Optional[str] = None,
         details: Optional[dict[str, Any]] = None,
         attachment: Optional[Any] = None
-) -> ContextManager[TraceLogger]:  # noqa
+) -> Iterator[TraceLogger]:  # | ContextManager[TraceLogger]:  # noqa
     stack = inspect.stack()
     frame = stack[2]
     source = Source(file=Path(frame.filename).name, line=frame.lineno)
@@ -86,6 +88,7 @@ def telemetry(
             @functools.wraps(decoratee)
             async def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(decoratee, *decoratee_args, **decoratee_kwargs)
+                logger: TraceLogger
                 with telemetry_context(activity, source, on_error) as logger:
                     if auto_begin:
                         logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
@@ -101,6 +104,7 @@ def telemetry(
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(decoratee, *decoratee_args, **decoratee_kwargs)
+                logger: TraceLogger  # PyCharm doesn't understand context managers.
                 with telemetry_context(activity, source, on_error) as logger:
                     if auto_begin:
                         logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)

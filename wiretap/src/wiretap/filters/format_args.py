@@ -1,5 +1,6 @@
 import logging
-from typing import Callable, cast
+from collections.abc import Callable
+from typing import cast
 
 from ..types import DefaultExtra
 
@@ -37,7 +38,7 @@ class FormatArgs(logging.Filter):
                         args_formatted[arg_name] = format(arg, arg_format)
                         break
 
-                    if isinstance(arg_format, Callable):
+                    if callable(arg_format):  # isinstance(arg_format, Callable):
                         args_formatted[arg_name] = arg_format(arg)
                         break
 

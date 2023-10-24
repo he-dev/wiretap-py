@@ -206,7 +206,7 @@ def test_can_log_error(dumpster: Dumpster):
 
     dumpster.assert_record_count(2)
     dumpster.assert_record_values(0, trace="begin")
-    dumpster.assert_record_values(1, trace="error", message="Unhandled exception has occurred.")
+    dumpster.assert_record_values(1, trace="error", message="Unhandled <ZeroDivisionError> has occurred: <N/A>")
     assert isinstance(dumpster.logs()[1].exc_info[1], ZeroDivisionError)
 
 

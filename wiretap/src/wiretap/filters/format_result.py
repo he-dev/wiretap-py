@@ -31,7 +31,7 @@ class FormatResult(logging.Filter):
                 result_formatted = format(result_native, result_format)
                 break
 
-            if isinstance(result_format, Callable):
+            if callable(result_format):  # isinstance(result_format, Callable):
                 result_formatted = result_format(result_native)
                 break
 

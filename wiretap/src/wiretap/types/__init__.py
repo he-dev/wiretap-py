@@ -12,7 +12,6 @@ ExcInfo: TypeAlias = tuple[Type[BaseException], BaseException, TracebackType]
 
 
 class Logger(Protocol):
-    subject: str
     activity: str
     elapsed: Elapsed
 
@@ -36,7 +35,7 @@ class Source:
 @dataclasses.dataclass
 class NodeExtra:
     parent_id: uuid.UUID | None
-    unique_id: uuid.UUID
+    unique_id: uuid.UUID | None
 
 
 @dataclasses.dataclass

@@ -81,10 +81,10 @@ class FinalTrace:
             return
         self._logger.log_trace(str(TraceNameByCaller()), message, details, attachment, logging.INFO)
 
-    def log_error(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
+    def log_error(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None, exc_info: Optional[ExcInfo | bool] = True) -> None:
         if self._used:
             return
-        self._logger.log_trace(str(TraceNameByCaller()), message, details, attachment, logging.ERROR, exc_info=True)
+        self._logger.log_trace(str(TraceNameByCaller()), message, details, attachment, logging.ERROR, exc_info=exc_info)
 
 
 class TraceLogger:
