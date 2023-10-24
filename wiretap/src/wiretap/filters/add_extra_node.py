@@ -1,4 +1,5 @@
 import logging
+from typing import cast
 
 from ..types import NodeExtra
 from ..session import current_logger

@@ -19,7 +19,6 @@ INSERT INTO dev.wiretap_log(
     [parent_id], 
     [unique_id], 
     [timestamp], 
-    --[subject],
     [activity], 
     [trace], 
     [level], 
