@@ -26,7 +26,6 @@ class SqlServerHandler(Handler):
             "parent_id": extra.parent_id.__str__() if extra.parent_id else None,
             "unique_id": extra.unique_id.__str__(),
             "timestamp": extra.timestamp,
-            # "subject": "<subject>", # extra.subject,
             "activity": extra.activity,
             "trace": extra.trace.lower(),
             "level": record.levelname.lower(),

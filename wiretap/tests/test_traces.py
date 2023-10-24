@@ -88,6 +88,7 @@ class Dumpster:
     @staticmethod
     def assert_record_values(index: int, **expected):
         record = Dumpster.logs()[index]
+        record.__dict__["details"].pop("source", None)  # this is not checkable because it contains a dynamic line-number
 
         a_keys = [k for k in expected.keys()]
         e_keys = [k for k in expected.keys() if k in record.__dict__]
@@ -279,7 +280,7 @@ def test_can_log_const_extra(dumpster: Dumpster):
 def test_can_log_abort_on_exception(dumpster: Dumpster):
     @wiretap.telemetry(on_error=wiretap.LogAbortWhen(ZeroDivisionError))
     def case14():
-        raise ZeroDivisionError()
+        raise ZeroDivisionError("This is a test message.")
 
     try:
         case14()
@@ -288,4 +289,4 @@ def test_can_log_abort_on_exception(dumpster: Dumpster):
 
     dumpster.assert_record_count(2)
     dumpster.assert_record_values(0, trace="begin", )
-    dumpster.assert_record_values(1, trace="abort", message="Unable to complete.")
+    dumpster.assert_record_values(1, trace="abort", message="Unable to complete due to <ZeroDivisionError>: This is a test message.")
