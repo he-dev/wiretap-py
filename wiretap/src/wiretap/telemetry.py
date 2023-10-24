@@ -9,7 +9,7 @@ from .session import current_logger
 from .types import Node
 
 
-class LogAbortOn:
+class LogAbortWhen:
     def __init__(self, *error_types: type[Exception]):
         self.error_types = error_types
 

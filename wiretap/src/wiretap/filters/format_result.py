@@ -4,6 +4,10 @@ from typing import Callable, cast
 from ..types import DefaultExtra
 
 
+class InvalidResultFormat(Exception):
+    pass
+
+
 class FormatResult(logging.Filter):
     def __init__(self):
         super().__init__("format_result")
@@ -31,7 +35,10 @@ class FormatResult(logging.Filter):
                 result_formatted = result_format(result_native)
                 break
 
-            raise ValueError(f"Cannot format the result of <{default.activity}> in module <{default.subject}> because its spec is invalid. It must be: [str | Callable].")
+            raise InvalidResultFormat(
+                f"Cannot format the result of <{default.activity}> in module <{default.subject}>. "
+                f"Its spec is invalid. "
+                f"It must be: [str | Callable], but found <{type(result_format)}>.")
 
         if result_formatted:
             default.details["result"] = result_formatted

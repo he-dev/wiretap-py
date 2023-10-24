@@ -277,7 +277,7 @@ def test_can_log_const_extra(dumpster: Dumpster):
 
 
 def test_can_log_abort_on_exception(dumpster: Dumpster):
-    @wiretap.telemetry(on_error=wiretap.LogAbortOn(ZeroDivisionError))
+    @wiretap.telemetry(on_error=wiretap.LogAbortWhen(ZeroDivisionError))
     def case14():
         raise ZeroDivisionError()
 
