@@ -19,7 +19,7 @@ INSERT INTO dev.wiretap_log(
     [parent_id], 
     [unique_id], 
     [timestamp], 
-    [subject],
+    --[subject],
     [activity], 
     [trace], 
     [level], 
@@ -32,7 +32,6 @@ INSERT INTO dev.wiretap_log(
     :parent_id, 
     :unique_id, 
     :timestamp, 
-    :subject,
     :activity, 
     :trace, 
     :level, 
@@ -56,7 +55,7 @@ config = {
             "()": logging.Formatter,
             "style": "{",
             "datefmt": "%Y-%m-%d %H:%M:%S",
-            "fmt": "{asctime}.{msecs:03.0f} {indent} {subject}/{activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}",
+            "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}",
         }
     },
     "filters": {
@@ -80,7 +79,7 @@ config = {
             "()": wiretap.filters.SerializeDetailsToJson
         },
         "context_extra": {
-            "()": wiretap.filters.AddContextExtra
+            "()": wiretap.filters.AddNodeExtra
         },
         "trace_extra": {
             "()": wiretap.filters.AddTraceExtra
@@ -242,9 +241,9 @@ async def baz(value: int, scope: wiretap.TraceLogger = None):
 
 
 def flow_test():
-    with wiretap.begin_telemetry(subject="outer", activity="outer") as outer:
+    with wiretap.begin_telemetry("outer") as outer:
         outer.other.log_info(details=dict(foo=1))
-        with wiretap.begin_telemetry(subject="outer", activity="inner") as inner:
+        with wiretap.begin_telemetry("inner") as inner:
             inner.other.log_info(details=dict(bar=2))
 
         try:

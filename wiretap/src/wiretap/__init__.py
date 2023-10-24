@@ -11,7 +11,8 @@ DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elaps
 
 DEFAULT_FILTERS = [
     filters.AddTimestampExtra(tz="utc"),
-    filters.AddContextExtra(),
+    filters.AddActivityExtra(),
+    filters.AddNodeExtra(),
     filters.AddTraceExtra(),
     filters.FormatArgs(),
     filters.FormatResult()

@@ -2,16 +2,15 @@ import logging
 from typing import Any, Optional
 
 from .parts import Elapsed, Used, TraceNameByCaller
-from .types import TraceExtra, ExcInfo
+from .types import TraceExtra, ExcInfo, Source, Logger
 
 
-class BasicLogger:
+class BasicLogger(Logger):
 
-    def __init__(self, subject: str, activity: str):
-        self.subject = subject
+    def __init__(self, activity: str):
         self.activity = activity
         self.elapsed = Elapsed()
-        self._logger = logging.getLogger(f"{subject}.{activity}")
+        self._logger = logging.getLogger(activity)
 
     def log_trace(
             self,
@@ -29,18 +28,20 @@ class BasicLogger:
             attachment=attachment
         )
 
-        self._logger.log(level=level, msg=message, exc_info=exc_info, extra=vars(trace_extra))
+        self._logger.log(level=level, msg=message, exc_info=exc_info, extra=vars(trace_extra) | dict(activity=self.activity))
 
 
 class InitialTrace:
     def __init__(self, logger: BasicLogger):
         self._logger = logger
         self._used = Used()
+        self.source: list[Source] = []
 
     def log_begin(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
         if self._used:
             return
-        self._logger.log_trace(str(TraceNameByCaller()), message, details, attachment, logging.INFO)
+        source = vars(self.source.pop()) if self.source else {}
+        self._logger.log_trace(str(TraceNameByCaller()), message, (details or {}) | dict(source=source), attachment, logging.INFO)
 
 
 class OtherTrace:

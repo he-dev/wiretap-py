@@ -1,20 +1,18 @@
 import logging
 
-from ..types import ContextExtra
+from ..types import NodeExtra
 from ..session import current_logger
 
 
-class AddContextExtra(logging.Filter):
+class AddNodeExtra(logging.Filter):
     def __init__(self):
-        super().__init__("context")
+        super().__init__("node")
 
     def filter(self, record: logging.LogRecord) -> bool:
-        logger = current_logger.get()
-        context_extra = ContextExtra(
-            parent_id=logger.parent.id if logger and logger.parent else None,
-            unique_id=logger.id if logger else None,
-            subject=logger.value.subject if logger else record.module,
-            activity=logger.value.activity if logger else record.funcName
+        node = current_logger.get()
+        context_extra = NodeExtra(
+            parent_id=node.parent.id if node and node.parent else None,
+            unique_id=node.id if node else None
         )
         extra = vars(context_extra)
         for k, v in extra.items():

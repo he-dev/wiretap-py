@@ -28,11 +28,15 @@ class Logger(Protocol):
 
 
 @dataclasses.dataclass
-class ContextExtra:
+class Source:
+    file: str
+    line: int
+
+
+@dataclasses.dataclass
+class NodeExtra:
     parent_id: uuid.UUID | None
     unique_id: uuid.UUID
-    subject: str
-    activity: str
 
 
 @dataclasses.dataclass
@@ -53,3 +57,5 @@ class DefaultExtra(Protocol):
     elapsed: float
     details: dict[str, Any] | None
     attachment: str | None
+
+

@@ -2,11 +2,12 @@ import asyncio
 import contextlib
 import functools
 import inspect
+from pathlib import Path
 from typing import Dict, Any, Optional, ContextManager, Callable, Protocol
 
 from .loggers import BasicLogger, TraceLogger
 from .session import current_logger
-from .types import Node
+from .types import Node, Source
 
 
 class LogAbortWhen:
@@ -26,13 +27,14 @@ class OnError(Protocol):
 
 @contextlib.contextmanager
 def telemetry_context(
-        subject: str,
         activity: str,
-        on_error: Optional[OnError] = None
+        source: Source,
+        on_error: Optional[OnError] = None,
 ) -> ContextManager[TraceLogger]:  # noqa
     parent = current_logger.get()
-    logger = BasicLogger(subject, activity)
+    logger = BasicLogger(activity)
     tracer = TraceLogger(logger)
+    tracer.initial.source.append(source)
     token = current_logger.set(Node(logger, parent))
     try:
         yield tracer
@@ -46,13 +48,15 @@ def telemetry_context(
 
 @contextlib.contextmanager
 def begin_telemetry(
-        subject: str,
         activity: str,
         message: Optional[str] = None,
         details: Optional[dict[str, Any]] = None,
         attachment: Optional[Any] = None
 ) -> ContextManager[TraceLogger]:  # noqa
-    with telemetry_context(subject, activity) as tracer:
+    stack = inspect.stack()
+    frame = stack[2]
+    source = Source(file=Path(frame.filename).name, line=frame.lineno)
+    with telemetry_context(activity, source) as tracer:
         tracer.initial.log_begin(message, details, attachment)
         yield tracer
         tracer.final.log_end()
@@ -73,8 +77,12 @@ def telemetry(
     details = details or {}
 
     def factory(decoratee):
-        module = inspect.getmodule(decoratee)
-        subject = module.__name__ if module else None
+        stack = inspect.stack()
+        frame = stack[1]
+        source = Source(file=Path(frame.filename).name, line=frame.lineno)
+        # module = inspect.getmodule(decoratee)
+        # subject = module.__name__ if module else None
+        # subject = "s"  # f"{Path(frame.filename).name}: #{frame.lineno}"
         activity = activity_alias or decoratee.__name__
 
         def inject_logger(logger: TraceLogger, d: Dict):
@@ -97,7 +105,7 @@ def telemetry(
             @functools.wraps(decoratee)
             async def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(*decoratee_args, **decoratee_kwargs)
-                with telemetry_context(subject, activity, on_error) as logger:
+                with telemetry_context(activity, source, on_error) as logger:
                     if auto_begin:
                         logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
                     inject_logger(logger, decoratee_kwargs)
@@ -112,7 +120,7 @@ def telemetry(
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(*decoratee_args, **decoratee_kwargs)
-                with telemetry_context(subject, activity, on_error) as logger:
+                with telemetry_context(activity, source, on_error) as logger:
                     if auto_begin:
                         logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
                     inject_logger(logger, decoratee_kwargs)

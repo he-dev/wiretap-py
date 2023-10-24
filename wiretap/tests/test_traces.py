@@ -13,7 +13,7 @@ config = {
             "()": logging.Formatter,
             "style": "{",
             "datefmt": "%Y-%m-%d %H:%M:%S",
-            "fmt": "{asctime}.{msecs:03.0f} {indent} {subject}/{activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}",
+            "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}",
         }
     },
     "filters": {
@@ -110,8 +110,8 @@ def test_can_log_defaults(dumpster: Dumpster):
     case01()
 
     dumpster.assert_record_count(2)
-    dumpster.assert_record_values(0, subject="test_traces", activity="case01", trace="begin", details={}, attachment=None, indent="_", const_extra="const_value")
-    dumpster.assert_record_values(1, subject="test_traces", activity="case01", trace="end", details={}, attachment=None, indent="_", const_extra="const_value")
+    dumpster.assert_record_values(0, activity="case01", trace="begin", details={}, attachment=None, indent="_", const_extra="const_value")
+    dumpster.assert_record_values(1, activity="case01", trace="end", details={}, attachment=None, indent="_", const_extra="const_value")
 
 
 def test_can_log_args_and_result_raw(dumpster: Dumpster):

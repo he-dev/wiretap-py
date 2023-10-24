@@ -1,7 +1,6 @@
 import logging
 
 from ..types import TraceExtra
-from ..session import current_logger
 
 
 class AddTraceExtra(logging.Filter):
@@ -9,11 +8,10 @@ class AddTraceExtra(logging.Filter):
         super().__init__("trace")
 
     def filter(self, record: logging.LogRecord) -> bool:
-        logger = current_logger.get()
-        if not hasattr(record, self.name):
+        if not hasattr(record, "trace"):
             trace_extra = TraceExtra(
                 trace="info",
-                elapsed=float(logger.value.elapsed) if logger else 0,
+                elapsed=0,
                 details={},
                 attachment=None
             )
