@@ -8,7 +8,8 @@ from typing import Any, Optional, Callable, Protocol, Iterator
 
 from .loggers import BasicLogger, TraceLogger
 from .session import current_logger
-from .types import Node, Source
+from .types import Source
+from .parts import Node
 
 
 class OnError(Protocol):

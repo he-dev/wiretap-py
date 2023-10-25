@@ -1,12 +1,11 @@
 import dataclasses
 import uuid
-from contextvars import ContextVar
 from datetime import datetime
 from logging import DEBUG
 from types import TracebackType
 from typing import Protocol, Optional, Any, TypeAlias, Type
 
-from ..parts import Elapsed, Node
+from ..parts import Elapsed
 
 ExcInfo: TypeAlias = tuple[Type[BaseException], BaseException, TracebackType]
 
