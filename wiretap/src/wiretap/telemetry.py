@@ -6,9 +6,9 @@ import inspect
 from pathlib import Path
 from typing import Any, Optional, Callable, Protocol, Iterator, TypeVar, Generic
 
-from .loggers import BasicLogger, TraceLogger
+from .loggers import BasicLogger, TraceLogger, InitialTraceMissing
 from .session import current_logger
-from .types import Source
+from .types import Activity
 from .parts import Node
 
 OnError = Callable[[BaseException, TraceLogger], None]
@@ -25,17 +25,18 @@ class LogAbortWhen:
 
 @contextlib.contextmanager
 def telemetry_context(
-        activity: str,
-        source: Source,
+        activity: Activity,
         on_error: OnError = lambda _exc, _logger: None
 ) -> Iterator[TraceLogger]:  # | ContextManager[TraceLogger]:  # noqa
     parent = current_logger.get()
     logger = BasicLogger(activity)
     tracer = TraceLogger(logger)
-    tracer.initial.source.append(source)
     token = current_logger.set(Node(logger, parent))
     try:
         yield tracer
+    except InitialTraceMissing:
+        # Do nothing when this error occurs, otherwise the same exception will raise for the default handler.
+        raise
     except Exception as e:  # noqa
         on_error(e, tracer)
         tracer.final.log_error(message=f"Unhandled <{type(e).__name__}> has occurred: <{str(e) or 'N/A'}>")
@@ -53,8 +54,7 @@ def begin_telemetry(
 ) -> Iterator[TraceLogger]:  # | ContextManager[TraceLogger]:  # noqa
     stack = inspect.stack()
     frame = stack[2]
-    source = Source(file=Path(frame.filename).name, line=frame.lineno)
-    with telemetry_context(activity, source) as tracer:
+    with telemetry_context(Activity(name=activity, file=Path(frame.filename).name, line=frame.lineno)) as tracer:
         tracer.initial.log_begin(message, details, attachment)
         yield tracer
         tracer.final.log_end()
@@ -77,8 +77,11 @@ def telemetry(
     def factory(decoratee):
         stack = inspect.stack()
         frame = stack[1]
-        source = Source(file=Path(frame.filename).name, line=frame.lineno)
-        activity = alias or decoratee.__name__
+        activity = Activity(
+            name=alias or decoratee.__name__,
+            file=Path(frame.filename).name,
+            line=frame.lineno
+        )
         kwargs_with_logger = KwargsWithLogger(decoratee)
 
         if asyncio.iscoroutinefunction(decoratee):
@@ -86,7 +89,7 @@ def telemetry(
             async def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(decoratee, *decoratee_args, **decoratee_kwargs)
                 logger: TraceLogger
-                with telemetry_context(activity, source, on_error) as logger:
+                with telemetry_context(activity, on_error) as logger:
                     if auto_begin:
                         logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
                     inject_logger(decoratee, decoratee_kwargs, logger)
@@ -102,7 +105,7 @@ def telemetry(
             def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(decoratee, *decoratee_args, **decoratee_kwargs)
                 logger: TraceLogger  # PyCharm doesn't understand context managers.
-                with telemetry_context(activity, source, on_error) as logger:
+                with telemetry_context(activity, on_error) as logger:
                     if auto_begin:
                         logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
                     result = decoratee(*decoratee_args, **kwargs_with_logger(decoratee_kwargs, logger))
@@ -120,6 +123,7 @@ _Func = TypeVar("_Func", bound=Callable)
 
 class KwargsWithLogger(Generic[_Func]):
     def __init__(self, func: _Func):
+        # Find the name of the logger-argument if any...
         self.name = next((n for n, t in inspect.getfullargspec(func).annotations.items() if t is TraceLogger), "")
 
     def __call__(self, kwargs: dict[str, Any], logger: TraceLogger) -> dict[str, Any]:

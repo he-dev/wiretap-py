@@ -197,6 +197,11 @@ def cancel_this_function_because_of_iteration_stop(logger: wiretap.TraceLogger =
         logger.other.log_info(details=dict(x=x))
 
 
+@wiretap.telemetry(auto_begin=False)
+def will_not_log_uninitialized(logger: wiretap.TraceLogger = None):
+    logger.other.log_info()
+
+
 @wiretap.telemetry()
 def foo(value: int, logger: wiretap.TraceLogger = None, **kwargs) -> int:
     logger.other.log_info(details=dict(name=f"sync-{value}"))
@@ -331,3 +336,4 @@ if __name__ == "__main__":
     use_module()
     uses_default_logger()
     trace_only_once()
+    will_not_log_uninitialized()

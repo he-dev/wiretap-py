@@ -4,7 +4,7 @@ from typing import Optional, Callable
 from . import types
 from . import filters
 from . import session
-from .loggers import BasicLogger, TraceLogger
+from .loggers import BasicLogger, TraceLogger, Initialized, InitialTraceMissing
 from .telemetry import telemetry, begin_telemetry, LogAbortWhen
 
 DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}"

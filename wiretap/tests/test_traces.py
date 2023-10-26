@@ -290,3 +290,12 @@ def test_can_log_abort_on_exception(dumpster: Dumpster):
     dumpster.assert_record_count(2)
     dumpster.assert_record_values(0, trace="begin", )
     dumpster.assert_record_values(1, trace="abort", message="Unable to complete due to <ZeroDivisionError>: This is a test message.")
+
+
+def test_raises_when_not_initialized():
+    @wiretap.telemetry(auto_begin=False)
+    def case15(logger: wiretap.TraceLogger = None):
+        logger.other.log_info()
+
+    with pytest.raises(wiretap.InitialTraceMissing):
+        case15()

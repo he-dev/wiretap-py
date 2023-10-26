@@ -10,8 +10,15 @@ from ..parts import Elapsed
 ExcInfo: TypeAlias = tuple[Type[BaseException], BaseException, TracebackType]
 
 
+@dataclasses.dataclass
+class Activity:
+    name: str
+    file: str
+    line: int
+
+
 class Logger(Protocol):
-    activity: str
+    activity: Activity
     elapsed: Elapsed
 
     def log_trace(
@@ -23,12 +30,6 @@ class Logger(Protocol):
             level: int = DEBUG,
             exc_info: Optional[ExcInfo | bool] = None
     ): ...
-
-
-@dataclasses.dataclass
-class Source:
-    file: str
-    line: int
 
 
 @dataclasses.dataclass
@@ -55,5 +56,3 @@ class DefaultExtra(Protocol):
     elapsed: float
     details: dict[str, Any] | None
     attachment: str | None
-
-
