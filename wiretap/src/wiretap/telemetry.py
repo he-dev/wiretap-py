@@ -4,21 +4,23 @@ import dataclasses
 import functools
 import inspect
 from pathlib import Path
-from typing import Any, Optional, Callable, Protocol, Iterator, TypeVar, Generic
+from typing import Any, Optional, Callable, Iterator, TypeVar, Generic
 
-from .loggers import BasicLogger, TraceLogger, InitialTraceMissing
+from .loggers import BasicLogger, InitialTraceMissing
+# from .loggers_classic import TraceLogger
+from .loggers_fluent import FluentTraceLogger
 from .session import current_logger
 from .types import Activity
 from .parts import Node
 
-OnError = Callable[[BaseException, TraceLogger], None]
+OnError = Callable[[BaseException, FluentTraceLogger], None]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class LogAbortWhen:
     exceptions: type[BaseException] | tuple[type[BaseException], ...]
 
-    def __call__(self, exc: BaseException, logger: TraceLogger) -> None:
+    def __call__(self, exc: BaseException, logger: FluentTraceLogger) -> None:
         if isinstance(exc, self.exceptions):
             logger.final.log_abort(message=f"Unable to complete due to <{type(exc).__name__}>: {str(exc) or '<N/A>'}")
 
@@ -27,10 +29,10 @@ class LogAbortWhen:
 def telemetry_context(
         activity: Activity,
         on_error: OnError = lambda _exc, _logger: None
-) -> Iterator[TraceLogger]:  # | ContextManager[TraceLogger]:  # noqa
+) -> Iterator[FluentTraceLogger]:  # | ContextManager[TraceLogger]:  # noqa
     parent = current_logger.get()
     logger = BasicLogger(activity)
-    tracer = TraceLogger(logger)
+    tracer = FluentTraceLogger(logger)
     token = current_logger.set(Node(logger, parent))
     try:
         yield tracer
@@ -51,13 +53,14 @@ def begin_telemetry(
         message: Optional[str] = None,
         details: Optional[dict[str, Any]] = None,
         attachment: Optional[Any] = None
-) -> Iterator[TraceLogger]:  # | ContextManager[TraceLogger]:  # noqa
+) -> Iterator[FluentTraceLogger]:  # | ContextManager[TraceLogger]:  # noqa
     stack = inspect.stack()
     frame = stack[2]
-    with telemetry_context(Activity(name=activity, file=Path(frame.filename).name, line=frame.lineno)) as tracer:
-        tracer.initial.log_begin(message, details, attachment)
-        yield tracer
-        tracer.final.log_end()
+    logger: FluentTraceLogger
+    with telemetry_context(Activity(name=activity, file=Path(frame.filename).name, line=frame.lineno)) as logger:
+        logger.initial.with_details(**(details or {})).with_attachment(attachment).log_begin(message)
+        yield logger
+        logger.final.with_details().log_end()
 
 
 def telemetry(
@@ -88,13 +91,13 @@ def telemetry(
             @functools.wraps(decoratee)
             async def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(decoratee, *decoratee_args, **decoratee_kwargs)
-                logger: TraceLogger
+                logger: FluentTraceLogger
                 with telemetry_context(activity, on_error) as logger:
                     if auto_begin:
-                        logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
+                        logger.initial.with_details(**(details | dict(args_native=args, args_format=include_args) or {})).with_attachment(attachment).log_begin(message)
                     inject_logger(decoratee, decoratee_kwargs, logger)
                     result = await decoratee(*decoratee_args, **decoratee_kwargs)
-                    logger.final.log_end(details=dict(result_native=result, result_format=include_result))
+                    logger.final.with_details(result_native=result, result_format=include_result).log_end()
                     return result
 
             decorator.__signature__ = inspect.signature(decoratee)
@@ -104,12 +107,12 @@ def telemetry(
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(decoratee, *decoratee_args, **decoratee_kwargs)
-                logger: TraceLogger  # PyCharm doesn't understand context managers.
+                logger: FluentTraceLogger  # PyCharm doesn't understand context managers.
                 with telemetry_context(activity, on_error) as logger:
                     if auto_begin:
-                        logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
+                        logger.initial.with_details(args_native=args, args_format=include_args, **(details or {})).with_attachment(attachment).log_begin(message)
                     result = decoratee(*decoratee_args, **kwargs_with_logger(decoratee_kwargs, logger))
-                    logger.final.log_end(details=dict(result_native=result, result_format=include_result))
+                    logger.final.with_details(result_native=result, result_format=include_result).log_end()
                     return result
 
             decorator.__signature__ = inspect.signature(decoratee)
@@ -124,20 +127,20 @@ _Func = TypeVar("_Func", bound=Callable)
 class KwargsWithLogger(Generic[_Func]):
     def __init__(self, func: _Func):
         # Find the name of the logger-argument if any...
-        self.name = next((n for n, t in inspect.getfullargspec(func).annotations.items() if t is TraceLogger), "")
+        self.name = next((n for n, t in inspect.getfullargspec(func).annotations.items() if t is FluentTraceLogger), "")
 
-    def __call__(self, kwargs: dict[str, Any], logger: TraceLogger) -> dict[str, Any]:
+    def __call__(self, kwargs: dict[str, Any], logger: FluentTraceLogger) -> dict[str, Any]:
         # If name exists, then the key definitely is there so no need to check twice.
         if self.name:
             kwargs[self.name] = logger
         return kwargs
 
 
-def inject_logger(func: object, kwargs: dict[str, Any], logger: TraceLogger) -> None:
+def inject_logger(func: object, kwargs: dict[str, Any], logger: FluentTraceLogger) -> None:
     for n, t in inspect.getfullargspec(func).annotations.items():
         if t is BasicLogger:
             kwargs[n] = logger.default
-        if t is TraceLogger:
+        if t is FluentTraceLogger:
             kwargs[n] = logger
 
 

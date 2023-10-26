@@ -141,7 +141,7 @@ def test_can_log_selected_args(dumpster: Dumpster):
 
 def test_can_log_other_traces(dumpster: Dumpster):
     @wiretap.telemetry()
-    def case04(logger: wiretap.TraceLogger = None):
+    def case04(logger: wiretap.FluentTraceLogger = None):
         logger.other.log_info(message="This is an info.")
         logger.other.log_item(message="This is an item.")
         logger.other.log_skip(message="This is a skip.")
@@ -160,7 +160,7 @@ def test_can_log_other_traces(dumpster: Dumpster):
 
 def test_can_suppress_duplicate_traces(dumpster: Dumpster):
     @wiretap.telemetry()
-    def case05(logger: wiretap.TraceLogger = None):
+    def case05(logger: wiretap.FluentTraceLogger = None):
         logger.final.log_end(message="This is the end.")
 
     case05()
@@ -172,7 +172,7 @@ def test_can_suppress_duplicate_traces(dumpster: Dumpster):
 
 def test_can_log_noop(dumpster: Dumpster):
     @wiretap.telemetry()
-    def case06(logger: wiretap.TraceLogger = None):
+    def case06(logger: wiretap.FluentTraceLogger = None):
         logger.final.log_noop()
 
     case06()
@@ -184,7 +184,7 @@ def test_can_log_noop(dumpster: Dumpster):
 
 def test_can_log_abort(dumpster: Dumpster):
     @wiretap.telemetry()
-    def case07(logger: wiretap.TraceLogger = None):
+    def case07(logger: wiretap.FluentTraceLogger = None):
         logger.final.log_abort()
 
     case07()
@@ -212,7 +212,7 @@ def test_can_log_error(dumpster: Dumpster):
 
 def test_can_disable_begin(dumpster: Dumpster):
     @wiretap.telemetry(auto_begin=False)
-    def case09(logger: wiretap.TraceLogger = None):
+    def case09(logger: wiretap.FluentTraceLogger = None):
         logger.initial.log_begin(message="This is a begin.")
         logger.final.log_end(message="This is an end.")
 
@@ -294,7 +294,7 @@ def test_can_log_abort_on_exception(dumpster: Dumpster):
 
 def test_raises_when_not_initialized():
     @wiretap.telemetry(auto_begin=False)
-    def case15(logger: wiretap.TraceLogger = None):
+    def case15(logger: wiretap.FluentTraceLogger = None):
         logger.other.log_info()
 
     with pytest.raises(wiretap.InitialTraceMissing):

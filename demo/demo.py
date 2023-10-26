@@ -154,7 +154,7 @@ def include_args_and_result_formatted(a: int, b: int) -> int:
 
 
 @wiretap.telemetry(message="This is a start message!")
-def use_message(logger: wiretap.TraceLogger = None):
+def use_message(logger: wiretap.FluentTraceLogger = None):
     logger.other.log_info("This is an info message!")
     logger.final.log_noop("This is a noop message!")
 
@@ -170,7 +170,7 @@ def uses_default_logger():
 
 
 @wiretap.telemetry()
-def trace_only_once(logger: wiretap.TraceLogger = None):
+def trace_only_once(logger: wiretap.FluentTraceLogger = None):
     logger.final.log_end(message="Trace this only once!")
 
 
@@ -185,7 +185,7 @@ def include_args_without_formatting(a: int, b: int):
 
 
 @wiretap.telemetry()
-def cancel_this_function_because_of_iteration_stop(logger: wiretap.TraceLogger = None):
+def cancel_this_function_because_of_iteration_stop(logger: wiretap.FluentTraceLogger = None):
     @wiretap.telemetry()
     def numbers() -> Iterator[int]:
         yield 1
@@ -194,16 +194,16 @@ def cancel_this_function_because_of_iteration_stop(logger: wiretap.TraceLogger =
         yield 3
 
     for x in numbers():
-        logger.other.log_info(details=dict(x=x))
+        logger.other.with_details(x=x).log_info()
 
 
 @wiretap.telemetry(auto_begin=False)
-def will_not_log_uninitialized(logger: wiretap.TraceLogger = None):
+def will_not_log_uninitialized(logger: wiretap.FluentTraceLogger = None):
     logger.other.log_info()
 
 
 @wiretap.telemetry()
-def foo(value: int, logger: wiretap.TraceLogger = None, **kwargs) -> int:
+def foo(value: int, logger: wiretap.FluentTraceLogger = None, **kwargs) -> int:
     logger.other.log_info(details=dict(name=f"sync-{value}"))
     logging.info("This is a classic message!")
     # raise ValueError("Test!")
@@ -220,29 +220,29 @@ def fzz(value: int, logger: wiretap.BasicLogger = None) -> int:
 
 
 @wiretap.telemetry()
-def qux(value: int, scope: wiretap.TraceLogger = None):
+def qux(value: int, scope: wiretap.FluentTraceLogger = None):
     scope.other.log_info(details=dict(name=f"sync-{value}"))
     # raise ValueError("Test!")
 
 
 @wiretap.telemetry()
-async def bar(value: int, scope: wiretap.TraceLogger = None):
+async def bar(value: int, scope: wiretap.FluentTraceLogger = None):
     scope.other.log_info(details=dict(name=f"sync-{value}"))
     await asyncio.sleep(2.0)
     foo(0)
 
 
 @wiretap.telemetry()
-async def baz(value: int, scope: wiretap.TraceLogger = None):
+async def baz(value: int, scope: wiretap.FluentTraceLogger = None):
     scope.other.log_info(details=dict(name=f"sync-{value}"))
     await asyncio.sleep(3.0)
 
 
 def flow_test():
     with wiretap.begin_telemetry("outer") as outer:
-        outer.other.log_info(details=dict(foo=1))
+        outer.other.with_details(foo=1).log_info()
         with wiretap.begin_telemetry("inner") as inner:
-            inner.other.log_info(details=dict(bar=2))
+            inner.other.with_details(bar=2).log_info()
 
         try:
             raise ValueError
