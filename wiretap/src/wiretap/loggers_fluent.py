@@ -72,8 +72,7 @@ class FluentInitialTrace(FluentTrace["FluentInitialTrace"]):
     def log_begin(self, message: str | None = None) -> None:
         if self._used:
             return
-        self.as_info()
-        self.log_trace(str(TraceNameByCaller()), message)
+        self.as_info().log_trace(str(TraceNameByCaller()), message)
         self._initialize()
 
 
