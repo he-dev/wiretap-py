@@ -37,7 +37,11 @@ class InitialTraceMissing(Exception):
 
 
 @dataclasses.dataclass
-class Initialized:
+class InitialTraceLogged:
+    """
+    This class provides a mechanism to ensure that an initial trace is logged before any other trace is.
+    This situation may occur when telemetry's auto_begin=True and the user forgets to call logger.initial.log_begin.
+    """
     activity: Activity
     _value = False
 
@@ -70,32 +74,32 @@ class InitialTrace:
 
 
 class OtherTrace:
-    def __init__(self, logger: BasicLogger, require_initialized: Callable[[str], None]):
+    def __init__(self, logger: BasicLogger, require_initial_trace: Callable[[str], None]):
         self._logger = logger
-        self._require_initialized = require_initialized
+        self._require_initial_trace = require_initial_trace
 
     def log_info(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._require_initialized(str(TraceNameByCaller()))
+        self._require_initial_trace(str(TraceNameByCaller()))
         self._logger.log_trace(str(TraceNameByCaller()), message, details, attachment, logging.DEBUG)
 
     def log_item(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._require_initialized(str(TraceNameByCaller()))
+        self._require_initial_trace(str(TraceNameByCaller()))
         self._logger.log_trace(str(TraceNameByCaller()), message, details, attachment, logging.DEBUG)
 
     def log_skip(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._require_initialized(str(TraceNameByCaller()))
+        self._require_initial_trace(str(TraceNameByCaller()))
         self._logger.log_trace(str(TraceNameByCaller()), message, details, attachment, logging.DEBUG)
 
     def log_metric(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
-        self._require_initialized(str(TraceNameByCaller()))
+        self._require_initial_trace(str(TraceNameByCaller()))
         self._logger.log_trace(str(TraceNameByCaller()), message, details, attachment, logging.DEBUG)
 
 
 class FinalTrace:
-    def __init__(self, logger: BasicLogger, require_initialized: Callable[[str], None]):
+    def __init__(self, logger: BasicLogger, require_initial_trace: Callable[[str], None]):
         self._logger = logger
         self._used = Used()
-        self._require_initialized = require_initialized
+        self._require_initial_trace = require_initial_trace
 
     def log_noop(self, message: Optional[str] = None, details: Optional[dict[str, Any]] = None, attachment: Optional[Any] = None) -> None:
         self._log_trace(str(TraceNameByCaller()), message, details, attachment, logging.INFO, exc_info=None)
@@ -112,14 +116,14 @@ class FinalTrace:
     def _log_trace(self, name: str, message: Optional[str], details: Optional[dict[str, Any]], attachment: Optional[Any], level: int, exc_info: Optional[ExcInfo | bool]):
         if self._used:
             return
-        self._require_initialized(name)
+        self._require_initial_trace(name)
         self._logger.log_trace(name, message, details, attachment, level, exc_info=exc_info)
 
 
 class TraceLogger:
     def __init__(self, logger: BasicLogger):
-        self._initialized = Initialized(logger.activity)
+        self._initial_trace_logged = InitialTraceLogged(logger.activity)
         self.default = logger
-        self.initial = InitialTrace(logger, self._initialized.yes)
-        self.other = OtherTrace(logger, self._initialized.require)
-        self.final = FinalTrace(logger, self._initialized.require)
+        self.initial = InitialTrace(logger, self._initial_trace_logged.yes)
+        self.other = OtherTrace(logger, self._initial_trace_logged.require)
+        self.final = FinalTrace(logger, self._initial_trace_logged.require)

@@ -336,4 +336,4 @@ if __name__ == "__main__":
     use_module()
     uses_default_logger()
     trace_only_once()
-    will_not_log_uninitialized()
+    # will_not_log_uninitialized()
