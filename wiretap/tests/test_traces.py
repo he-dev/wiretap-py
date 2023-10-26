@@ -196,7 +196,7 @@ def test_can_log_abort(dumpster: Dumpster):
 
 def test_can_log_error(dumpster: Dumpster):
     @wiretap.telemetry()
-    def case08(logger: wiretap.TraceLogger = None):
+    def case08():
         raise ZeroDivisionError
 
     try:

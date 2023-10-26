@@ -4,35 +4,30 @@ import dataclasses
 import functools
 import inspect
 from pathlib import Path
-from typing import Any, Optional, Callable, Protocol, Iterator
+from typing import Any, Optional, Callable, Protocol, Iterator, TypeVar, Generic
 
 from .loggers import BasicLogger, TraceLogger
 from .session import current_logger
 from .types import Source
 from .parts import Node
 
-
-class OnError(Protocol):
-    def __call__(self, exc: BaseException, logger: TraceLogger) -> bool: ...
+OnError = Callable[[BaseException, TraceLogger], None]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class LogAbortWhen(OnError):
+class LogAbortWhen:
     exceptions: type[BaseException] | tuple[type[BaseException], ...]
 
-    def __call__(self, exc: BaseException, logger: TraceLogger) -> bool:
+    def __call__(self, exc: BaseException, logger: TraceLogger) -> None:
         if isinstance(exc, self.exceptions):
             logger.final.log_abort(message=f"Unable to complete due to <{type(exc).__name__}>: {str(exc) or '<N/A>'}")
-            return True
-        else:
-            return False
 
 
 @contextlib.contextmanager
 def telemetry_context(
         activity: str,
         source: Source,
-        on_error: Optional[OnError] = None
+        on_error: OnError = lambda _exc, _logger: None
 ) -> Iterator[TraceLogger]:  # | ContextManager[TraceLogger]:  # noqa
     parent = current_logger.get()
     logger = BasicLogger(activity)
@@ -42,8 +37,8 @@ def telemetry_context(
     try:
         yield tracer
     except Exception as e:  # noqa
-        if not on_error or not on_error(e, tracer):
-            tracer.final.log_error(message=f"Unhandled <{type(e).__name__}> has occurred: <{str(e) or 'N/A'}>")
+        on_error(e, tracer)
+        tracer.final.log_error(message=f"Unhandled <{type(e).__name__}> has occurred: <{str(e) or 'N/A'}>")
         raise
     finally:
         current_logger.reset(token)
@@ -72,7 +67,7 @@ def telemetry(
         message: Optional[str] = None,
         details: Optional[dict[str, Any]] = None,
         attachment: Optional[Any] = None,
-        on_error: Optional[OnError] = None,
+        on_error: OnError = lambda _exc, _logger: None,
         auto_begin=True
 ):
     """Provides telemetry for the decorated function."""
@@ -84,6 +79,7 @@ def telemetry(
         frame = stack[1]
         source = Source(file=Path(frame.filename).name, line=frame.lineno)
         activity = alias or decoratee.__name__
+        kwargs_with_logger = KwargsWithLogger(decoratee)
 
         if asyncio.iscoroutinefunction(decoratee):
             @functools.wraps(decoratee)
@@ -109,8 +105,7 @@ def telemetry(
                 with telemetry_context(activity, source, on_error) as logger:
                     if auto_begin:
                         logger.initial.log_begin(message=message, details=details | dict(args_native=args, args_format=include_args) or {}, attachment=attachment)
-                    inject_logger(decoratee, decoratee_kwargs, logger)
-                    result = decoratee(*decoratee_args, **decoratee_kwargs)
+                    result = decoratee(*decoratee_args, **kwargs_with_logger(decoratee_kwargs, logger))
                     logger.final.log_end(details=dict(result_native=result, result_format=include_result))
                     return result
 
@@ -120,12 +115,26 @@ def telemetry(
     return factory
 
 
-def inject_logger(decoratee: object, args: dict[str, Any], logger: TraceLogger) -> None:
-    for n, t in inspect.getfullargspec(decoratee).annotations.items():
+_Func = TypeVar("_Func", bound=Callable)
+
+
+class KwargsWithLogger(Generic[_Func]):
+    def __init__(self, func: _Func):
+        self.name = next((n for n, t in inspect.getfullargspec(func).annotations.items() if t is TraceLogger), "")
+
+    def __call__(self, kwargs: dict[str, Any], logger: TraceLogger) -> dict[str, Any]:
+        # If name exists, then the key definitely is there so no need to check twice.
+        if self.name:
+            kwargs[self.name] = logger
+        return kwargs
+
+
+def inject_logger(func: object, kwargs: dict[str, Any], logger: TraceLogger) -> None:
+    for n, t in inspect.getfullargspec(func).annotations.items():
         if t is BasicLogger:
-            args[n] = logger.default
+            kwargs[n] = logger.default
         if t is TraceLogger:
-            args[n] = logger
+            kwargs[n] = logger
 
 
 def get_args(decoratee: object, *args, **kwargs) -> dict[str, Any]:
