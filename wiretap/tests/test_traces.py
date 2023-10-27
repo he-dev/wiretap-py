@@ -141,11 +141,11 @@ def test_can_log_selected_args(dumpster: Dumpster):
 
 def test_can_log_other_traces(dumpster: Dumpster):
     @wiretap.telemetry()
-    def case04(logger: wiretap.FluentTraceLogger = None):
-        logger.other.log_info(message="This is an info.")
-        logger.other.log_item(message="This is an item.")
-        logger.other.log_skip(message="This is a skip.")
-        logger.other.log_metric(message="This is a metric.")
+    def case04(logger: wiretap.Activity = None):
+        logger.other.trace_info(message="This is an info.").log()
+        logger.other.trace_item(message="This is an item.").log()
+        logger.other.trace_skip(message="This is a skip.").log()
+        logger.other.trace_metric(message="This is a metric.").log()
 
     case04()
 
@@ -160,20 +160,21 @@ def test_can_log_other_traces(dumpster: Dumpster):
 
 def test_can_suppress_duplicate_traces(dumpster: Dumpster):
     @wiretap.telemetry()
-    def case05(logger: wiretap.FluentTraceLogger = None):
-        logger.final.log_end(message="This is the end.")
+    def case05(activity: wiretap.Activity = None):
+        activity.start.trace_begin("This is the begin.")
+        activity.final.trace_end("This is the end.").log()
 
     case05()
 
     dumpster.assert_record_count(2)
-    dumpster.assert_record_values(0, trace="begin")
+    dumpster.assert_record_values(0, trace="begin")  # , message="This is the begin.")
     dumpster.assert_record_values(1, trace="end", message="This is the end.")
 
 
 def test_can_log_noop(dumpster: Dumpster):
     @wiretap.telemetry()
-    def case06(logger: wiretap.FluentTraceLogger = None):
-        logger.final.log_noop()
+    def case06(activity: wiretap.Activity = None):
+        activity.final.trace_noop().log()
 
     case06()
 
@@ -184,8 +185,8 @@ def test_can_log_noop(dumpster: Dumpster):
 
 def test_can_log_abort(dumpster: Dumpster):
     @wiretap.telemetry()
-    def case07(logger: wiretap.FluentTraceLogger = None):
-        logger.final.log_abort()
+    def case07(activity: wiretap.Activity = None):
+        activity.final.trace_abort().log()
 
     case07()
 
@@ -212,9 +213,9 @@ def test_can_log_error(dumpster: Dumpster):
 
 def test_can_disable_begin(dumpster: Dumpster):
     @wiretap.telemetry(auto_begin=False)
-    def case09(logger: wiretap.FluentTraceLogger = None):
-        logger.initial.log_begin(message="This is a begin.")
-        logger.final.log_end(message="This is an end.")
+    def case09(activity: wiretap.Activity = None):
+        activity.start.trace_begin("This is a begin.").log()
+        activity.final.trace_end("This is an end.").log()
 
     case09()
 
@@ -294,8 +295,17 @@ def test_can_log_abort_on_exception(dumpster: Dumpster):
 
 def test_raises_when_not_initialized():
     @wiretap.telemetry(auto_begin=False)
-    def case15(logger: wiretap.FluentTraceLogger = None):
-        logger.other.log_info()
+    def case15(activity: wiretap.Activity = None):
+        activity.other.trace_info().log()
 
-    with pytest.raises(wiretap.InitialTraceMissing):
+    with pytest.raises(wiretap.ActivityStartMissing):
         case15()
+
+
+def test_raises_when_duplicate_start(dumpster: Dumpster):
+    @wiretap.telemetry()
+    def case16(activity: wiretap.Activity = None):
+        activity.start.trace_begin("This is the begin.").log()
+
+    with pytest.raises(wiretap.ActivityAlreadyStarted):
+        case16()

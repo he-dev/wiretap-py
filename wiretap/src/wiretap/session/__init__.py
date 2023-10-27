@@ -2,8 +2,8 @@ from contextvars import ContextVar
 from typing import Optional
 
 from ..parts import Node
-from ..types import Logger
+from ..activity import Activity
 
-current_logger: ContextVar[Optional[Node[Logger]]] = ContextVar("current_logger", default=None)
+current_activity: ContextVar[Optional[Node[Activity]]] = ContextVar("current_activity", default=None)
 
 

@@ -1,8 +1,5 @@
 import logging
 
-from ..types import NodeExtra
-from ..session import current_logger
-
 
 class AddActivityExtra(logging.Filter):
     def __init__(self):
