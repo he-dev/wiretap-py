@@ -1,8 +1,8 @@
 import dataclasses
 import logging
-from typing import Any, Optional, Callable, TypeVar, Generic
+from typing import Any, Optional
 
-from .parts import Elapsed, Used, TraceNameByCaller
+from .parts import Elapsed
 from .types import TraceExtra, ExcInfo, Activity, Logger
 
 

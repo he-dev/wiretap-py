@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Callable, TypeVar, Generic, cast
+from typing import Any, Callable, TypeVar, Generic
 
 from .loggers import BasicLogger, InitialTraceLogged
 from .parts import Used, TraceNameByCaller
@@ -52,14 +52,7 @@ class FluentTrace(Generic[_T]):
     def log_trace(self, name: str, message: str | None = None) -> None:
         source = dict(file=self._logger.activity.file, line=self._logger.activity.line)
         self.with_details(source=source)
-        self._logger.log_trace(
-            name,
-            message,
-            level=self._args.level,
-            details=self._args.details,
-            attachment=self._args.attachment,
-            exc_info=self._args.exc_info
-        )
+        self._logger.log_trace(name, message, level=self._args.level, details=self._args.details, attachment=self._args.attachment, exc_info=self._args.exc_info)
         self._args = TraceArgs()
 
 

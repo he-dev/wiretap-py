@@ -7,7 +7,7 @@ from typing import Protocol, Optional, Any, TypeAlias, Type
 
 from ..parts import Elapsed
 
-ExcInfo: TypeAlias = tuple[Type[BaseException], BaseException, TracebackType]
+ExcInfo: TypeAlias = bool | tuple[Type[BaseException], BaseException, TracebackType | None] | tuple[None, None, None] | BaseException | None
 
 
 @dataclasses.dataclass
