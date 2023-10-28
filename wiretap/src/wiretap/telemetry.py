@@ -6,7 +6,7 @@ import inspect
 from pathlib import Path
 from typing import Any, Optional, Callable, Iterator, TypeVar, Generic
 
-from .activity import Activity, ActivityStartMissing
+from .tracing import Activity, ActivityStartMissing, ActivityAlreadyStarted, PreviousTraceNotLogged, ActivityStartLogged
 from .session import current_activity
 from .parts import Node
 
@@ -31,7 +31,7 @@ def telemetry_context(
     token = current_activity.set(Node(activity, parent))
     try:
         yield activity
-    except ActivityStartMissing:
+    except (ActivityStartMissing, ActivityAlreadyStarted, PreviousTraceNotLogged):
         # Do nothing when this error occurs, otherwise the same exception will raise for the default handler.
         raise
     except Exception as e:  # noqa
@@ -53,7 +53,7 @@ def begin_telemetry(
     frame = stack[2]
     logger: Activity
     with telemetry_context(Activity(name=activity, file=Path(frame.filename).name, line=frame.lineno)) as logger:
-        logger.start.trace_begin(message).with_details(**(details or {})).with_attachment(attachment).log()
+        logger.start.trace_begin().with_message(message).with_details(**(details or {})).with_attachment(attachment).log()
         yield logger
         logger.final.trace_end().with_details().log()
 
@@ -89,7 +89,7 @@ def telemetry(
                 logger: Activity
                 with telemetry_context(activity, on_error) as logger:
                     if auto_begin:
-                        logger.start.trace_begin(message).with_details(**(details or {})).with_details(args_native=args, args_format=include_args).with_attachment(attachment).log()
+                        logger.start.trace_begin().with_message(message).with_details(**(details or {})).with_details(args_native=args, args_format=include_args).with_attachment(attachment).log()
                     result = await decoratee(*decoratee_args, **kwargs_with_logger(decoratee_kwargs, logger))
                     logger.final.trace_end().with_details(result_native=result, result_format=include_result).log()
                     return result
@@ -104,7 +104,7 @@ def telemetry(
                 logger: Activity  # PyCharm doesn't understand context managers.
                 with telemetry_context(activity, on_error) as logger:
                     if auto_begin:
-                        logger.start.trace_begin(message).with_details(**(details or {})).with_details(args_native=args, args_format=include_args).with_attachment(attachment).log()
+                        logger.start.trace_begin().with_message(message).with_details(**(details or {})).with_details(args_native=args, args_format=include_args).with_attachment(attachment).log()
                     result = decoratee(*decoratee_args, **kwargs_with_logger(decoratee_kwargs, logger))
                     logger.final.trace_end().with_details(result_native=result, result_format=include_result).log()
                     return result

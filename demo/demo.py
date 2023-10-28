@@ -154,7 +154,7 @@ def include_args_and_result_formatted(a: int, b: int) -> int:
 
 
 @wiretap.telemetry(message="This is a start message!")
-def use_message(logger: wiretap.Activity = None):
+def use_message(logger: wiretap.tracing.Activity = None):
     logger.other.trace_info("This is an info message!").log()
     logger.final.trace_noop("This is a noop message!").log()
 
@@ -170,8 +170,8 @@ def uses_default_logger():
 
 
 @wiretap.telemetry()
-def trace_only_once(logger: wiretap.Activity = None):
-    logger.final.trace_end("Trace this only once!").log()
+def trace_only_once(logger: wiretap.tracing.Activity = None):
+    logger.final.trace_end().with_message("Trace this only once!").log()
 
 
 @wiretap.telemetry(include_args=dict(a=None, b=None))
@@ -185,7 +185,7 @@ def include_args_without_formatting(a: int, b: int):
 
 
 @wiretap.telemetry()
-def cancel_this_function_because_of_iteration_stop(logger: wiretap.Activity = None):
+def cancel_this_function_because_of_iteration_stop(logger: wiretap.tracing.Activity = None):
     @wiretap.telemetry()
     def numbers() -> Iterator[int]:
         yield 1
@@ -194,16 +194,16 @@ def cancel_this_function_because_of_iteration_stop(logger: wiretap.Activity = No
         yield 3
 
     for x in numbers():
-        logger.other.trace_info().with_details(x=x).log()
+        logger.other.trace_info("blub").with_details(x=x).log()
 
 
 @wiretap.telemetry(auto_begin=False)
-def will_not_log_uninitialized(logger: wiretap.Activity = None):
+def will_not_log_uninitialized(logger: wiretap.tracing.Activity = None):
     logger.other.trace_info().log()
 
 
 @wiretap.telemetry()
-def foo(value: int, logger: wiretap.Activity = None, **kwargs) -> int:
+def foo(value: int, logger: wiretap.tracing.Activity = None, **kwargs) -> int:
     logger.other.trace_info().with_details(name=f"sync-{value}").log()
     logging.info("This is a classic message!")
     # raise ValueError("Test!")
@@ -214,41 +214,41 @@ def foo(value: int, logger: wiretap.Activity = None, **kwargs) -> int:
 
 
 @wiretap.telemetry(include_args=dict(value=".2f", bar=lambda x: f"{x}-callable"), include_result=True)
-def fzz(value: int, logger: wiretap.Activity = None) -> int:
+def fzz(value: int, logger: wiretap.tracing.Activity = None) -> int:
     # return logger.completed(3, wiretap.FormatResultDetails())
     return 3
 
 
 @wiretap.telemetry()
-def qux(value: int, scope: wiretap.Activity = None):
+def qux(value: int, scope: wiretap.tracing.Activity = None):
     scope.other.trace_info(details=dict(name=f"sync-{value}")).log()
     # raise ValueError("Test!")
 
 
 @wiretap.telemetry()
-async def bar(value: int, scope: wiretap.Activity = None):
+async def bar(value: int, scope: wiretap.tracing.Activity = None):
     scope.other.trace_info(details=dict(name=f"sync-{value}")).log()
     await asyncio.sleep(2.0)
     foo(0)
 
 
 @wiretap.telemetry()
-async def baz(value: int, scope: wiretap.Activity = None):
+async def baz(value: int, scope: wiretap.tracing.Activity = None):
     scope.other.trace_info(details=dict(name=f"sync-{value}")).log()
     await asyncio.sleep(3.0)
 
 
 def flow_test():
     with wiretap.begin_telemetry("outer") as outer:
-        outer.other.trace_info().with_details(foo=1).log()
+        outer.other.trace_info("blub").with_details(foo=1).log()
         with wiretap.begin_telemetry("inner") as inner:
-            inner.other.trace_info().with_details(bar=2).log()
+            inner.other.trace_info("blub").with_details(bar=2).log()
 
         try:
             raise ValueError
         except:
             # outer.canceled(reason="Testing suppressing exceptions.")
-            outer.final.trace_error().log()
+            outer.final.trace_error("blub").log()
 
 
 async def main_async():

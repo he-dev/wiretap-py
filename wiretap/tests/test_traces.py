@@ -5,6 +5,7 @@ from logging.handlers import MemoryHandler
 from typing import cast
 
 import wiretap
+import wiretap.tracing
 
 config = {
     "version": 1,
@@ -141,58 +142,58 @@ def test_can_log_selected_args(dumpster: Dumpster):
 
 def test_can_log_other_traces(dumpster: Dumpster):
     @wiretap.telemetry()
-    def case04(logger: wiretap.Activity = None):
-        logger.other.trace_info(message="This is an info.").log()
-        logger.other.trace_item(message="This is an item.").log()
-        logger.other.trace_skip(message="This is a skip.").log()
-        logger.other.trace_metric(message="This is a metric.").log()
+    def case04(logger: wiretap.tracing.Activity = None):
+        logger.other.trace_info("This is an info.").log()
+        logger.other.trace_item("foo", "This is an item.").log()
+        logger.other.trace_skip("Had to skip this!").log()
+        logger.other.trace_metric("bar", "baz").log()
 
     case04()
 
     dumpster.assert_record_count(6)
     dumpster.assert_record_values(0, trace="begin")
     dumpster.assert_record_values(1, trace="info", message="This is an info.")
-    dumpster.assert_record_values(2, trace="item", message="This is an item.")
-    dumpster.assert_record_values(3, trace="skip", message="This is a skip.")
-    dumpster.assert_record_values(4, trace="metric", message="This is a metric.")
+    dumpster.assert_record_values(2, trace="item", details=dict(foo="This is an item."))
+    dumpster.assert_record_values(3, trace="skip", message="Had to skip this!")
+    dumpster.assert_record_values(4, trace="metric", details=dict(bar="baz"))
     dumpster.assert_record_values(5, trace="end")
 
 
-def test_can_suppress_duplicate_traces(dumpster: Dumpster):
-    @wiretap.telemetry()
-    def case05(activity: wiretap.Activity = None):
-        activity.start.trace_begin("This is the begin.")
-        activity.final.trace_end("This is the end.").log()
-
-    case05()
-
-    dumpster.assert_record_count(2)
-    dumpster.assert_record_values(0, trace="begin")  # , message="This is the begin.")
-    dumpster.assert_record_values(1, trace="end", message="This is the end.")
+# def test_can_suppress_duplicate_traces(dumpster: Dumpster):
+#     @wiretap.telemetry()
+#     def case05(activity: wiretap.Activity = None):
+#         activity.start.trace_begin().with_message("This is the begin.").log()
+#         activity.final.trace_end().with_message("This is the end.").log()
+#
+#     case05()
+#
+#     dumpster.assert_record_count(2)
+#     dumpster.assert_record_values(0, trace="begin")
+#     dumpster.assert_record_values(1, trace="end", message="This is the end.")
 
 
 def test_can_log_noop(dumpster: Dumpster):
     @wiretap.telemetry()
-    def case06(activity: wiretap.Activity = None):
-        activity.final.trace_noop().log()
+    def case06(activity: wiretap.tracing.Activity = None):
+        activity.final.trace_noop("This didn't go well.").log()
 
     case06()
 
     dumpster.assert_record_count(2)
     dumpster.assert_record_values(0, trace="begin")
-    dumpster.assert_record_values(1, trace="noop")
+    dumpster.assert_record_values(1, trace="noop", message="This didn't go well.")
 
 
 def test_can_log_abort(dumpster: Dumpster):
     @wiretap.telemetry()
-    def case07(activity: wiretap.Activity = None):
-        activity.final.trace_abort().log()
+    def case07(activity: wiretap.tracing.Activity = None):
+        activity.final.trace_abort("This didn't go well.").log()
 
     case07()
 
     dumpster.assert_record_count(2)
     dumpster.assert_record_values(0, trace="begin")
-    dumpster.assert_record_values(1, trace="abort")
+    dumpster.assert_record_values(1, trace="abort", message="This didn't go well.")
 
 
 def test_can_log_error(dumpster: Dumpster):
@@ -213,9 +214,9 @@ def test_can_log_error(dumpster: Dumpster):
 
 def test_can_disable_begin(dumpster: Dumpster):
     @wiretap.telemetry(auto_begin=False)
-    def case09(activity: wiretap.Activity = None):
-        activity.start.trace_begin("This is a begin.").log()
-        activity.final.trace_end("This is an end.").log()
+    def case09(activity: wiretap.tracing.Activity = None):
+        activity.start.trace_begin().with_message("This is a begin.").log()
+        activity.final.trace_end().with_message("This is an end.").log()
 
     case09()
 
@@ -295,17 +296,41 @@ def test_can_log_abort_on_exception(dumpster: Dumpster):
 
 def test_raises_when_not_initialized():
     @wiretap.telemetry(auto_begin=False)
-    def case15(activity: wiretap.Activity = None):
-        activity.other.trace_info().log()
+    def case15(activity: wiretap.tracing.Activity = None):
+        activity.other.trace_info("This is an info.").log()
 
-    with pytest.raises(wiretap.ActivityStartMissing):
+    with pytest.raises(wiretap.tracing.ActivityStartMissing):
         case15()
 
 
 def test_raises_when_duplicate_start(dumpster: Dumpster):
     @wiretap.telemetry()
-    def case16(activity: wiretap.Activity = None):
-        activity.start.trace_begin("This is the begin.").log()
+    def case16(activity: wiretap.tracing.Activity = None):
+        activity.start.trace_begin().with_message("This is the begin.").log()
 
-    with pytest.raises(wiretap.ActivityAlreadyStarted):
+    with pytest.raises(wiretap.tracing.ActivityAlreadyStarted):
         case16()
+
+
+def test_can_log_custom_traces(dumpster: Dumpster):
+    @wiretap.telemetry(auto_begin=False)
+    def case17(activity: wiretap.tracing.Activity = None):
+        activity.start.trace("one").log()
+        activity.other.trace("two").log()
+        activity.final.trace("three").log()
+
+    case17()
+
+    dumpster.assert_record_count(3)
+    dumpster.assert_record_values(0, trace="one", )
+    dumpster.assert_record_values(1, trace="two")
+    dumpster.assert_record_values(2, trace="three")
+
+
+def test_raises_when_trace_not_logged(dumpster: Dumpster):
+    @wiretap.telemetry()
+    def case18(activity: wiretap.tracing.Activity = None):
+        activity.other.trace_info("This is an info.")  # not logged so end will raise
+
+    with pytest.raises(wiretap.tracing.PreviousTraceNotLogged):
+        case18()
