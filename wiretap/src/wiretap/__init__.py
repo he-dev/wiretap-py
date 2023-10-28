@@ -3,9 +3,8 @@ from typing import Optional, Callable
 
 from . import types
 from . import filters
-from . import session
 from . import tracing
-from .telemetry import telemetry, begin_telemetry, LogAbortWhen
+from .telemetry import telemetry
 
 DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}"
 

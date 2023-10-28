@@ -153,7 +153,7 @@ def include_args_and_result_formatted(a: int, b: int) -> int:
     return a + b
 
 
-@wiretap.telemetry(message="This is a start message!")
+@wiretap.telemetry(on_begin=lambda t: t.with_message("This is a start message!"))
 def use_message(logger: wiretap.tracing.Activity = None):
     logger.other.trace_info("This is an info message!").log()
     logger.final.trace_noop("This is a noop message!").log()
@@ -239,9 +239,9 @@ async def baz(value: int, scope: wiretap.tracing.Activity = None):
 
 
 def flow_test():
-    with wiretap.begin_telemetry("outer") as outer:
+    with wiretap.tracing.begin_activity("outer") as outer:
         outer.other.trace_info("blub").with_details(foo=1).log()
-        with wiretap.begin_telemetry("inner") as inner:
+        with wiretap.tracing.begin_activity("inner") as inner:
             inner.other.trace_info("blub").with_details(bar=2).log()
 
         try:
@@ -291,7 +291,7 @@ def foo_e():
         pass
 
 
-@wiretap.telemetry(attachment="bar_e")
+@wiretap.telemetry(on_begin=lambda t: t.with_attachment("bar_e"))
 def bar_e():
     baz_e()
 

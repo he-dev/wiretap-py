@@ -256,7 +256,7 @@ def test_can_format_args_and_result_by_callable(dumpster: Dumpster):
 
 
 def test_can_log_begin_extra(dumpster: Dumpster):
-    @wiretap.telemetry(message="This is a begin.", details=dict(foo="bar"), attachment="baz")
+    @wiretap.telemetry(on_begin=lambda t: t.with_message("This is a begin.").with_details(foo="bar").with_attachment("baz"))
     def case12():
         pass
 
@@ -280,7 +280,7 @@ def test_can_log_const_extra(dumpster: Dumpster):
 
 
 def test_can_log_abort_on_exception(dumpster: Dumpster):
-    @wiretap.telemetry(on_error=wiretap.LogAbortWhen(ZeroDivisionError))
+    @wiretap.telemetry(on_error=wiretap.tracing.LogAbortWhen(ZeroDivisionError))
     def case14():
         raise ZeroDivisionError("This is a test message.")
 

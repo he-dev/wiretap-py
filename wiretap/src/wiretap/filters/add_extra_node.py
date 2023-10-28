@@ -1,6 +1,7 @@
 import logging
 
-from ..session import current_activity
+# from ..session import current_activity
+from ..tracing import current_activity
 
 
 class AddNodeExtra(logging.Filter):

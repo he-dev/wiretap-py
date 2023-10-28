@@ -1,9 +1,6 @@
 import uuid
 from datetime import datetime
-from types import TracebackType
-from typing import Protocol, Any, TypeAlias, Type
-
-ExcInfo: TypeAlias = bool | tuple[Type[BaseException], BaseException, TracebackType | None] | tuple[None, None, None] | BaseException | None
+from typing import Protocol, Any
 
 
 class DefaultExtra(Protocol):
@@ -14,5 +11,5 @@ class DefaultExtra(Protocol):
     activity: str
     trace: str
     elapsed: float
-    details: dict[str, Any] | None
+    details: dict[str, Any]
     attachment: str | None

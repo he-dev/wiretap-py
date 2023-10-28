@@ -11,5 +11,5 @@ class StripExcInfo(logging.Filter):
             # the first 3 frames are the decorator traces; let's get rid of them
             while exc_tb.tb_next:
                 exc_tb = exc_tb.tb_next
-            record.exc_info = exc_cls, exc, exc_tb
+            record.exc_info = exc_cls, exc, exc_tb  # type: ignore
         return True

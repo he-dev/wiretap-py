@@ -1,8 +1,10 @@
 import logging
-from typing import Any, Callable
+from types import TracebackType
+from typing import Any, Callable, Type, TypeAlias
 
 from ..parts import TraceNameByCaller
-from ..types import ExcInfo
+
+ExcInfo: TypeAlias = bool | tuple[Type[BaseException], BaseException, TracebackType | None] | tuple[None, None, None] | BaseException | None
 
 
 class Trace:
@@ -51,6 +53,9 @@ class Trace:
     def as_error(self) -> "Trace":
         self.level = logging.ERROR
         return self
+
+    def action(self, func: Callable[["Trace"], "Trace"]) -> "Trace":
+        return func(self)
 
     def log(self):
         self._log(self)

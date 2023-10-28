@@ -1,6 +1,6 @@
 import logging
 
-from ..session import current_activity
+from ..tracing import current_activity
 
 
 class AddIndentExtra(logging.Filter):
