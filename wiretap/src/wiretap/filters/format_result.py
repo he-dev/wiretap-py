@@ -1,7 +1,7 @@
 import logging
-from typing import Callable, cast
+from typing import cast
 
-from ..types import DefaultExtra
+from ..specs import DefaultExtra
 
 
 class InvalidResultFormat(Exception):

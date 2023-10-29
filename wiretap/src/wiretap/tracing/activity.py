@@ -21,6 +21,10 @@ current_activity: ContextVar[Node["Activity"] | None] = ContextVar("current_acti
 
 
 class Activity:
+    """
+    This class represents an activity for which telemetry is collected.
+    """
+
     def __init__(
             self,
             name: str,
@@ -105,21 +109,33 @@ class Activity:
 
 
 @contextlib.contextmanager
-def begin_activity(name: str, auto_begin=True) -> Iterator[Activity]:
+def begin_activity(
+        name: str,
+        auto_begin=True,
+        on_begin: OnBegin | None = None,
+        on_error: OnError | None = None
+) -> Iterator[Activity]:
     stack = inspect.stack()
     frame = stack[2]
-    with Activity(name=name, file=Path(frame.filename).name, line=frame.lineno, auto_begin=auto_begin) as activity:
+    with Activity(
+            name=name,
+            file=Path(frame.filename).name,
+            line=frame.lineno,
+            auto_begin=auto_begin,
+            on_begin=on_begin,
+            on_error=on_error
+    ) as activity:
         yield activity
-        activity.final.trace_end().with_details().log()
+        activity.final.trace_end().log()
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class LogAbortWhen:
+class LogAbortWhen(OnError):
     exceptions: type[BaseException] | tuple[type[BaseException], ...]
 
-    def __call__(self, exc: BaseException, logger: Activity) -> None:
+    def __call__(self, exc: BaseException, activity: Activity) -> None:
         if isinstance(exc, self.exceptions):
-            logger.final.trace_abort(f"Unable to complete due to <{type(exc).__name__}>: {str(exc) or '<N/A>'}").log()
+            activity.final.trace_abort(f"Unable to complete due to <{type(exc).__name__}>: {str(exc) or '<N/A>'}").log()
 
 
 class StartTrace:
@@ -185,7 +201,7 @@ class ActivityStartMissing(Exception):
     def __init__(self, activity: str, file: str, line: int, trace: str):
         super().__init__(
             f"Cannot trace <{trace}> for the <{activity}> activity in <{file}:{line}>. "
-            f"You need to log an initial trace first."
+            f"You need to log an start trace first."
         )
 
 
@@ -225,6 +241,7 @@ class PendingTrace:
     """
     This class helps to make sure that pending traces are logged before the next one.
     """
+
     def __init__(self, activity: str, file: str, line: int):
         self.activity = activity
         self.file = file

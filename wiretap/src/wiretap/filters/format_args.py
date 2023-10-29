@@ -1,8 +1,7 @@
 import logging
-from collections.abc import Callable
 from typing import cast
 
-from ..types import DefaultExtra
+from ..specs import DefaultExtra
 
 
 class InvalidArgFormat(Exception):

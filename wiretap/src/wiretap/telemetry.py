@@ -25,21 +25,26 @@ def telemetry(
         frame = stack[1]
         kwargs_with_activity = KwargsWithActivity(decoratee)
 
+        def activity(**kwargs) -> Activity:
+            """
+            Creates an activity with args to format because they are known later when the decorator is called.
+            """
+            return Activity(
+                name=alias or decoratee.__name__,
+                file=Path(frame.filename).name,
+                line=frame.lineno,
+                auto_begin=auto_begin,
+                on_begin=lambda t: t.action(on_begin).with_details(**kwargs),
+                on_error=on_error
+            )
+
         if asyncio.iscoroutinefunction(decoratee):
             @functools.wraps(decoratee)
             async def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(decoratee, *decoratee_args, **decoratee_kwargs)
-                activity = Activity(
-                    name=alias or decoratee.__name__,
-                    file=Path(frame.filename).name,
-                    line=frame.lineno,
-                    auto_begin=auto_begin,
-                    on_begin=lambda t: t.action(on_begin).with_details(args_native=args, args_format=include_args),
-                    on_error=on_error
-                )
-                with activity:
-                    result = await decoratee(*decoratee_args, **kwargs_with_activity(decoratee_kwargs, activity))
-                    activity.final.trace_end().with_details(result_native=result, result_format=include_result).log()
+                with activity(args_native=args, args_format=include_args) as act:
+                    result = await decoratee(*decoratee_args, **kwargs_with_activity(decoratee_kwargs, act))
+                    act.final.trace_end().with_details(result_native=result, result_format=include_result).log()
                     return result
 
             decorator.__signature__ = inspect.signature(decoratee)
@@ -49,17 +54,9 @@ def telemetry(
             @functools.wraps(decoratee)
             def decorator(*decoratee_args, **decoratee_kwargs):
                 args = get_args(decoratee, *decoratee_args, **decoratee_kwargs)
-                activity = Activity(
-                    name=alias or decoratee.__name__,
-                    file=Path(frame.filename).name,
-                    line=frame.lineno,
-                    auto_begin=auto_begin,
-                    on_begin=lambda t: t.action(on_begin).with_details(args_native=args, args_format=include_args),
-                    on_error=on_error
-                )
-                with activity:
-                    result = decoratee(*decoratee_args, **kwargs_with_activity(decoratee_kwargs, activity))
-                    activity.final.trace_end().with_details(result_native=result, result_format=include_result).log()
+                with activity(args_native=args, args_format=include_args) as act:
+                    result = decoratee(*decoratee_args, **kwargs_with_activity(decoratee_kwargs, act))
+                    act.final.trace_end().with_details(result_native=result, result_format=include_result).log()
                     return result
 
             decorator.__signature__ = inspect.signature(decoratee)
@@ -76,10 +73,10 @@ class KwargsWithActivity(Generic[_Func]):
         # Find the name of the logger-argument if any...
         self.name = next((n for n, t in inspect.getfullargspec(func).annotations.items() if t is Activity), "")
 
-    def __call__(self, kwargs: dict[str, Any], logger: Activity) -> dict[str, Any]:
+    def __call__(self, kwargs: dict[str, Any], activity: Activity) -> dict[str, Any]:
         # If name exists, then the key definitely is there so no need to check twice.
         if self.name:
-            kwargs[self.name] = logger
+            kwargs[self.name] = activity
         return kwargs
 
 

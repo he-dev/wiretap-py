@@ -1,13 +1,16 @@
 import logging
-from types import TracebackType
-from typing import Any, Callable, Type, TypeAlias
+from typing import Any, Callable
 
 from ..parts import TraceNameByCaller
-
-ExcInfo: TypeAlias = bool | tuple[Type[BaseException], BaseException, TracebackType | None] | tuple[None, None, None] | BaseException | None
+from ..specs import ExcInfo
 
 
 class Trace:
+    """
+    This class is a builder for a single activity trace.
+    The process ends when log() is called and the trace is sent to the log.
+    """
+
     def __init__(self, name: str | None, log: Callable[["Trace"], None] | None):
         self.name = name or str(TraceNameByCaller(2))
         self.message: str | None = None

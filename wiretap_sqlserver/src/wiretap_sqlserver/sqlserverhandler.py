@@ -5,7 +5,7 @@ import sqlalchemy  # type: ignore
 from logging import Handler
 from typing import cast
 
-from wiretap.types import DefaultExtra
+from wiretap.specs import DefaultExtra
 
 
 class SqlServerHandler(Handler):
