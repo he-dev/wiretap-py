@@ -2,11 +2,12 @@ import contextlib
 import dataclasses
 import inspect
 import logging
+import re
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Callable, Any, Protocol, Iterator
 
-from ..parts import TraceNameByCaller, Elapsed, OneTimeFalse, Node
+from ..tools import Elapsed, Node
 from .trace import Trace
 
 
@@ -187,6 +188,26 @@ class FinalTrace:
 
     def trace_end(self) -> Trace:
         return self._trace().as_info()
+
+
+class OneTimeFalse:
+    state = False
+
+    def __bool__(self):
+        try:
+            return self.state
+        finally:
+            self.state = True
+
+
+class TraceNameByCaller:
+
+    def __init__(self, frame_index: int):
+        caller = inspect.stack()[frame_index].function
+        self.value = re.sub("^trace_", "", caller, flags=re.IGNORECASE)
+
+    def __str__(self):
+        return self.value
 
 
 class ActivityAlreadyStarted(Exception):

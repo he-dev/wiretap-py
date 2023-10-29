@@ -1,7 +1,6 @@
 import logging
 from typing import Any, Callable
 
-from ..parts import TraceNameByCaller
 from ..specs import ExcInfo
 
 
@@ -11,8 +10,8 @@ class Trace:
     The process ends when log() is called and the trace is sent to the log.
     """
 
-    def __init__(self, name: str | None, log: Callable[["Trace"], None] | None):
-        self.name = name or str(TraceNameByCaller(2))
+    def __init__(self, name: str, log: Callable[["Trace"], None] | None):
+        self.name = name
         self.message: str | None = None
         self.details: dict[str, Any] = {}
         self.attachment: Any | None = None
