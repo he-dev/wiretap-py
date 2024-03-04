@@ -53,7 +53,6 @@ class Activity:
         self.final = FinalTrace(self._trace(self._log_final))
 
     def _log(self, trace: Trace) -> None:
-        self._tracing.clear()
         self._logger.log(
             level=trace.level,
             msg=trace.message,
@@ -67,20 +66,30 @@ class Activity:
             )
         )
 
+    # This is how start traces are logged.
     def _log_start(self, trace: Trace):
+        self._tracing.clear()
         self._started.yes_for(trace.name)
+        # Source info is logged only here.
         self._log(trace.with_details(source=dict(file=self.file, line=self.line)))
 
+    # This is how other traces are logged.
     def _log_other(self, trace: Trace):
+        self._tracing.clear()
         self._started.require_for(trace.name)
         self._log(trace)
 
+    # This is how final traces are logged.
     def _log_final(self, trace: Trace):
+        self._tracing.clear()
+        # Makes sure that final traces aren't logged multiple times.
+        # This can happen when an error trace was logged, so the end trace is obsolete.
         if self._finalized:
             return
         self._started.require_for(trace.name)
         self._log(trace)
 
+    # Creates a factory function for the Trace as some additional work is necessary.
     def _trace(self, log: Callable[[Trace], None]) -> NewTrace:
         def _factory(name: str | None = None) -> Trace:
             name = name or str(TraceNameByCaller(2))
@@ -104,6 +113,8 @@ class Activity:
             else:
                 self._on_error(exc_val, self)
                 self.final.trace_error(f"Unhandled <{exc_type.__name__}> has occurred: <{str(exc_val) or 'N/A'}>").log()
+        else:
+            self.final.trace_end().log()
 
         current_activity.reset(self._token)
         return False
@@ -127,7 +138,6 @@ def begin_activity(
             on_error=on_error
     ) as activity:
         yield activity
-        activity.final.trace_end().log()
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -151,6 +161,11 @@ class StartTrace:
 
 
 class OtherTrace:
+    """
+    This class provides additional traces that can be used for debugging,
+    thus every trace here has the debug level.
+    Only start & final traces have the info level or higher.
+    """
     def __init__(self, trace: NewTrace):
         self._trace = trace
 
@@ -158,19 +173,26 @@ class OtherTrace:
         return self._trace(name).as_debug()
 
     def trace_info(self, message: str) -> Trace:
+        """Logs an arbitrary message."""
         return self._trace().with_message(message).as_debug()
 
     def trace_item(self, name: str, value: Any) -> Trace:
+        """Logs an item processed by a loop."""
         return self._trace().with_details(**{name: value}).as_debug()
 
     def trace_skip(self, message: str) -> Trace:
+        """Logs the reason why a loop item was skipped."""
         return self._trace().with_message(message).as_debug()
 
     def trace_metric(self, name: str, value: Any) -> Trace:
+        """Logs an arbitrary metric about the code or process etc."""
         return self._trace().with_details(**{name: value}).as_debug()
 
 
 class FinalTrace:
+    """
+    This class provides traces that close an activity with details about its result.
+    """
     def __init__(self, trace: NewTrace):
         self._trace = trace
 
@@ -178,15 +200,19 @@ class FinalTrace:
         return self._trace(name).as_info()
 
     def trace_noop(self, message: str) -> Trace:
+        """Logs the reason why an activity didn't have to do anything."""
         return self._trace().with_message(message).as_info()
 
     def trace_abort(self, message: str) -> Trace:
+        """Logs the reason why an activity couldn't do its job."""
         return self._trace().with_message(message).as_warning()
 
     def trace_error(self, message: str) -> Trace:
+        """Logs an unexpected error."""
         return self._trace().with_message(message).as_error().with_exc_info(True)
 
     def trace_end(self) -> Trace:
+        """Logs the fact that an activity ended without issues."""
         return self._trace().as_info()
 
 

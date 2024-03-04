@@ -203,7 +203,7 @@ def test_can_log_error(dumpster: Dumpster):
 
     try:
         case08()
-    except:
+    except:  # noqa
         pass
 
     dumpster.assert_record_count(2)

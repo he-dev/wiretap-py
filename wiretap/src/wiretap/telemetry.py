@@ -69,8 +69,11 @@ _Func = TypeVar("_Func", bound=Callable)
 
 
 class KwargsWithActivity(Generic[_Func]):
+    """
+    This tool finds the parameter of type Activity and injects the instance of it.
+    """
     def __init__(self, func: _Func):
-        # Find the name of the logger-argument if any...
+        # Find the name of the activity argument if any...
         self.name = next((n for n, t in inspect.getfullargspec(func).annotations.items() if t is Activity), "")
 
     def __call__(self, kwargs: dict[str, Any], activity: Activity) -> dict[str, Any]:
@@ -84,4 +87,4 @@ def get_args(decoratee: object, *args, **kwargs) -> dict[str, Any]:
     # Zip arg names and their indexes up to the number of args of the decoratee_args.
     arg_pairs = zip(inspect.getfullargspec(decoratee).args, range(len(args)))
     # Turn arg_pairs into a dictionary and combine it with decoratee_kwargs.
-    return {t[0]: args[t[1]] for t in arg_pairs} | kwargs
+    return {arg: args[i] for arg, i in arg_pairs} | kwargs
