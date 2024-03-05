@@ -5,7 +5,7 @@ from typing import Optional, Iterator, TypeVar, Generic
 _T = TypeVar("_T")
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass
 class Node(Generic[_T]):
     value: _T
     parent: Optional["Node[_T]"]

@@ -5,11 +5,14 @@ import logging.config
 import logging.handlers
 import asyncio
 import multiprocessing
+import time
+
 import demo2
 from typing import Iterator, Protocol
 
 import wiretap
 import wiretap_sqlserver.sqlserverhandler
+from wiretap.tracing import Reason
 
 from wiretap_sqlserver.sqlserverhandler import SqlServerOdbcConnectionString
 
@@ -54,7 +57,13 @@ config = {
             "()": logging.Formatter,
             "style": "{",
             "datefmt": "%Y-%m-%d %H:%M:%S",
-            "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}",
+            "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {snapshot}",
+        },
+        "elastic": {
+            "()": logging.Formatter,
+            "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+            "fmt": "{json}",
         }
     },
     "filters": {
@@ -71,11 +80,18 @@ config = {
             "()": wiretap.filters.AddTimestampExtra,
             "tz": "local"
         },
+        "timestamp_utc": {
+            "()": wiretap.filters.AddTimestampExtra,
+            "tz": "utc"
+        },
         "strip_exc_info": {
             "()": wiretap.filters.StripExcInfo
         },
         "serialize_details": {
             "()": wiretap.filters.SerializeDetailsToJson
+        },
+        "serialize_to_json": {
+            "()": wiretap.filters.SerializeToJson
         }
     },
     "handlers": {
@@ -87,6 +103,7 @@ config = {
                 "indent",
                 "timestamp_local",
                 "strip_exc_info",
+                "serialize_to_json"
                 # "context_extra",
                 # "trace_extra"
             ]
@@ -98,6 +115,22 @@ config = {
             "filename": r"c:\temp\wiretap.log",
             "formatter": "wiretap",
             "level": "DEBUG"
+        },
+        "elastic": {
+            "class": "logging.handlers.TimedRotatingFileHandler",
+            "when": "d",
+            "interval": 1,
+            "filename": r"c:\temp\elastic.log",
+            "formatter": "elastic",
+            "level": "DEBUG",
+            "filters": [
+                "indent",
+                "timestamp_utc",
+                "strip_exc_info",
+                "serialize_to_json"
+                # "context_extra",
+                # "trace_extra"
+            ]
         },
         "sqlserver": {
             # "class": "wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
@@ -126,8 +159,8 @@ config = {
     },
     "loggers": {
         "": {
-            "handlers": ["console", "file", "sqlserver"],
-            # "handlers": ["console", "file"],
+            # "handlers": ["console", "file", "sqlserver"],
+            "handlers": ["console", "file", "elastic"],
             # "handlers": ["file"],
             # "handlers": ["console", "file", "memory"],
             "level": "DEBUG"
@@ -138,55 +171,55 @@ config = {
 wiretap.dict_config(config)
 
 
-@wiretap.telemetry()
+# @wiretap.telemetry()
 def include_neither_args_nor_result(a: int, b: int) -> int:
     return a + b
 
 
-@wiretap.telemetry(include_args=True, include_result=True)
+# @wiretap.telemetry(include_args=True, include_result=True)
 def include_args_and_result(a: int, b: int) -> int:
     return a + b
 
 
-@wiretap.telemetry(include_args=dict(a=".1f", b=".1f"), include_result=".3f")
+# @wiretap.telemetry(include_args=dict(a=".1f", b=".1f"), include_result=".3f")
 def include_args_and_result_formatted(a: int, b: int) -> int:
     return a + b
 
 
-@wiretap.telemetry(on_begin=lambda t: t.with_message("This is a start message!"))
+# @wiretap.telemetry(on_begin=lambda t: t.with_message("This is a start message!"))
 def use_message(logger: wiretap.tracing.Activity = None):
     logger.other.trace_info("This is an info message!").log()
     logger.final.trace_noop("This is a noop message!").log()
 
 
-@wiretap.telemetry()
+# @wiretap.telemetry()
 def use_module():
     demo2.another_module()
 
 
-@wiretap.telemetry()
+# @wiretap.telemetry()
 def uses_default_logger():
     logging.info(msg="This is a classic log.")
 
 
-@wiretap.telemetry()
+# @wiretap.telemetry()
 def trace_only_once(logger: wiretap.tracing.Activity = None):
-    logger.final.trace_end().with_message("Trace this only once!").log()
+    logger.final.end_activity().with_message("Trace this only once!").log()
 
 
-@wiretap.telemetry(include_args=dict(a=None, b=None))
+# @wiretap.telemetry(include_args=dict(a=None, b=None))
 def include_args_without_logger(a: int, b: int):
     return a + b
 
 
-@wiretap.telemetry(include_args=dict(a=None, b=None), include_result=True)
+# @wiretap.telemetry(include_args=dict(a=None, b=None), include_result=True)
 def include_args_without_formatting(a: int, b: int):
     return a + b
 
 
-@wiretap.telemetry()
+# @wiretap.telemetry()
 def cancel_this_function_because_of_iteration_stop(logger: wiretap.tracing.Activity = None):
-    @wiretap.telemetry()
+    # @wiretap.telemetry()
     def numbers() -> Iterator[int]:
         yield 1
         yield 2
@@ -197,58 +230,58 @@ def cancel_this_function_because_of_iteration_stop(logger: wiretap.tracing.Activ
         logger.other.trace_info("blub").with_details(x=x).log()
 
 
-@wiretap.telemetry(auto_begin=False)
+# @wiretap.telemetry(auto_begin=False)
 def will_not_log_uninitialized(logger: wiretap.tracing.Activity = None):
     logger.other.trace_info().log()
 
 
-@wiretap.telemetry()
+# @wiretap.telemetry()
 def foo(value: int, logger: wiretap.tracing.Activity = None, **kwargs) -> int:
     logger.other.trace_info().with_details(name=f"sync-{value}").log()
     logging.info("This is a classic message!")
     # raise ValueError("Test!")
     qux(value)
     result = 3
-    logger.final.trace_end(message="This went smooth!", details=dict(value=f"{result:.1f}"))
+    logger.final.end_activity(message="This went smooth!", details=dict(value=f"{result:.1f}"))
     return result
 
 
-@wiretap.telemetry(include_args=dict(value=".2f", bar=lambda x: f"{x}-callable"), include_result=True)
+# @wiretap.telemetry(include_args=dict(value=".2f", bar=lambda x: f"{x}-callable"), include_result=True)
 def fzz(value: int, logger: wiretap.tracing.Activity = None) -> int:
     # return logger.completed(3, wiretap.FormatResultDetails())
     return 3
 
 
-@wiretap.telemetry()
+# @wiretap.telemetry()
 def qux(value: int, scope: wiretap.tracing.Activity = None):
     scope.other.trace_info(details=dict(name=f"sync-{value}")).log()
     # raise ValueError("Test!")
 
 
-@wiretap.telemetry()
+# @wiretap.telemetry()
 async def bar(value: int, scope: wiretap.tracing.Activity = None):
     scope.other.trace_info(details=dict(name=f"sync-{value}")).log()
     await asyncio.sleep(2.0)
     foo(0)
 
 
-@wiretap.telemetry()
+# @wiretap.telemetry()
 async def baz(value: int, scope: wiretap.tracing.Activity = None):
     scope.other.trace_info(details=dict(name=f"sync-{value}")).log()
     await asyncio.sleep(3.0)
 
 
-def flow_test():
-    with wiretap.tracing.begin_activity("outer") as outer:
-        outer.other.trace_info("blub").with_details(foo=1).log()
-        with wiretap.tracing.begin_activity("inner") as inner:
-            inner.other.trace_info("blub").with_details(bar=2).log()
-
-        try:
-            raise ValueError
-        except:
-            # outer.canceled(reason="Testing suppressing exceptions.")
-            outer.final.trace_error("blub").log()
+# def flow_test():
+#     with wiretap.tracing.begin_activity("outer") as outer:
+#         outer.other.trace_info("blub").with_details(foo=1).log()
+#         with wiretap.tracing.begin_activity("inner") as inner:
+#             inner.other.trace_info("blub").with_details(bar=2).log()
+#
+#         try:
+#             raise ValueError
+#         except:
+#             # outer.canceled(reason="Testing suppressing exceptions.")
+#             outer.final.trace_error("blub").log()
 
 
 async def main_async():
@@ -273,17 +306,17 @@ def main_proc():
             pass
 
 
-@wiretap.telemetry()
+# @wiretap.telemetry()
 def main():
     pass
 
 
-@wiretap.telemetry()
+# @wiretap.telemetry()
 def test_completed():
     pass
 
 
-@wiretap.telemetry()
+# @wiretap.telemetry()
 def foo_e():
     try:
         bar_e()
@@ -291,19 +324,38 @@ def foo_e():
         pass
 
 
-@wiretap.telemetry(on_begin=lambda t: t.with_attachment("bar_e"))
+# @wiretap.telemetry(on_begin=lambda t: t.with_attachment("bar_e"))
 def bar_e():
     baz_e()
 
 
-@wiretap.telemetry()
+# @wiretap.telemetry()
 def baz_e():
     raise ZeroDivisionError
 
 
-@wiretap.telemetry()
+# @wiretap.telemetry()
 def blub(a):
     pass
+
+
+def test_function():
+    logging.info("There is no scope here!")
+    with wiretap.begin_activity(message="Hallo trace!", snapshot=dict(foo="foo")):
+        time.sleep(0.2)
+        wiretap.trace_state("One message!", snapshot=dict(bar="baz"))
+        with wiretap.begin_activity(name="sub_function"):
+            time.sleep(0.1)
+            logging.info("How about an info?")
+            pass
+        time.sleep(0.3)
+        raise ZeroDivisionError
+        try:
+            raise ZeroDivisionError
+        except ZeroDivisionError as e:
+            wiretap.end_activity("Oh no!", reason=Reason.ERROR)
+        wiretap.end_activity("Just a test!", reason=Reason.CANCELLED)
+        pass
 
 
 @dataclasses.dataclass
@@ -321,19 +373,21 @@ if __name__ == "__main__":
 
     # print(foo(1, bar="baz"))
 
-    foo_e()
+    # foo_e()
 
     # blub(1, 2)
 
-    flow_test()
-    include_neither_args_nor_result(1, 2)
-    include_args_and_result(1, 2)
-    include_args_and_result_formatted(1, 2)
-    use_message()
-    include_args_without_logger(1, 2)
-    include_args_without_formatting(3, 4)
-    cancel_this_function_because_of_iteration_stop()
-    use_module()
-    uses_default_logger()
-    trace_only_once()
+    # flow_test()
+    # include_neither_args_nor_result(1, 2)
+    # include_args_and_result(1, 2)
+    # include_args_and_result_formatted(1, 2)
+    # use_message()
+    # include_args_without_logger(1, 2)
+    # include_args_without_formatting(3, 4)
+    # cancel_this_function_because_of_iteration_stop()
+    # use_module()
+    # uses_default_logger()
+    # trace_only_once()
     # will_not_log_uninitialized()
+
+    test_function()

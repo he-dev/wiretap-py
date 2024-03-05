@@ -216,7 +216,7 @@ def test_can_disable_begin(dumpster: Dumpster):
     @wiretap.telemetry(auto_begin=False)
     def case09(activity: wiretap.tracing.Activity = None):
         activity.start.trace_begin().with_message("This is a begin.").log()
-        activity.final.trace_end().with_message("This is an end.").log()
+        activity.final.end_activity().with_message("This is an end.").log()
 
     case09()
 

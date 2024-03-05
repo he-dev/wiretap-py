@@ -1,6 +1,6 @@
 import wiretap
 
 
-@wiretap.telemetry()
+#@wiretap.telemetry()
 def another_module():
     pass

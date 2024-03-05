@@ -1,90 +1,79 @@
-import asyncio
-import functools
+import contextlib
 import inspect
+import sys
+import uuid
 from pathlib import Path
-from typing import Any, Callable, TypeVar, Generic
+from typing import Any
 
-from .tracing import Activity, OnBegin, OnError
-
-
-def telemetry(
-        alias: str | None = None,
-        include_args: dict[str, str | Callable | None] | bool | None = False,
-        include_result: str | Callable | bool | None = False,
-        auto_begin=True,
-        on_begin: OnBegin | None = None,
-        on_error: OnError | None = None
-):
-    """Provides telemetry for the decorated function."""
-
-    on_begin = on_begin or (lambda _t: _t)
-    on_error = on_error or (lambda _exc, _logger: None)
-
-    def factory(decoratee):
-        stack = inspect.stack()
-        frame = stack[1]
-        kwargs_with_activity = KwargsWithActivity(decoratee)
-
-        def activity(**kwargs) -> Activity:
-            """
-            Creates an activity with args to format because they are known later when the decorator is called.
-            """
-            return Activity(
-                name=alias or decoratee.__name__,
-                file=Path(frame.filename).name,
-                line=frame.lineno,
-                auto_begin=auto_begin,
-                on_begin=lambda t: t.action(on_begin).with_details(**kwargs),
-                on_error=on_error
-            )
-
-        if asyncio.iscoroutinefunction(decoratee):
-            @functools.wraps(decoratee)
-            async def decorator(*decoratee_args, **decoratee_kwargs):
-                args = get_args(decoratee, *decoratee_args, **decoratee_kwargs)
-                with activity(args_native=args, args_format=include_args) as act:
-                    result = await decoratee(*decoratee_args, **kwargs_with_activity(decoratee_kwargs, act))
-                    act.final.trace_end().with_details(result_native=result, result_format=include_result).log()
-                    return result
-
-            decorator.__signature__ = inspect.signature(decoratee)
-            return decorator
-
-        else:
-            @functools.wraps(decoratee)
-            def decorator(*decoratee_args, **decoratee_kwargs):
-                args = get_args(decoratee, *decoratee_args, **decoratee_kwargs)
-                with activity(args_native=args, args_format=include_args) as act:
-                    result = decoratee(*decoratee_args, **kwargs_with_activity(decoratee_kwargs, act))
-                    act.final.trace_end().with_details(result_native=result, result_format=include_result).log()
-                    return result
-
-            decorator.__signature__ = inspect.signature(decoratee)
-            return decorator
-
-    return factory
+from .context import current_activity
+from .tools import Node
+from .tracing import Activity, Reason
 
 
-_Func = TypeVar("_Func", bound=Callable)
+@contextlib.contextmanager
+def begin_activity(
+        name: str | None = None,
+        message: str | None = None,
+        snapshot: dict[str, Any] | None = None
+) -> None:
+    stack = inspect.stack(2)
+    frame = stack[2]
+    activity = Activity(name=name or frame[3])
+    parent = current_activity.get()
+    token = current_activity.set(Node(value=activity, parent=parent, id=uuid.uuid4()))
+    try:
+        activity.log(
+            trace="begin",
+            message=message,
+            snapshot=(snapshot or {}) | dict(file=dict(name=Path(frame.filename).name, line=frame.lineno))
+        )
+        yield None
+    except Exception:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        end_activity(
+            message=f"Unhandled <{exc_type.__name__}> has occurred: <{str(exc_value) or 'N/A'}>",
+            reason=Reason.ERROR
+        )
+        raise
+    finally:
+        end_activity()
+        current_activity.reset(token)
 
 
-class KwargsWithActivity(Generic[_Func]):
-    """
-    This tool finds the parameter of type Activity and injects the instance of it.
-    """
-    def __init__(self, func: _Func):
-        # Find the name of the activity argument if any...
-        self.name = next((n for n, t in inspect.getfullargspec(func).annotations.items() if t is Activity), "")
-
-    def __call__(self, kwargs: dict[str, Any], activity: Activity) -> dict[str, Any]:
-        # If name exists, then the key definitely is there so no need to check twice.
-        if self.name:
-            kwargs[self.name] = activity
-        return kwargs
+def trace_state(message: str | None = None, snapshot: dict | None = None) -> None:
+    activity: Activity = current_activity.get().value
+    if not activity:
+        raise Exception("There is no activity in the current scope.")
+    if not activity.is_open.state:
+        raise Exception(f"The current '{activity.name}' activity is no longer open.")
+    activity.log("state", message, snapshot)
 
 
-def get_args(decoratee: object, *args, **kwargs) -> dict[str, Any]:
-    # Zip arg names and their indexes up to the number of args of the decoratee_args.
-    arg_pairs = zip(inspect.getfullargspec(decoratee).args, range(len(args)))
-    # Turn arg_pairs into a dictionary and combine it with decoratee_kwargs.
-    return {arg: args[i] for arg, i in arg_pairs} | kwargs
+def end_activity(message: str | None = None, snapshot: dict[str, Any] | None = None, reason: Reason = Reason.COMPLETED, exception: Exception | None = None) -> None:
+    activity: Activity = current_activity.get().value
+    if not activity:
+        raise Exception("There is no activity in the current scope.")
+    if not activity.is_open:
+        return
+    activity.log("end", message, (snapshot or {}) | dict(reason=reason.value), exc_info=reason == Reason.ERROR)
+
+
+"""
+
+- activity
+    - parent_id - auto
+    - unique_id - auto
+    - timestamp - auto
+    - activity - auto
+
+- trace
+    - trace - auto
+    - elapsed - auto
+    - message - user
+    - snapshot - user
+        - file
+            - name
+            - line
+    - exception - auto
+
+"""

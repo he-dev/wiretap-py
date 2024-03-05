@@ -4,7 +4,7 @@ from typing import Optional, Callable
 from . import specs
 from . import filters
 from . import tracing
-from .telemetry import telemetry
+from .telemetry import begin_activity, trace_state, end_activity
 
 DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}"
 
@@ -13,8 +13,8 @@ DEFAULT_FILTERS: list[logging.Filter | Callable[[logging.LogRecord], bool]] = [
     filters.AddActivityExtra(),
     filters.AddNodeExtra(),
     filters.AddTraceExtra(),
-    filters.FormatArgs(),
-    filters.FormatResult()
+    # filters.FormatArgs(),
+    # filters.FormatResult()
 ]
 
 

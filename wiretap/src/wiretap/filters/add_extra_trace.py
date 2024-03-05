@@ -8,10 +8,9 @@ class AddTraceExtra(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         if not hasattr(record, "trace"):
             extra = dict(
-                trace="info",
+                trace="plain",
                 elapsed=0,
-                details={},
-                attachment=None
+                snapshot={},
             )
             for k, v in extra.items():
                 record.__dict__[k] = v
