@@ -4,15 +4,16 @@ from typing import Optional, Callable
 from . import specs
 from . import filters
 from . import tracing
-from .telemetry import begin_activity, trace_state, end_activity
+from . import formatters
+from .telemetry import begin_activity, log_info, log_completed, log_cancelled, log_error
 
-DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}"
+DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {event} | {elapsed:.3f}s | {message} | {snapshot}"
 
 DEFAULT_FILTERS: list[logging.Filter | Callable[[logging.LogRecord], bool]] = [
     filters.AddTimestampExtra(tz="utc"),
-    filters.AddActivityExtra(),
-    filters.AddNodeExtra(),
-    filters.AddTraceExtra(),
+    filters.AddDefaultActivity(),
+    filters.AddCurrentActivity(),
+    filters.DumpException()
     # filters.FormatArgs(),
     # filters.FormatResult()
 ]

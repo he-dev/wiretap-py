@@ -21,21 +21,21 @@ class Activity:
     def __init__(
             self,
             name: str,
+            frame: inspect.FrameInfo
     ):
         self.name = name
+        self.frame = frame
         self.elapsed = Elapsed()
         self.is_open = OneTimeFlag(True)
         self.logger = logging.getLogger(name)
 
-    def log(self, trace: str, message: str, snapshot: dict, exc_info: bool = False) -> None:
+    def log(self, event: str, message: str, snapshot: dict, exc_info: bool = False) -> None:
         self.logger.log(
             level=logging.INFO,
             msg=message,
             exc_info=exc_info,
             extra=dict(
-                activity=self.name,
-                trace=trace,
-                elapsed=float(self.elapsed),
+                event=event,
                 snapshot=snapshot or {}
             )
         )

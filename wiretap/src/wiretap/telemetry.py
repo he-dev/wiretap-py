@@ -1,13 +1,13 @@
 import contextlib
 import inspect
+import logging
 import sys
 import uuid
-from pathlib import Path
 from typing import Any
 
 from .context import current_activity
 from .tools import Node
-from .tracing import Activity, Reason
+from .tracing import Activity
 
 
 @contextlib.contextmanager
@@ -18,44 +18,71 @@ def begin_activity(
 ) -> None:
     stack = inspect.stack(2)
     frame = stack[2]
-    activity = Activity(name=name or frame[3])
+    activity = Activity(
+        name=name or frame[3],
+        frame=frame
+    )
     parent = current_activity.get()
     token = current_activity.set(Node(value=activity, parent=parent, id=uuid.uuid4()))
     try:
-        activity.log(
-            trace="begin",
+        log(
+            event="started",
             message=message,
-            snapshot=(snapshot or {}) | dict(file=dict(name=Path(frame.filename).name, line=frame.lineno))
+            snapshot=snapshot
         )
         yield None
     except Exception:
         exc_type, exc_value, exc_traceback = sys.exc_info()
-        end_activity(
-            message=f"Unhandled <{exc_type.__name__}> has occurred: <{str(exc_value) or 'N/A'}>",
-            reason=Reason.ERROR
-        )
+        log_error(message=f"Unhandled <{exc_type.__name__}> has occurred: <{str(exc_value) or 'N/A'}>")
         raise
     finally:
-        end_activity()
+        log_completed()
         current_activity.reset(token)
 
 
-def trace_state(message: str | None = None, snapshot: dict | None = None) -> None:
+def log(event: str, message: str, snapshot: dict, exc_info: bool = False) -> None:
     activity: Activity = current_activity.get().value
     if not activity:
         raise Exception("There is no activity in the current scope.")
+
+    activity.logger.log(
+        level=logging.INFO,
+        msg=message,
+        exc_info=exc_info,
+        extra=dict(
+            event=event,
+            snapshot=snapshot or {}
+        )
+    )
+
+
+def _current_activity() -> Activity:
+    activity: Activity = current_activity.get().value
+    if not activity:
+        raise Exception("There is no activity in the current scope.")
+    return activity
+
+
+def log_info(message: str | None = None, snapshot: dict | None = None) -> None:
+    activity = _current_activity()
     if not activity.is_open.state:
         raise Exception(f"The current '{activity.name}' activity is no longer open.")
-    activity.log("state", message, snapshot)
+    log("info", message, snapshot)
 
 
-def end_activity(message: str | None = None, snapshot: dict[str, Any] | None = None, reason: Reason = Reason.COMPLETED, exception: Exception | None = None) -> None:
-    activity: Activity = current_activity.get().value
-    if not activity:
-        raise Exception("There is no activity in the current scope.")
-    if not activity.is_open:
-        return
-    activity.log("end", message, (snapshot or {}) | dict(reason=reason.value), exc_info=reason == Reason.ERROR)
+def log_completed(message: str | None = None, snapshot: dict | None = None) -> None:
+    if _current_activity().is_open:
+        log("completed", message, snapshot)
+
+
+def log_cancelled(message: str | None = None, snapshot: dict | None = None) -> None:
+    if _current_activity().is_open:
+        log("cancelled", message, snapshot)
+
+
+def log_error(message: str | None = None, snapshot: dict | None = None) -> None:
+    if _current_activity().is_open:
+        log("error", message, snapshot, exc_info=True)
 
 
 """
@@ -67,7 +94,10 @@ def end_activity(message: str | None = None, snapshot: dict[str, Any] | None = N
     - activity - auto
 
 - trace
-    - trace - auto
+    - trace
+        - name: begin|state|end
+        - type: auto|user
+        - reason: completed|cancelled|error
     - elapsed - auto
     - message - user
     - snapshot - user

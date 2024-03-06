@@ -57,13 +57,19 @@ config = {
             "()": logging.Formatter,
             "style": "{",
             "datefmt": "%Y-%m-%d %H:%M:%S",
-            "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {snapshot}",
+            "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {event} | {elapsed:.3f}s | {message} | {snapshot}",
         },
+        # "elastic": {
+        #     "()": logging.Formatter,
+        #     "style": "{",
+        #     "datefmt": "%Y-%m-%d %H:%M:%S",
+        #     "fmt": "{json}",
+        # },
         "elastic": {
-            "()": logging.Formatter,
-            "style": "{",
-            "datefmt": "%Y-%m-%d %H:%M:%S",
-            "fmt": "{json}",
+            "()": wiretap.formatters.JSONFormatter,
+            # "style": "{",
+            # "datefmt": "%Y-%m-%d %H:%M:%S",
+            # "fmt": "{json}",
         }
     },
     "filters": {
@@ -103,7 +109,7 @@ config = {
                 "indent",
                 "timestamp_local",
                 "strip_exc_info",
-                "serialize_to_json"
+                # "serialize_to_json"
                 # "context_extra",
                 # "trace_extra"
             ]
@@ -124,10 +130,10 @@ config = {
             "formatter": "elastic",
             "level": "DEBUG",
             "filters": [
-                "indent",
+                # "indent",
                 "timestamp_utc",
                 "strip_exc_info",
-                "serialize_to_json"
+                # "serialize_to_json"
                 # "context_extra",
                 # "trace_extra"
             ]
@@ -343,11 +349,11 @@ def test_function():
     logging.info("There is no scope here!")
     with wiretap.begin_activity(message="Hallo trace!", snapshot=dict(foo="foo")):
         time.sleep(0.2)
-        wiretap.trace_state("One message!", snapshot=dict(bar="baz"))
+        wiretap.log_info("One message!", snapshot=dict(bar="baz"))
         with wiretap.begin_activity(name="sub_function"):
-            time.sleep(0.1)
-            logging.info("How about an info?")
-            pass
+            time.sleep(0.3)
+            logging.warning("Didn't use wiretap!")
+            wiretap.log_cancelled("There wasn't anything to do here!")
         time.sleep(0.3)
         raise ZeroDivisionError
         try:

@@ -315,9 +315,9 @@ def test_raises_when_duplicate_start(dumpster: Dumpster):
 def test_can_log_custom_traces(dumpster: Dumpster):
     @wiretap.telemetry(auto_begin=False)
     def case17(activity: wiretap.tracing.Activity = None):
-        activity.start.trace("one").log()
-        activity.other.trace("two").log()
-        activity.final.trace("three").log()
+        activity.start.log("one").log()
+        activity.other.log("two").log()
+        activity.final.log("three").log()
 
     case17()
 
