@@ -26,7 +26,6 @@ class AddCurrentActivity(logging.Filter):
                     file=Path(node.value.frame.filename).name,
                     line=node.value.frame.lineno
                 )
-            record.__dict__["snapshot"] = {}
             record.__dict__["exception"] = None
             record.__dict__["scope"] = dict(
                 prev_id=node.parent.id if node.parent else None,

@@ -5,6 +5,7 @@ import logging.config
 import logging.handlers
 import asyncio
 import multiprocessing
+import pathlib
 import time
 
 import demo2
@@ -165,97 +166,10 @@ wiretap.dict_config(config)
 
 
 # @wiretap.telemetry()
-def include_neither_args_nor_result(a: int, b: int) -> int:
-    return a + b
-
-
-# @wiretap.telemetry(include_args=True, include_result=True)
-def include_args_and_result(a: int, b: int) -> int:
-    return a + b
-
-
-# @wiretap.telemetry(include_args=dict(a=".1f", b=".1f"), include_result=".3f")
-def include_args_and_result_formatted(a: int, b: int) -> int:
-    return a + b
-
-
-# @wiretap.telemetry(on_begin=lambda t: t.with_message("This is a start message!"))
-def use_message(logger: wiretap.process.Activity = None):
-    logger.other.trace_info("This is an info message!").log()
-    logger.final.trace_noop("This is a noop message!").log()
-
-
-# @wiretap.telemetry()
-def use_module():
-    demo2.another_module()
-
-
-# @wiretap.telemetry()
-def uses_default_logger():
-    logging.info(msg="This is a classic log.")
-
-
-# @wiretap.telemetry()
-def trace_only_once(logger: wiretap.process.Activity = None):
-    logger.final.end_activity().with_message("Trace this only once!").log()
-
-
-# @wiretap.telemetry(include_args=dict(a=None, b=None))
-def include_args_without_logger(a: int, b: int):
-    return a + b
-
-
-# @wiretap.telemetry(include_args=dict(a=None, b=None), include_result=True)
-def include_args_without_formatting(a: int, b: int):
-    return a + b
-
-
-# @wiretap.telemetry()
-def cancel_this_function_because_of_iteration_stop(logger: wiretap.process.Activity = None):
-    # @wiretap.telemetry()
-    def numbers() -> Iterator[int]:
-        yield 1
-        yield 2
-        return
-        yield 3
-
-    for x in numbers():
-        logger.other.trace_info("blub").with_details(x=x).log()
-
-
-# @wiretap.telemetry(auto_begin=False)
-def will_not_log_uninitialized(logger: wiretap.process.Activity = None):
-    logger.other.trace_info().log()
-
-
-# @wiretap.telemetry()
-def foo(value: int, logger: wiretap.process.Activity = None, **kwargs) -> int:
-    logger.other.trace_info().with_details(name=f"sync-{value}").log()
-    logging.info("This is a classic message!")
-    # raise ValueError("Test!")
-    qux(value)
-    result = 3
-    logger.final.end_activity(message="This went smooth!", details=dict(value=f"{result:.1f}"))
-    return result
-
-
-# @wiretap.telemetry(include_args=dict(value=".2f", bar=lambda x: f"{x}-callable"), include_result=True)
-def fzz(value: int, logger: wiretap.process.Activity = None) -> int:
-    # return logger.completed(3, wiretap.FormatResultDetails())
-    return 3
-
-
-# @wiretap.telemetry()
-def qux(value: int, scope: wiretap.process.Activity = None):
-    scope.other.trace_info(details=dict(name=f"sync-{value}")).log()
-    # raise ValueError("Test!")
-
-
-# @wiretap.telemetry()
 async def bar(value: int, scope: wiretap.process.Activity = None):
     scope.other.trace_info(details=dict(name=f"sync-{value}")).log()
     await asyncio.sleep(2.0)
-    foo(0)
+    # foo(0)
 
 
 # @wiretap.telemetry()
@@ -264,26 +178,13 @@ async def baz(value: int, scope: wiretap.process.Activity = None):
     await asyncio.sleep(3.0)
 
 
-# def flow_test():
-#     with wiretap.process.begin_activity("outer") as outer:
-#         outer.other.trace_info("blub").with_details(foo=1).log()
-#         with wiretap.process.begin_activity("inner") as inner:
-#             inner.other.trace_info("blub").with_details(bar=2).log()
-#
-#         try:
-#             raise ValueError
-#         except:
-#             # outer.canceled(reason="Testing suppressing exceptions.")
-#             outer.final.trace_error("blub").log()
-
-
 async def main_async():
     b1 = asyncio.create_task(bar(1))
     b2 = asyncio.create_task(baz(2))
     await asyncio.sleep(0)
-    foo(3)
+    # foo(3)
     await asyncio.gather(b1, b2)
-    foo(4)
+    # foo(4)
 
 
 def main_proc():
@@ -294,94 +195,39 @@ def main_proc():
     # await asyncio.gather(b1, b2)
     # foo(4)
 
-    with multiprocessing.Pool() as pool:
-        for _ in pool.starmap(foo, [(x,) for x in range(1, 10)]):
-            pass
+    # with multiprocessing.Pool() as pool:
+    #     for _ in pool.starmap(foo, [(x,) for x in range(1, 10)]):
+    #         pass
 
-
-# @wiretap.telemetry()
-def main():
     pass
 
 
-# @wiretap.telemetry()
-def test_completed():
-    pass
+def will_fail():
+    with wiretap.begin_activity():
+        raise ZeroDivisionError
 
 
-# @wiretap.telemetry()
-def foo_e():
-    try:
-        bar_e()
-    except ZeroDivisionError:
-        pass
-
-
-# @wiretap.telemetry(on_begin=lambda t: t.with_attachment("bar_e"))
-def bar_e():
-    baz_e()
-
-
-# @wiretap.telemetry()
-def baz_e():
-    raise ZeroDivisionError
-
-
-# @wiretap.telemetry()
-def blub(a):
-    pass
-
-
-def test_function():
+def can_everything():
     logging.info("There is no scope here!")
-    with wiretap.begin_activity(message="Hallo trace!", snapshot=dict(foo="foo")):
+    with wiretap.begin_activity(message="This is the main scope!", snapshot=dict(foo="bar")):
         time.sleep(0.2)
-        wiretap.log_info("One message!", snapshot=dict(bar="baz"))
-        with wiretap.begin_activity(name="sub_function"):
+        wiretap.log_info("200ms later...", snapshot=dict(bar="baz"))
+        with wiretap.begin_activity(name="can_cancel"):
             time.sleep(0.3)
             logging.warning("Didn't use wiretap!")
             wiretap.log_cancelled("There wasn't anything to do here!")
         wiretap.log("click", "Check!")
         time.sleep(0.3)
-        raise ZeroDivisionError
-        try:
-            raise ZeroDivisionError
-        except ZeroDivisionError as e:
-            wiretap.end_activity("Oh no!", reason=Reason.ERROR)
-        wiretap.end_activity("Just a test!", reason=Reason.CANCELLED)
-        pass
 
-
-@dataclasses.dataclass
-class Home(Protocol):
-    foo: int
+        with wiretap.begin_activity("catches"):
+            try:
+                will_fail()
+            except ZeroDivisionError as e:
+                wiretap.log_cancelled("Caught ZeroDivisionError!")
 
 
 if __name__ == "__main__":
     # asyncio.run(main())
     # main_proc()
 
-    # h = Home(2)
-
-    # fzz(7)
-
-    # print(foo(1, bar="baz"))
-
-    # foo_e()
-
-    # blub(1, 2)
-
-    # flow_test()
-    # include_neither_args_nor_result(1, 2)
-    # include_args_and_result(1, 2)
-    # include_args_and_result_formatted(1, 2)
-    # use_message()
-    # include_args_without_logger(1, 2)
-    # include_args_without_formatting(3, 4)
-    # cancel_this_function_because_of_iteration_stop()
-    # use_module()
-    # uses_default_logger()
-    # trace_only_once()
-    # will_not_log_uninitialized()
-
-    test_function()
+    can_everything()

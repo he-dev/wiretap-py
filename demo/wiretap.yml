@@ -12,26 +12,25 @@ formatters:
     (): "logging.Formatter"
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
-    fmt: "{asctime}.{msecs:03.0f} {indent} {subject}/{activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}"
+    "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {event} | {elapsed:.3f}s | {message} | {snapshot}",
+  elastic:
+    "()": wiretap.formatters.JSONFormatter
 filters:
   timestamp_local:
     (): "wiretap.filters.AddTimestampExtra"
     tz: "local"
-  context_extra:
-    (): "wiretap.filters.AddContextExtra"
-  trace_extra:
-    (): "wiretap.filters.AddTraceExtra"
+  timestamp_utc:
+    (): "wiretap.filters.AddTimestampExtra"
+    tz: "utc"
   indent:
     (): "wiretap.filters.AddIndentExtra"
     char: "_"
   strip_exc_info:
     (): "wiretap.filters.StripExcInfo"
-  lower_level:
-    (): "wiretap.filters.LowerLevelName"
-  format_args:
-    (): "wiretap.filters.FormatArgs"
-  format_result:
-    (): "wiretap.filters.FormatResult"
+  instance:
+    (): "wiretap.filters.AddConstExtra"
+    name: "instance"
+    value: "demo-1"
 handlers:
   console:
     class: "logging.StreamHandler"
@@ -41,25 +40,27 @@ handlers:
       - indent
       - timestamp_local
       - strip_exc_info
-      - context_extra
-      - trace_extra
-      - format_args
-      - format_result
   file:
     class: "logging.handlers.TimedRotatingFileHandler"
     when: "d"
     interval: 1
     filename: null
-    formatter: "wiretap"
+    formatter: "c:\\temp\\wiretap.log"
     level: "DEBUG"
     filters:
       - indent
       - timestamp_local
       - strip_exc_info
-      - context_extra
-      - trace_extra
-      - format_args
-      - format_result
+  elastic:
+    class: "logging.handlers.TimedRotatingFileHandler"
+    when: "d"
+    interval: 1
+    filename: null
+    formatter: "c:\\temp\\elastic.log"
+    level: "DEBUG"
+    filters:
+      - timestamp_utc
+      - strip_exc_info
   #sqlserver:
   #  class: "wiretap_sqlserver.SqlServerHandler"
   #  #connection_string: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost,1433;DATABASE=automation;UID=sa;PWD=;"
@@ -69,7 +70,7 @@ handlers:
 
 loggers:
   root:
-    handlers: [ "console", "file" ]
+    handlers: [ "console", "file", "elastic" ]
     level: "DEBUG"
   PIL:
     level: "WARNING"
