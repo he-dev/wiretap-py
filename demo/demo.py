@@ -12,7 +12,6 @@ from typing import Iterator, Protocol
 
 import wiretap
 import wiretap_sqlserver.sqlserverhandler
-from wiretap.tracing import Reason
 
 from wiretap_sqlserver.sqlserverhandler import SqlServerOdbcConnectionString
 
@@ -92,12 +91,6 @@ config = {
         },
         "strip_exc_info": {
             "()": wiretap.filters.StripExcInfo
-        },
-        "serialize_details": {
-            "()": wiretap.filters.SerializeDetailsToJson
-        },
-        "serialize_to_json": {
-            "()": wiretap.filters.SerializeToJson
         }
     },
     "handlers": {
@@ -109,9 +102,6 @@ config = {
                 "indent",
                 "timestamp_local",
                 "strip_exc_info",
-                # "serialize_to_json"
-                # "context_extra",
-                # "trace_extra"
             ]
         },
         "file": {
@@ -148,9 +138,6 @@ config = {
             "filters": [
                 "instance",
                 "strip_exc_info",
-                "serialize_details",
-                # "context_extra",
-                # "trace_extra"
             ],
             ".": {
                 "extra_params": ["instance"]
@@ -193,7 +180,7 @@ def include_args_and_result_formatted(a: int, b: int) -> int:
 
 
 # @wiretap.telemetry(on_begin=lambda t: t.with_message("This is a start message!"))
-def use_message(logger: wiretap.tracing.Activity = None):
+def use_message(logger: wiretap.process.Activity = None):
     logger.other.trace_info("This is an info message!").log()
     logger.final.trace_noop("This is a noop message!").log()
 
@@ -209,7 +196,7 @@ def uses_default_logger():
 
 
 # @wiretap.telemetry()
-def trace_only_once(logger: wiretap.tracing.Activity = None):
+def trace_only_once(logger: wiretap.process.Activity = None):
     logger.final.end_activity().with_message("Trace this only once!").log()
 
 
@@ -224,7 +211,7 @@ def include_args_without_formatting(a: int, b: int):
 
 
 # @wiretap.telemetry()
-def cancel_this_function_because_of_iteration_stop(logger: wiretap.tracing.Activity = None):
+def cancel_this_function_because_of_iteration_stop(logger: wiretap.process.Activity = None):
     # @wiretap.telemetry()
     def numbers() -> Iterator[int]:
         yield 1
@@ -237,12 +224,12 @@ def cancel_this_function_because_of_iteration_stop(logger: wiretap.tracing.Activ
 
 
 # @wiretap.telemetry(auto_begin=False)
-def will_not_log_uninitialized(logger: wiretap.tracing.Activity = None):
+def will_not_log_uninitialized(logger: wiretap.process.Activity = None):
     logger.other.trace_info().log()
 
 
 # @wiretap.telemetry()
-def foo(value: int, logger: wiretap.tracing.Activity = None, **kwargs) -> int:
+def foo(value: int, logger: wiretap.process.Activity = None, **kwargs) -> int:
     logger.other.trace_info().with_details(name=f"sync-{value}").log()
     logging.info("This is a classic message!")
     # raise ValueError("Test!")
@@ -253,34 +240,34 @@ def foo(value: int, logger: wiretap.tracing.Activity = None, **kwargs) -> int:
 
 
 # @wiretap.telemetry(include_args=dict(value=".2f", bar=lambda x: f"{x}-callable"), include_result=True)
-def fzz(value: int, logger: wiretap.tracing.Activity = None) -> int:
+def fzz(value: int, logger: wiretap.process.Activity = None) -> int:
     # return logger.completed(3, wiretap.FormatResultDetails())
     return 3
 
 
 # @wiretap.telemetry()
-def qux(value: int, scope: wiretap.tracing.Activity = None):
+def qux(value: int, scope: wiretap.process.Activity = None):
     scope.other.trace_info(details=dict(name=f"sync-{value}")).log()
     # raise ValueError("Test!")
 
 
 # @wiretap.telemetry()
-async def bar(value: int, scope: wiretap.tracing.Activity = None):
+async def bar(value: int, scope: wiretap.process.Activity = None):
     scope.other.trace_info(details=dict(name=f"sync-{value}")).log()
     await asyncio.sleep(2.0)
     foo(0)
 
 
 # @wiretap.telemetry()
-async def baz(value: int, scope: wiretap.tracing.Activity = None):
+async def baz(value: int, scope: wiretap.process.Activity = None):
     scope.other.trace_info(details=dict(name=f"sync-{value}")).log()
     await asyncio.sleep(3.0)
 
 
 # def flow_test():
-#     with wiretap.tracing.begin_activity("outer") as outer:
+#     with wiretap.process.begin_activity("outer") as outer:
 #         outer.other.trace_info("blub").with_details(foo=1).log()
-#         with wiretap.tracing.begin_activity("inner") as inner:
+#         with wiretap.process.begin_activity("inner") as inner:
 #             inner.other.trace_info("blub").with_details(bar=2).log()
 #
 #         try:
@@ -354,6 +341,7 @@ def test_function():
             time.sleep(0.3)
             logging.warning("Didn't use wiretap!")
             wiretap.log_cancelled("There wasn't anything to do here!")
+        wiretap.log("click", "Check!")
         time.sleep(0.3)
         raise ZeroDivisionError
         try:

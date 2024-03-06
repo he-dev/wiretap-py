@@ -6,8 +6,7 @@ import uuid
 from typing import Any
 
 from .context import current_activity
-from .tools import Node
-from .tracing import Activity
+from .process import Activity, Node
 
 
 @contextlib.contextmanager
@@ -40,7 +39,7 @@ def begin_activity(
         current_activity.reset(token)
 
 
-def log(event: str, message: str, snapshot: dict, exc_info: bool = False) -> None:
+def log(event: str, message: str | None = None, snapshot: dict | None = None, exc_info: bool = False) -> None:
     activity: Activity = current_activity.get().value
     if not activity:
         raise Exception("There is no activity in the current scope.")
@@ -95,9 +94,6 @@ def log_error(message: str | None = None, snapshot: dict | None = None) -> None:
 
 - trace
     - trace
-        - name: begin|state|end
-        - type: auto|user
-        - reason: completed|cancelled|error
     - elapsed - auto
     - message - user
     - snapshot - user

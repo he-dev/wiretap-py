@@ -1,16 +1,8 @@
 import inspect
 import logging
 import re
-from enum import Enum
-from typing import Any
 
-from ..tools import Elapsed
-
-
-class Reason(Enum):
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
-    ERROR = "error"
+from .elapsed import Elapsed
 
 
 class Activity:

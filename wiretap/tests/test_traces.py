@@ -5,7 +5,7 @@ from logging.handlers import MemoryHandler
 from typing import cast
 
 import wiretap
-import wiretap.tracing
+import wiretap.process
 
 config = {
     "version": 1,
