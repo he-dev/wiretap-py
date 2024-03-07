@@ -12,9 +12,11 @@ formatters:
     (): "logging.Formatter"
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
-    "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {event} | {elapsed:.3f}s | {message} | {snapshot}",
+    "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {event} | {elapsed:.3f}s | {message} | {snapshot} | {tags}"
   elastic:
     "()": wiretap.formatters.JSONFormatter
+    ".":
+      json_encoder_cls: wiretap.tools.JSONMultiEncoder
 filters:
   timestamp_local:
     (): "wiretap.filters.AddTimestampExtra"
@@ -44,19 +46,17 @@ handlers:
     class: "logging.handlers.TimedRotatingFileHandler"
     when: "d"
     interval: 1
-    filename: null
-    formatter: "c:\\temp\\wiretap.log"
+    filename: "c:\\temp\\wiretap.log"
+    formatter: wiretap
     level: "DEBUG"
     filters:
       - indent
       - timestamp_local
       - strip_exc_info
-  elastic:
-    class: "logging.handlers.TimedRotatingFileHandler"
-    when: "d"
-    interval: 1
-    filename: null
-    formatter: "c:\\temp\\elastic.log"
+  elastic_file:
+    class: "logging.FileHandler"
+    filename: "c:\\temp\\elastic.log"
+    formatter: elastic
     level: "DEBUG"
     filters:
       - timestamp_utc
@@ -70,7 +70,7 @@ handlers:
 
 loggers:
   root:
-    handlers: [ "console", "file", "elastic" ]
+    handlers: [ "console", "file", "elastic_file" ]
     level: "DEBUG"
   PIL:
     level: "WARNING"

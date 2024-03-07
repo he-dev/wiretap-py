@@ -14,7 +14,7 @@ config = {
             "()": logging.Formatter,
             "style": "{",
             "datefmt": "%Y-%m-%d %H:%M:%S",
-            "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {details} | {attachment}",
+            "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:.3f}s | {message} | {snapshot} | {tags}",
         }
     },
     "filters": {
@@ -33,9 +33,6 @@ config = {
         },
         "strip_exc_info": {
             "()": wiretap.filters.StripExcInfo
-        },
-        "serialize_details": {
-            "()": wiretap.filters.SerializeDetailsToJson
         }
     },
     "handlers": {

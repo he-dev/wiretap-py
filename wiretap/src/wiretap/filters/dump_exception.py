@@ -1,8 +1,6 @@
 import logging
 import traceback
 
-from wiretap.context import current_activity
-
 
 class DumpException(logging.Filter):
     def __init__(self):
