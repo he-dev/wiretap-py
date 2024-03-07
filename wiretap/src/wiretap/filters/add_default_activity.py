@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from wiretap.context import current_activity
 
@@ -10,17 +11,18 @@ class AddDefaultActivity(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         if not current_activity.get():
             record.__dict__["activity"] = record.funcName
-            record.__dict__["event"] = f"${record.levelname}"
+            record.__dict__["event"] = f":{record.levelname}"
             record.__dict__["elapsed"] = 0
             record.__dict__["snapshot"] = {}
-            record.__dict__["exception"] = None
-            record.__dict__["scope"] = dict(
+            record.__dict__["tags"] = ["plain"]
+            record.__dict__["context"] = dict(
                 prev_id=None,
                 this_id=None
             )
             record.__dict__["source"] = dict(
-                file=record.filename,
+                file=Path(record.filename).name,
                 line=record.lineno
             )
+            record.__dict__["exception"] = None
 
         return True

@@ -13,12 +13,15 @@ class AddCurrentActivity(logging.Filter):
         if node:
             record.__dict__["activity"] = node.value.name
 
+            # This is a plain record so add default fields.
             if not hasattr(record, "event"):
                 record.__dict__["event"] = f"${record.levelname}"
                 record.__dict__["source"] = dict(
                     file=Path(record.filename).name,
                     line=record.lineno
                 )
+                record.__dict__["snapshot"] = {}
+                record.__dict__["tags"] = ["plain"]
 
             record.__dict__["elapsed"] = round(float(node.value.elapsed), 3)
             if "source" not in record.__dict__:
@@ -27,9 +30,12 @@ class AddCurrentActivity(logging.Filter):
                     line=node.value.frame.lineno
                 )
             record.__dict__["exception"] = None
-            record.__dict__["scope"] = dict(
+            record.__dict__["context"] = dict(
                 prev_id=node.parent.id if node.parent else None,
                 this_id=node.id
             )
+
+            if isinstance(record.tags, set):
+                record.__dict__["tags"] = list(record.tags)
 
         return True

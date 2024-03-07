@@ -57,7 +57,7 @@ config = {
             "()": logging.Formatter,
             "style": "{",
             "datefmt": "%Y-%m-%d %H:%M:%S",
-            "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {event} | {elapsed:.3f}s | {message} | {snapshot}",
+            "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {event} | {elapsed:.3f}s | {message} | {snapshot} | {tags}",
         },
         # "elastic": {
         #     "()": logging.Formatter,
@@ -164,7 +164,6 @@ config = {
 
 wiretap.dict_config(config)
 
-
 # @wiretap.telemetry()
 async def bar(value: int, scope: wiretap.process.Activity = None):
     scope.other.trace_info(details=dict(name=f"sync-{value}")).log()
@@ -209,13 +208,14 @@ def will_fail():
 
 def can_everything():
     logging.info("There is no scope here!")
-    with wiretap.begin_activity(message="This is the main scope!", snapshot=dict(foo="bar")):
+    with wiretap.begin_activity(message="This is the main scope!", snapshot=dict(foo="bar"), tags={"qux"}):
         time.sleep(0.2)
         wiretap.log_info("200ms later...", snapshot=dict(bar="baz"))
         with wiretap.begin_activity(name="can_cancel"):
             time.sleep(0.3)
             logging.warning("Didn't use wiretap!")
             wiretap.log_cancelled("There wasn't anything to do here!")
+            # wiretap.log_info("This won't work!")
         wiretap.log("click", "Check!")
         time.sleep(0.3)
 

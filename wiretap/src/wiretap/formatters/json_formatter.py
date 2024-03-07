@@ -12,6 +12,9 @@ class JSONMultiEncoder(json.JSONEncoder):
         if isinstance(obj, UUID):
             return obj.__str__()
 
+        if isinstance(obj, set):
+            return list(obj)
+
         return super(JSONMultiEncoder, self).default(obj)
 
 
@@ -24,7 +27,8 @@ class JSONFormatter(logging.Formatter):
             "elapsed": record.elapsed,
             "message": record.msg,
             "snapshot": record.snapshot,
-            "scope": record.scope,
+            "tags": record.tags,
+            "context": record.context,
             "source": record.source,
             "exception": record.exception
         }

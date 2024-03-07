@@ -13,7 +13,8 @@ from .process import Activity, Node
 def begin_activity(
         name: str | None = None,
         message: str | None = None,
-        snapshot: dict[str, Any] | None = None
+        snapshot: dict[str, Any] | None = None,
+        tags: set[str] | None = None
 ) -> None:
     stack = inspect.stack(2)
     frame = stack[2]
@@ -27,19 +28,26 @@ def begin_activity(
         log(
             event="started",
             message=message,
-            snapshot=snapshot
+            snapshot=snapshot,
+            tags=(tags or set()) | {"auto"}
         )
         yield None
     except Exception:
         exc_type, exc_value, exc_traceback = sys.exc_info()
-        log_error(message=f"Unhandled <{exc_type.__name__}> has occurred: <{str(exc_value) or 'N/A'}>")
+        log_error(message=f"Unhandled <{exc_type.__name__}> has occurred: <{str(exc_value) or 'N/A'}>", tags={"auto", "unhandled"})
         raise
     finally:
-        log_completed()
+        log_completed(tags={"auto"})
         current_activity.reset(token)
 
 
-def log(event: str, message: str | None = None, snapshot: dict | None = None, exc_info: bool = False) -> None:
+def log(
+        event: str,
+        message: str | None = None,
+        snapshot: dict | None = None,
+        tags: set[str] | None = None,
+        exc_info: bool = False
+) -> None:
     activity: Activity = current_activity.get().value
     if not activity:
         raise Exception("There is no activity in the current scope.")
@@ -50,7 +58,8 @@ def log(event: str, message: str | None = None, snapshot: dict | None = None, ex
         exc_info=exc_info,
         extra=dict(
             event=event,
-            snapshot=snapshot or {}
+            snapshot=snapshot or {},
+            tags=(tags or set()) | ({"custom"} if "auto" not in (tags or set()) else set())
         )
     )
 
@@ -62,26 +71,42 @@ def _current_activity() -> Activity:
     return activity
 
 
-def log_info(message: str | None = None, snapshot: dict | None = None) -> None:
+def log_info(
+        message: str | None = None,
+        snapshot: dict | None = None,
+        tags: set[str] | None = None
+) -> None:
     activity = _current_activity()
     if not activity.is_open.state:
         raise Exception(f"The current '{activity.name}' activity is no longer open.")
-    log("info", message, snapshot)
+    log("info", message, snapshot, tags)
 
 
-def log_completed(message: str | None = None, snapshot: dict | None = None) -> None:
+def log_completed(
+        message: str | None = None,
+        snapshot: dict | None = None,
+        tags: set[str] | None = None
+) -> None:
     if _current_activity().is_open:
-        log("completed", message, snapshot)
+        log("completed", message, snapshot, tags)
 
 
-def log_cancelled(message: str | None = None, snapshot: dict | None = None) -> None:
+def log_cancelled(
+        message: str | None = None,
+        snapshot: dict | None = None,
+        tags: set[str] | None = None
+) -> None:
     if _current_activity().is_open:
-        log("cancelled", message, snapshot)
+        log("cancelled", message, snapshot, tags)
 
 
-def log_error(message: str | None = None, snapshot: dict | None = None) -> None:
+def log_error(
+        message: str | None = None,
+        snapshot: dict | None = None,
+        tags: set[str] | None = None
+) -> None:
     if _current_activity().is_open:
-        log("error", message, snapshot, exc_info=True)
+        log("error", message, snapshot, tags, exc_info=True)
 
 
 """
