@@ -21,17 +21,6 @@ class Activity:
         self.is_open = OneTimeFlag(True)
         self.logger = logging.getLogger(name)
 
-    def log(self, event: str, message: str, snapshot: dict, exc_info: bool = False) -> None:
-        self.logger.log(
-            level=logging.INFO,
-            msg=message,
-            exc_info=exc_info,
-            extra=dict(
-                event=event,
-                snapshot=snapshot or {}
-            )
-        )
-
 
 class OneTimeFlag:
     def __init__(self, initial_value: bool = False) -> None:

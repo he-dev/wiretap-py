@@ -19,14 +19,15 @@ def begin_activity(
     stack = inspect.stack(2)
     frame = stack[2]
     activity = Activity(
-        name=name or frame[3],
+        name=name or frame.function,
         frame=frame
     )
     parent = current_activity.get()
+    # The UUID needs to be created here,
+    # because for some stupid pythonic reason creating a new Node isn't enough.
     token = current_activity.set(Node(value=activity, parent=parent, id=uuid.uuid4()))
     try:
-        log(
-            event="started",
+        _log_started(
             message=message,
             snapshot=snapshot,
             tags=(tags or set()) | {"auto"}
@@ -52,6 +53,7 @@ def log(
     if not activity:
         raise Exception("There is no activity in the current scope.")
 
+    tags = (tags or set())
     activity.logger.log(
         level=logging.INFO,
         msg=message,
@@ -59,7 +61,7 @@ def log(
         extra=dict(
             event=event,
             snapshot=snapshot or {},
-            tags=(tags or set()) | ({"custom"} if "auto" not in (tags or set()) else set())
+            tags=tags | ({"custom"} if "auto" not in tags else set())
         )
     )
 
@@ -69,6 +71,14 @@ def _current_activity() -> Activity:
     if not activity:
         raise Exception("There is no activity in the current scope.")
     return activity
+
+
+def _log_started(
+        message: str | None = None,
+        snapshot: dict | None = None,
+        tags: set[str] | None = None
+) -> None:
+    log("started", message, snapshot, tags)
 
 
 def log_info(
