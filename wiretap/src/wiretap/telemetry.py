@@ -58,11 +58,12 @@ def log(
         level=logging.INFO,
         msg=message,
         exc_info=exc_info,
-        extra=dict(
-            event=event,
-            snapshot=snapshot or {},
-            tags=tags | ({"custom"} if "auto" not in tags else set())
-        )
+        extra={
+            "event_message": message,
+            "event_name": event,
+            "event_snapshot": snapshot or {},
+            "event_tags": tags | ({"custom"} if "auto" not in tags else set())
+        }
     )
 
 

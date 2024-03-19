@@ -10,19 +10,17 @@ class AddDefaultActivity(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         if not current_activity.get():
-            record.__dict__["activity"] = record.funcName
-            record.__dict__["event"] = f":{record.levelname}"
-            record.__dict__["elapsed"] = 0
-            record.__dict__["snapshot"] = {}
-            record.__dict__["tags"] = ["plain"]
-            record.__dict__["context"] = dict(
-                prev_id=None,
-                this_id=None
-            )
-            record.__dict__["source"] = dict(
-                file=Path(record.filename).name,
-                line=record.lineno
-            )
+            record.__dict__["activity_id"] = []
+            record.__dict__["activity_elapsed"] = []
+            record.__dict__["activity_name"] = [record.funcName]
+            record.__dict__["event_message"] = record.msg
+            record.__dict__["event_name"] = f":{record.levelname}"
+            record.__dict__["event_snapshot"] = {}
+            record.__dict__["event_tags"] = ["plain"]
+            record.__dict__["source"] = {
+                "file_path": record.filename,
+                "file_line": record.lineno
+            }
             record.__dict__["exception"] = None
 
         return True

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wiretap"
-version = "8.0.0"
+version = "8.1.0"
 requires-python = ">=3.10"
 authors = [{ name = "he-dev" }]
 description = "This package provides a context-oriented logger."

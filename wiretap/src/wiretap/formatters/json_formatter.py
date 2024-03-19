@@ -10,14 +10,15 @@ class JSONFormatter(logging.Formatter):
     def format(self, record):
         entry = {
             "timestamp": record.timestamp,
-            "activity": record.activity,
-            "event": record.event,
-            "elapsed": record.elapsed,
-            "message": record.msg,
-            "snapshot": record.snapshot,
-            "tags": record.tags,
-            "context": record.context,
-            "source": record.source,
+            "activity.elapsed": record.__dict__["activity_elapsed"],
+            "activity.id": record.__dict__["activity_id"],
+            "activity.name": record.__dict__["activity_name"],
+
+            "event.message": record.__dict__["event_message"],
+            "event.name": record.__dict__["event_name"],
+            "event.snapshot": record.__dict__["event_snapshot"],
+            "event.tags": record.__dict__["event_tags"],
+            "source": record.__dict__["source"],
             "exception": record.exception
         }
 
