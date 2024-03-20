@@ -23,7 +23,7 @@ class JSONFormatter(logging.Formatter):
         }
 
         entry["activity.elapsed"] = entry["activity.path.elapsed"][0:0 + 1]
-        entry["activity.depth"] = len(entry["activity.id"])
+        entry["activity.depth"] = len(entry["activity.path.id"])
         entry["activity.id"] = entry["activity.path.id"][0:0 + 1]
         entry["activity.name"] = entry["activity.path.name"][0:0 + 1]
 
