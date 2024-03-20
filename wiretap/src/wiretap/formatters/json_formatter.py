@@ -10,9 +10,9 @@ class JSONFormatter(logging.Formatter):
     def format(self, record):
         entry = {
             "timestamp": record.timestamp,
-            "activity.elapsed": record.__dict__["activity_elapsed"],
-            "activity.id": record.__dict__["activity_id"],
-            "activity.name": record.__dict__["activity_name"],
+            "activity.path.elapsed": record.__dict__["activity_elapsed"],
+            "activity.path.id": record.__dict__["activity_id"],
+            "activity.path.name": record.__dict__["activity_name"],
 
             "event.message": record.__dict__["event_message"],
             "event.name": record.__dict__["event_name"],
@@ -21,6 +21,15 @@ class JSONFormatter(logging.Formatter):
             "source": record.__dict__["source"],
             "exception": record.exception
         }
+
+        entry["activity.elapsed"] = entry["activity.path.elapsed"][0:0 + 1]
+        entry["activity.depth"] = len(entry["activity.id"])
+        entry["activity.id"] = entry["activity.path.id"][0:0 + 1]
+        entry["activity.name"] = entry["activity.path.name"][0:0 + 1]
+
+        entry["activity.previous.elapsed"] = entry["activity.path.elapsed"][1:1 + 1]
+        entry["activity.previous.id"] = entry["activity.path.id"][1:1 + 1]
+        entry["activity.previous.name"] = entry["activity.path.name"][1:1 + 1]
 
         if isinstance(self.json_encoder_cls, str):
             *module, cls = self.json_encoder_cls.split(".")

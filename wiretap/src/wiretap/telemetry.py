@@ -118,24 +118,3 @@ def log_error(
 ) -> None:
     if _current_activity().is_open:
         log("error", message, snapshot, tags, exc_info=True)
-
-
-"""
-
-- activity
-    - parent_id - auto
-    - unique_id - auto
-    - timestamp - auto
-    - activity - auto
-
-- trace
-    - trace
-    - elapsed - auto
-    - message - user
-    - snapshot - user
-        - file
-            - name
-            - line
-    - exception - auto
-
-"""
