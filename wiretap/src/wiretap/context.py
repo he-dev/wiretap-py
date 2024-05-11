@@ -1,5 +1,5 @@
 from contextvars import ContextVar
 
-from wiretap.process import Activity, Node
+from wiretap.process import ActivityScope, Node
 
-current_activity: ContextVar[Node[Activity] | None] = ContextVar("current_activity", default=None)
+current_activity: ContextVar[Node[ActivityScope] | None] = ContextVar("current_activity", default=None)

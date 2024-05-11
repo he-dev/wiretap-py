@@ -6,7 +6,7 @@ from . import filters
 from . import process
 from . import formatters
 from . import tools
-from .telemetry import begin_activity, log, log_info, log_completed, log_cancelled, log_error
+from .telemetry import begin_activity
 
 DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {event} | {elapsed:.3f}s | {message} | {snapshot}"
 

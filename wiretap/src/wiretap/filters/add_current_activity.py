@@ -1,6 +1,7 @@
 import logging
 
 from wiretap.context import current_activity
+from wiretap.tools import nth_or_default
 
 
 class AddCurrentActivity(logging.Filter):
@@ -10,16 +11,20 @@ class AddCurrentActivity(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         node = current_activity.get()
         if node:
-            record.__dict__["activity_elapsed"] = [round(float(n.value.elapsed), 3) for n in node]
-            record.__dict__["activity_id"] = [n.id for n in node]
-            record.__dict__["activity_name"] = [n.value.name for n in node]
+            record.__dict__["sequence_elapsed"] = [round(float(n.value.elapsed), 3) for n in node]
+            record.__dict__["sequence_id"] = [n.id for n in node]
+            record.__dict__["sequence_name"] = [n.value.name for n in node]
+
+            record.__dict__["activity_elapsed"] = nth_or_default(record.__dict__["sequence_elapsed"], 0)
+            record.__dict__["activity_id"] = nth_or_default(record.__dict__["sequence_id"], 0)
+            record.__dict__["activity_name"] = nth_or_default(record.__dict__["sequence_name"], 0)
 
             # This is a plain record so add default fields.
-            if not hasattr(record, "event_name"):
-                record.__dict__["event_name"] = f"${record.levelname}"
-                record.__dict__["event_snapshot"] = {}
-                record.__dict__["event_tags"] = ["plain"]
-                record.__dict__["event_message"] = record.msg
+            if not hasattr(record, "trace_name"):
+                record.__dict__["trace_name"] = f":{record.levelname}"
+                record.__dict__["trace_snapshot"] = {}
+                record.__dict__["trace_tags"] = {"plain"}
+                record.__dict__["trace_message"] = record.msg
                 record.__dict__["source"] = {
                     "file_path": record.filename,
                     "file_line": record.lineno

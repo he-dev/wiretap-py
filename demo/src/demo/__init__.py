@@ -9,15 +9,15 @@ import wiretap
 
 
 # @wiretap.telemetry()
-async def bar(value: int, scope: wiretap.process.Activity = None):
-    scope.other.trace_info(details=dict(name=f"sync-{value}")).log()
+async def bar(value: int, scope: wiretap.process.ActivityScope = None):
+    scope.other.trace_info(details=dict(name=f"sync-{value}")).log_trace()
     await asyncio.sleep(2.0)
     # foo(0)
 
 
 # @wiretap.telemetry()
-async def baz(value: int, scope: wiretap.process.Activity = None):
-    scope.other.trace_info(details=dict(name=f"sync-{value}")).log()
+async def baz(value: int, scope: wiretap.process.ActivityScope = None):
+    scope.other.trace_info(details=dict(name=f"sync-{value}")).log_trace()
     await asyncio.sleep(3.0)
 
 
@@ -52,22 +52,22 @@ def will_fail():
 
 def can_everything():
     logging.info("There is no scope here!")
-    with wiretap.begin_activity(message="This is the main scope!", snapshot=dict(foo="bar"), tags={"qux"}):
+    with wiretap.begin_activity(message="This is the main scope!", snapshot=dict(foo="bar"), tags={"qux"}) as s1:
         time.sleep(0.2)
-        wiretap.log_info("200ms later...", snapshot=dict(bar="baz"))
-        with wiretap.begin_activity(name="can_cancel"):
+        s1.log_info("200ms later...", snapshot=dict(bar="baz"))
+        with wiretap.begin_activity(name="can_cancel") as s2:
             time.sleep(0.3)
             logging.warning("Didn't use wiretap!")
-            wiretap.log_cancelled("There wasn't anything to do here!")
+            s2.log_exit("There wasn't anything to do here!")
             # wiretap.log_info("This won't work!")
-        wiretap.log("click", "Check!")
+        s1.log_trace("click", "Check!")
         time.sleep(0.3)
 
-        with wiretap.begin_activity("catches"):
+        with wiretap.begin_activity("catches") as s3:
             try:
                 will_fail()
             except ZeroDivisionError as e:
-                wiretap.log_cancelled("Caught ZeroDivisionError!")
+                s3.log_exit("Caught ZeroDivisionError!")
 
 
 if __name__ == "__main__":
