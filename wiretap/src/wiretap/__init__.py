@@ -6,6 +6,7 @@ from . import json
 from . import formatters
 
 from .telemetry import begin_activity
+from .telemetry import begin_counter
 
 DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity_name} | {trace_name} | {activity_elapsed:.3f}s | {trace_message} | {trace_snapshot} | {trace_tags}"
 

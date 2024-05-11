@@ -1,5 +1,8 @@
+import contextlib
 import inspect
 import logging
+from typing import Iterator
+from wiretap.counter import Counter
 
 from _reusable import Elapsed
 
@@ -103,3 +106,13 @@ class Activity:
     ) -> None:
         """This function logs an error in an activity."""
         self.log_trace("error", message, snapshot, tags, exc_info=True, in_progress=False)
+
+    @contextlib.contextmanager
+    def begin_counter(
+            self,
+            message: str | None = None,
+            tags: set[str] | None = None
+    ) -> Iterator[Counter]:
+        counter = Counter()
+        yield counter
+        self.log_trace(name="counter", message=message, snapshot=counter.dump(), tags=(tags or set()) | {"auto"})
