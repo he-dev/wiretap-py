@@ -1,11 +1,29 @@
 import atexit
 import logging
 import sys
+import uuid
+from datetime import datetime
+from types import TracebackType
+
 import sqlalchemy  # type: ignore
 from logging import Handler
-from typing import cast
+from typing import cast, Protocol, TypeAlias, Type
 
-from wiretap.specs import DefaultExtra
+# from wiretap.specs import DefaultExtra
+
+ExcInfo: TypeAlias = bool | tuple[Type[BaseException], BaseException, TracebackType | None] | tuple[None, None, None] | BaseException | None
+
+
+class DefaultExtra(Protocol):
+    parent_id: uuid.UUID | None
+    unique_id: uuid.UUID
+    timestamp: datetime
+    subject: str
+    activity: str
+    trace: str
+    elapsed: float
+    details: dict[str, Any]
+    attachment: str | None
 
 
 class SqlServerHandler(Handler):

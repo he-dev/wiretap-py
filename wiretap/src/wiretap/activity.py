@@ -1,11 +1,10 @@
 import inspect
 import logging
-import re
 
-from .elapsed import Elapsed
+from _reusable import Elapsed
 
 
-class ActivityScope:
+class Activity:
     """
     This class represents an activity for which telemetry is collected.
     """
@@ -104,26 +103,3 @@ class ActivityScope:
     ) -> None:
         """This function logs an error in an activity."""
         self.log_trace("error", message, snapshot, tags, exc_info=True, in_progress=False)
-
-
-class OneTimeFlag:
-    def __init__(self, initial_value: bool = False) -> None:
-        self.state = initial_value
-        self._initial_value = initial_value
-
-    def __bool__(self):
-        try:
-            return self.state
-        finally:
-            if self.state == self._initial_value:
-                self.state = not self.state
-
-
-class TraceNameByCaller:
-
-    def __init__(self, frame_index: int):
-        caller = inspect.stack()[frame_index].function
-        self.value = re.sub("^trace_", "", caller, flags=re.IGNORECASE)
-
-    def __str__(self):
-        return self.value

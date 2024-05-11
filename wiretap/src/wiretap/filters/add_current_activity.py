@@ -1,7 +1,7 @@
 import logging
 
 from wiretap.context import current_activity
-from wiretap.tools import nth_or_default
+from _reusable import nth_or_default
 
 
 class AddCurrentActivity(logging.Filter):

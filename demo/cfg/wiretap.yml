@@ -16,7 +16,7 @@ formatters:
   elastic:
     "()": wiretap.formatters.JSONFormatter
     ".":
-      json_encoder_cls: wiretap.tools.JSONMultiEncoder
+      json_encoder_cls: wiretap.json.JSONMultiEncoder
 filters:
   timestamp_local:
     (): "wiretap.filters.AddTimestampExtra"

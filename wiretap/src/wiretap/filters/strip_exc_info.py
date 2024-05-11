@@ -1,4 +1,6 @@
 import logging
+from types import TracebackType
+from typing import Tuple, Type, Optional
 
 
 class StripExcInfo(logging.Filter):
@@ -9,10 +11,10 @@ class StripExcInfo(logging.Filter):
         if record.exc_info:
             exc_cls, exc, exc_tb = record.exc_info
 
-            # drop the decorator frame
+            # Drops the decorator frame.
             if all((exc_cls, exc, exc_tb)):
-                if "telemetry.py" in exc_tb.tb_frame.__str__():
-                    exc_tb = exc_tb.tb_next
+                if "telemetry.py" in exc_tb.tb_frame.__str__():  # type: ignore
+                    exc_tb = exc_tb.tb_next  # type: ignore
 
             record.exc_info = exc_cls, exc, exc_tb  # type: ignore
         return True

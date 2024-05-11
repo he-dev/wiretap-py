@@ -9,14 +9,14 @@ import wiretap
 
 
 # @wiretap.telemetry()
-async def bar(value: int, scope: wiretap.process.ActivityScope = None):
+async def bar(value: int):
     scope.other.trace_info(details=dict(name=f"sync-{value}")).log_trace()
     await asyncio.sleep(2.0)
     # foo(0)
 
 
 # @wiretap.telemetry()
-async def baz(value: int, scope: wiretap.process.ActivityScope = None):
+async def baz(value: int):
     scope.other.trace_info(details=dict(name=f"sync-{value}")).log_trace()
     await asyncio.sleep(3.0)
 

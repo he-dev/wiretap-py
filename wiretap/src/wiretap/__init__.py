@@ -1,14 +1,13 @@
 import logging
 from typing import Optional, Callable
 
-from . import specs
 from . import filters
-from . import process
+from . import json
 from . import formatters
-from . import tools
+
 from .telemetry import begin_activity
 
-DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {event} | {elapsed:.3f}s | {message} | {snapshot}"
+DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity_name} | {trace_name} | {activity_elapsed:.3f}s | {trace_message} | {trace_snapshot} | {trace_tags}"
 
 DEFAULT_FILTERS: list[logging.Filter | Callable[[logging.LogRecord], bool]] = [
     filters.AddTimestampExtra(tz="utc"),

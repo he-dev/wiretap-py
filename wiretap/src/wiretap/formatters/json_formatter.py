@@ -1,8 +1,8 @@
 import json
 import logging
 from importlib import import_module
-from ..tools import JSONMultiEncoder
-from wiretap.tools import nth_or_default
+from wiretap.json import JSONMultiEncoder
+from _reusable import nth_or_default
 
 
 class JSONFormatter(logging.Formatter):
