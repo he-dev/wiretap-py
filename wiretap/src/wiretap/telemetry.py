@@ -6,7 +6,7 @@ from typing import Any, Iterator
 
 from .context import current_activity
 from .activity import Activity
-from .counter import Counter
+from .counter import LoopCounter
 
 
 @contextlib.contextmanager
@@ -41,14 +41,3 @@ def begin_activity(
         scope.log_end(tags={"auto"})
         current_activity.reset(token)
 
-
-@contextlib.contextmanager
-def begin_counter(
-        activity: Activity | None = None,
-        message: str | None = None,
-        tags: set[str] | None = None
-) -> Iterator[Counter]:
-    counter = Counter()
-    yield counter
-    if activity is not None:
-        activity.log_metric(message=message, snapshot=dict(counter=counter.dump()), tags=tags)

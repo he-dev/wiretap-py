@@ -2,7 +2,7 @@ import contextlib
 import inspect
 import logging
 from typing import Iterator
-from wiretap.counter import Counter
+from wiretap.counter import LoopCounter
 
 from _reusable import Elapsed
 
@@ -108,11 +108,11 @@ class Activity:
         self.log_trace("error", message, snapshot, tags, exc_info=True, in_progress=False)
 
     @contextlib.contextmanager
-    def begin_counter(
+    def log_loop(
             self,
             message: str | None = None,
             tags: set[str] | None = None
-    ) -> Iterator[Counter]:
-        counter = Counter()
+    ) -> Iterator[LoopCounter]:
+        counter = LoopCounter()
         yield counter
-        self.log_trace(name="counter", message=message, snapshot=counter.dump(), tags=(tags or set()) | {"auto"})
+        self.log_trace(name="loop", message=message, snapshot=counter.dump(), tags=(tags or set()) | {"auto"})

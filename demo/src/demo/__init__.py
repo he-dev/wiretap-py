@@ -56,7 +56,7 @@ def can_everything():
         time.sleep(0.2)
         s1.log_info("200ms later...", snapshot=dict(bar="baz"))
         with wiretap.begin_activity(name="can_cancel") as s2:
-            with s2.begin_counter() as c:
+            with s2.log_loop() as c:
                 with c.measure():
                     time.sleep(0.3)
                 logging.warning("Didn't use wiretap!")
