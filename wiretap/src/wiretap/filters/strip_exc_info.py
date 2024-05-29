@@ -1,6 +1,4 @@
 import logging
-from types import TracebackType
-from typing import Tuple, Type, Optional
 
 
 class StripExcInfo(logging.Filter):

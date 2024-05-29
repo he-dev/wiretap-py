@@ -4,13 +4,13 @@ from pprint import pprint
 import pytest
 
 import wiretap
-from wiretap.counter import LoopCounter
+from wiretap.scopes import LoopScope
 
 
 def test_counter():
-    c = LoopCounter()
+    c = LoopScope()
     assert c.elapsed == 0
-    assert c.items == 0
+    assert c.count == 0
     assert c.min.item_id is None
     assert c.max.item_id is None
     assert c.avg == 0
@@ -27,7 +27,7 @@ def test_counter():
     with c.measure("qux"):
         time.sleep(4)
 
-    assert c.items == 4
+    assert c.count == 4
     assert round(c.min.elapsed, 1) == 1
     assert round(c.max.elapsed, 1) == 4
     assert round(c.avg, 1) == 2.5

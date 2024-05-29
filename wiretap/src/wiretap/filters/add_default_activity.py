@@ -1,6 +1,6 @@
 import logging
-from pathlib import Path
 
+from wiretap import tag
 from wiretap.context import current_activity
 
 
@@ -21,10 +21,10 @@ class AddDefaultActivity(logging.Filter):
             record.__dict__["trace_message"] = record.msg
             record.__dict__["trace_name"] = f":{record.levelname}"
             record.__dict__["trace_snapshot"] = {}
-            record.__dict__["trace_tags"] = {"plain"}
+            record.__dict__["trace_tags"] = {tag.PLAIN}
             record.__dict__["source"] = {
-                "file_path": record.filename,
-                "file_line": record.lineno
+                "file": record.filename,
+                "line": record.lineno
             }
             record.__dict__["exception"] = None
 

@@ -9,7 +9,7 @@ _T = TypeVar("_T")
 class Node(Generic[_T]):
     value: _T
     parent: Optional["Node[_T]"]
-    id: uuid.UUID = uuid.uuid4()
+    id: uuid.UUID = dataclasses.field(default=uuid.uuid4())
 
     @property
     def depth(self) -> int:

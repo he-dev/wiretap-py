@@ -5,29 +5,29 @@ from typing import Any
 from _reusable import Elapsed
 
 
-class LoopCounter:
+class LoopScope:
 
     def __init__(self, precision: int = 3):
         self.precision = precision
-        self.items: int = 0
+        self.count: int = 0
         self.elapsed: float = 0
         self.min: Reading = Reading(elapsed=sys.float_info.max)
         self.max: Reading = Reading(elapsed=sys.float_info.min)
 
     @property
     def avg(self) -> float:
-        return self.elapsed / self.items if self.items else 0
+        return self.elapsed / self.count if self.count else 0
 
     @property
     def items_per_second(self) -> float:
-        return self.items / self.elapsed if self.items else 0
+        return self.count / self.elapsed if self.count else 0
 
     @contextlib.contextmanager
     def measure(self, item_id: str | None = None):
         elapsed = Elapsed(self.precision)
         yield
         current = float(elapsed)
-        self.items += 1
+        self.count += 1
         self.elapsed += current
         if current < self.min.elapsed:
             self.min = Reading(item_id, current)
@@ -36,7 +36,7 @@ class LoopCounter:
 
     def dump(self) -> dict[str, Any]:
         return {
-            "items": self.items,
+            "count": self.count,
             "elapsed": self.elapsed,
             "avg": self.avg,
             "min": self.min.dump(),
@@ -56,3 +56,5 @@ class Reading:
             "item_id": self.item_id,
             "elapsed": self.elapsed,
         }
+
+

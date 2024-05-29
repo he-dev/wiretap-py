@@ -46,17 +46,25 @@ def main_proc():
 
 
 def will_fail():
-    with wiretap.begin_activity():
-        raise ZeroDivisionError
+    with wiretap.log_activity():
+        raise TestException("Uses the message!", other="Has some custom value!")
+
+
+class TestException(Exception):
+    def __init__(self, message: str, other: str):
+        super().__init__(message)
+        self.other = other
 
 
 def can_everything():
     logging.info("There is no scope here!")
-    with wiretap.begin_activity(message="This is the main scope!", snapshot=dict(foo="bar"), tags={"qux"}) as s1:
+
+    dispose = wiretap.log_resource("read_nothing", db="test")
+    with wiretap.log_activity(message="This is the main scope!", snapshot=dict(foo="bar"), tags={"qux"}, bar="baz") as s1:
         time.sleep(0.2)
         s1.log_info("200ms later...", snapshot=dict(bar="baz"))
-        with wiretap.begin_activity(name="can_cancel") as s2:
-            with s2.log_loop() as c:
+        with wiretap.log_activity(name="can_cancel") as s2:
+            with s2.log_loop("This is a loop!") as c:
                 with c.measure():
                     time.sleep(0.3)
                 logging.warning("Didn't use wiretap!")
@@ -65,11 +73,14 @@ def can_everything():
         s1.log_trace("click", "Check!")
         time.sleep(0.3)
 
-        with wiretap.begin_activity("catches") as s3:
+        with wiretap.log_activity("catches") as s3:
             try:
                 will_fail()
-            except ZeroDivisionError as e:
-                s3.log_exit("Caught ZeroDivisionError!")
+            except TestException as e:
+                # s3.log_exit("Caught ZeroDivisionError!")
+                s3.log_error(exc_info=False)
+
+    dispose()
 
 
 if __name__ == "__main__":
