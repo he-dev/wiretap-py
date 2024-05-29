@@ -3,6 +3,7 @@ import inspect
 import logging
 import sys
 import uuid
+from enum import Enum
 from typing import Optional, Any, Iterator, Callable, Type, Tuple
 
 from . import filters
@@ -35,11 +36,11 @@ def log_activity(
         name: str | None = None,
         message: str | None = None,
         snapshot: dict[str, Any] | None = None,
-        tags: set[str] | None = None,
+        tags: set[str | Enum] | None = None,
         **kwargs
 ) -> Iterator[ActivityScope]:
     """This function logs telemetry for an activity scope. It returns the activity scope that provides additional APIs."""
-    tags = (tags or set()) | {tag.AUTO}
+    tags = (tags or set())  # | {tag.AUTO}
     if name:
         tags.add(tag.VIRTUAL)
 
@@ -68,7 +69,7 @@ def log_resource(
         name: str,
         message: str | None = None,
         snapshot: dict[str, Any] | None = None,
-        tags: set[str] | None = None,
+        tags: set[str | Enum] | None = None,
         **kwargs
 ) -> Callable[[], None]:
     """This function logs telemetry for a resource. It returns a function that logs the end of its usage when called."""

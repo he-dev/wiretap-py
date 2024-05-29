@@ -4,6 +4,8 @@ import logging
 import logging.config
 import logging.handlers
 import time
+from enum import Enum
+
 import yaml
 import wiretap
 
@@ -56,11 +58,22 @@ class TestException(Exception):
         self.other = other
 
 
+class TestEnum(Enum):
+    SOME_NAME = "some_value"
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return self.name
+
+
 def can_everything():
     logging.info("There is no scope here!")
 
     dispose = wiretap.log_resource("read_nothing", db="test")
     with wiretap.log_activity(message="This is the main scope!", snapshot=dict(foo="bar"), tags={"qux"}, bar="baz") as s1:
+        s1.log_info(some_enum=TestEnum.SOME_NAME)
         time.sleep(0.2)
         s1.log_info("200ms later...", snapshot=dict(bar="baz"))
         with wiretap.log_activity(name="can_cancel") as s2:

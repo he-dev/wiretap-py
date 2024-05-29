@@ -3,6 +3,7 @@ import inspect
 import logging
 import sys
 import uuid
+from enum import Enum
 
 from wiretap import tag
 from typing import Iterator, Any, Union, Type, Tuple
@@ -20,7 +21,7 @@ class ActivityScope:
             name: str,
             frame: inspect.FrameInfo,
             snapshot: dict[str, Any] | None = None,
-            tags: set[str] | None = None,
+            tags: set[str | Enum] | None = None,
             **kwargs: Any
     ):
         self.id = uuid.uuid4()
@@ -37,7 +38,7 @@ class ActivityScope:
             name: str,
             message: str | None = None,
             snapshot: dict | None = None,
-            tags: set[str] | None = None,
+            tags: set[str | Enum] | None = None,
             exc_info: bool = False,
             in_progress: bool = True,
             **kwargs
@@ -58,7 +59,8 @@ class ActivityScope:
                 "trace_message": message,
                 "trace_name": name,
                 "trace_snapshot": (snapshot or {}) | kwargs,
-                "trace_tags": tags | ({tag.CUSTOM} if tag.AUTO not in tags else set())
+                # "trace_tags": sorted(tags | ({tag.CUSTOM} if tag.AUTO not in tags else set()), key=lambda x: str(x) if isinstance(x, Enum) else x)
+                "trace_tags": sorted(tags, key=lambda x: str(x) if isinstance(x, Enum) else x)
             }
         )
         if not in_progress:
@@ -68,7 +70,7 @@ class ActivityScope:
             self,
             message: str | None = None,
             snapshot: dict | None = None,
-            tags: set[str] | None = None,
+            tags: set[str | Enum] | None = None,
             **kwargs
     ) -> None:
         """This function logs any state."""
@@ -85,7 +87,7 @@ class ActivityScope:
             self,
             message: str | None = None,
             snapshot: dict | None = None,
-            tags: set[str] | None = None,
+            tags: set[str | Enum] | None = None,
             **kwargs
     ) -> None:
         """This function logs any state."""
@@ -102,7 +104,7 @@ class ActivityScope:
             self,
             message: str,
             snapshot: dict | None = None,
-            tags: set[str] | None = None,
+            tags: set[str | Enum] | None = None,
             **kwargs
     ) -> None:
         """This function logs conditional branches."""
@@ -119,7 +121,7 @@ class ActivityScope:
             self,
             message: str | None = None,
             snapshot: dict | None = None,
-            tags: set[str] | None = None,
+            tags: set[str | Enum] | None = None,
             **kwargs
     ) -> None:
         """This function logs a regular end of an activity."""
@@ -134,9 +136,9 @@ class ActivityScope:
 
     def log_exit(
             self,
-            message: str,
+            message: str | None = None,
             snapshot: dict | None = None,
-            tags: set[str] | None = None,
+            tags: set[str | Enum] | None = None,
             **kwargs
     ) -> None:
         """This function logs an unusual end of an activity."""
@@ -153,7 +155,7 @@ class ActivityScope:
             self,
             message: str | None = None,
             snapshot: dict | None = None,
-            tags: set[str] | None = None,
+            tags: set[str | Enum] | None = None,
             exc_info: bool = True,
             **kwargs
     ) -> None:
@@ -177,7 +179,7 @@ class ActivityScope:
     def log_loop(
             self,
             message: str | None = None,
-            tags: set[str] | None = None,
+            tags: set[str | Enum] | None = None,
             **kwargs,
     ) -> Iterator[LoopScope]:
         scope = LoopScope()

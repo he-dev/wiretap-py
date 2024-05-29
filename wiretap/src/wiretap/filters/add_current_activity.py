@@ -13,8 +13,9 @@ class AddCurrentActivity(logging.Filter):
         node = current_activity.get()
         if node:
             # Find the currently logging activity, not the most inner one.
-            id = record.__dict__["id"]
-            node = next(n for n in node if n.id == id)
+            if "id" in record.__dict__:
+                id = record.__dict__["id"]
+                node = next(n for n in node if n.id == id)
 
             record.__dict__["sequence_elapsed"] = [round(float(n.value.elapsed), 3) for n in node]
             record.__dict__["sequence_id"] = [n.id for n in node]
