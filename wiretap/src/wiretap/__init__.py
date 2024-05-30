@@ -12,7 +12,7 @@ from . import json
 from . import scopes
 from . import tag
 from .context import current_activity
-from .scopes import ActivityScope
+from .scopes import ActivityScope, LoopScope
 
 DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity_name} | {trace_name} | {activity_elapsed}s | {trace_message} | {trace_snapshot} | {trace_tags}"
 
@@ -56,13 +56,25 @@ def log_activity(
         scope.log_trace(name="begin", message=message, snapshot=snapshot, **kwargs)
         yield scope
     except Exception:
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        if exc_type is not None:
+        exc_cls, exc, exc_tb = sys.exc_info()
+        if exc is not None:
             scope.log_error(tags={tag.UNHANDLED})
         raise
     finally:
         scope.log_end()
         current_activity.reset(token)
+
+
+def log_error(
+        message: str | None = None,
+        snapshot: dict | None = None,
+        tags: set[str | Enum] | None = None,
+        exc_info: bool = True,
+        **kwargs
+) -> None:
+    parent = current_activity.get()
+    if parent:
+        parent.value.log_error(message, snapshot, tags, exc_info=exc_info, **kwargs)
 
 
 def log_resource(
@@ -82,6 +94,34 @@ def log_resource(
     return dispose
 
 
+@contextlib.contextmanager
+def log_loop(
+        activity: ActivityScope,
+        message: str | None = None,
+        tags: set[str | Enum] | None = None,
+        **kwargs,
+) -> Iterator[LoopScope]:
+    """This function initializes a new scope for loop telemetry."""
+    scope = LoopScope()
+    try:
+        yield scope
+    finally:
+        activity.log_trace(
+            name="loop",
+            message=message,
+            snapshot=scope.dump(),
+            tags=tags,
+            **kwargs
+        )
+
+
 def no_exc_info_if(exception_type: Type[BaseException] | Tuple[Type[BaseException], ...]) -> bool:
     exc_cls, exc, exc_tb = sys.exc_info()
     return not isinstance(exc, exception_type)
+
+
+def to_tag(value: str | Enum) -> str:
+    if isinstance(value, Enum):
+        value = str(value)
+
+    return value.replace("_", "-")

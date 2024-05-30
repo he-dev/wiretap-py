@@ -25,14 +25,16 @@ class LoopScope:
     @contextlib.contextmanager
     def measure(self, item_id: str | None = None):
         elapsed = Elapsed(self.precision)
-        yield
-        current = float(elapsed)
-        self.count += 1
-        self.elapsed += current
-        if current < self.min.elapsed:
-            self.min = Reading(item_id, current)
-        if current > self.max.elapsed:
-            self.max = Reading(item_id, current)
+        try:
+            yield
+        finally:
+            current = float(elapsed)
+            self.count += 1
+            self.elapsed += current
+            if current < self.min.elapsed:
+                self.min = Reading(item_id, current)
+            if current > self.max.elapsed:
+                self.max = Reading(item_id, current)
 
     def dump(self) -> dict[str, Any]:
         return {

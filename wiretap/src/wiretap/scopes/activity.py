@@ -4,9 +4,8 @@ import logging
 import sys
 import uuid
 from enum import Enum
+from typing import Iterator, Any, Generator
 
-from wiretap import tag
-from typing import Iterator, Any, Union, Type, Tuple
 from _reusable import Elapsed
 from .loop import LoopScope
 
@@ -162,7 +161,7 @@ class ActivityScope:
         """This function logs an error in an activity."""
         exc_cls, exc, exc_tb = sys.exc_info()
         snapshot = snapshot or {}
-        if all((exc_cls, exc, exc_tb)):
+        if exc_cls:
             snapshot["reason"] = exc_cls.__name__
             # snapshot["message"] = str(exc) or None
         self.log_trace(
@@ -172,22 +171,5 @@ class ActivityScope:
             tags=tags,
             exc_info=exc_info,
             in_progress=False,
-            **kwargs
-        )
-
-    @contextlib.contextmanager
-    def log_loop(
-            self,
-            message: str | None = None,
-            tags: set[str | Enum] | None = None,
-            **kwargs,
-    ) -> Iterator[LoopScope]:
-        scope = LoopScope()
-        yield scope
-        self.log_trace(
-            name="loop",
-            message=message,
-            snapshot=scope.dump(),
-            tags=tags,
             **kwargs
         )
