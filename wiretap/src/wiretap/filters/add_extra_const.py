@@ -2,11 +2,12 @@ import logging
 from typing import Any
 
 
-class AddConstExtra(logging.Filter):
-    def __init__(self, name: str, value: Any):
-        self.value = value
-        super().__init__(name)
+class ConstField(logging.Filter):
+    def __init__(self, mapping: dict[str, Any]):
+        super().__init__()
+        self.mapping = mapping
 
     def filter(self, record: logging.LogRecord) -> bool:
-        setattr(record, self.name, self.value)
+        for key, value in self.mapping.items():
+            setattr(record, key, value)
         return True

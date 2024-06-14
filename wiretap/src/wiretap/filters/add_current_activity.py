@@ -47,3 +47,5 @@ class AddCurrentActivity(logging.Filter):
                 record.__dict__["event.tags"] = list(record.__dict__["event.tags"])
 
         return True
+
+

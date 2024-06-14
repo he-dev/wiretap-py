@@ -1,14 +1,14 @@
-import contextlib
+import dataclasses
 import inspect
 import logging
 import sys
 import uuid
 from enum import Enum
-from typing import Iterator, Any, Generator
+from typing import Any, Optional, Iterator
 
 from _reusable import Elapsed
-from .loop import LoopScope
 
+TRACE_KEY =  "_trace"
 
 class ActivityScope:
     """
@@ -17,12 +17,14 @@ class ActivityScope:
 
     def __init__(
             self,
+            parent: Optional["ActivityScope"],
             name: str,
             frame: inspect.FrameInfo,
             snapshot: dict[str, Any] | None = None,
             tags: set[str | Enum] | None = None,
             **kwargs: Any
     ):
+        self.parent = parent
         self.id = uuid.uuid4()
         self.name = name
         self.frame = frame
@@ -31,6 +33,16 @@ class ActivityScope:
         self.elapsed = Elapsed()
         self.in_progress = True
         self.logger = logging.getLogger(name)
+
+    @property
+    def depth(self) -> int:
+        return self.parent.depth + 1 if self.parent else 1
+
+    def __iter__(self) -> Iterator["ActivityScope"]:
+        current: Optional["ActivityScope"] = self
+        while current:
+            yield current
+            current = current.parent
 
     def log_trace(
             self,
@@ -54,12 +66,13 @@ class ActivityScope:
             msg=message,
             exc_info=exc_info,
             extra={
-                "id": self.id,
-                "trace_message": message,
-                "trace_name": name,
-                "trace_snapshot": (snapshot or {}) | kwargs,
-                # "trace_tags": sorted(tags | ({tag.CUSTOM} if tag.AUTO not in tags else set()), key=lambda x: str(x) if isinstance(x, Enum) else x)
-                "trace_tags": sorted(tags, key=lambda x: str(x) if isinstance(x, Enum) else x)
+                TRACE_KEY: Trace(
+                    activity=self,
+                    name=name,
+                    message=message,
+                    snapshot=(snapshot or {}) | kwargs,
+                    tags=tags,
+                )
             }
         )
         if not in_progress:
@@ -173,3 +186,16 @@ class ActivityScope:
             in_progress=False,
             **kwargs
         )
+
+
+@dataclasses.dataclass
+class Trace:
+    activity: ActivityScope
+    name: str
+    message: str
+    snapshot: dict[str, Any]
+    tags: set[str]
+
+    @property
+    def tags_sorted(self) -> list[str]:
+        return sorted(self.tags, key=lambda x: str(x) if isinstance(x, Enum) else x)

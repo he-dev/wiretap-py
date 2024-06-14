@@ -19,16 +19,16 @@ config = {
     },
     "filters": {
         "const_extra": {
-            "()": wiretap.filters.AddConstExtra,
+            "()": wiretap.filters.ConstField,
             "name": "const_extra",
             "value": "const_value"
         },
         "indent": {
-            "()": wiretap.filters.AddIndentExtra,
+            "()": wiretap.filters.IndentField,
             "char": "_"
         },
         "timestamp_local": {
-            "()": wiretap.filters.AddTimestampExtra,
+            "()": wiretap.filters.TimestampField,
             "tz": "local"
         },
         "strip_exc_info": {

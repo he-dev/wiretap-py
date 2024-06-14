@@ -28,20 +28,20 @@ config = {
     },
     "filters": {
         "instance": {
-            "()": wiretap.filters.AddConstExtra,
+            "()": wiretap.filters.ConstField,
             "name": "instance",
             "value": "demo-1"
         },
         "indent": {
-            "()": wiretap.filters.AddIndentExtra,
+            "()": wiretap.filters.IndentField,
             "char": "_"
         },
         "timestamp_local": {
-            "()": wiretap.filters.AddTimestampExtra,
+            "()": wiretap.filters.TimestampField,
             "tz": "local"
         },
         "timestamp_utc": {
-            "()": wiretap.filters.AddTimestampExtra,
+            "()": wiretap.filters.TimestampField,
             "tz": "utc"
         },
         "strip_exc_info": {

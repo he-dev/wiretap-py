@@ -14,13 +14,17 @@ from . import tag
 from .context import current_activity
 from .scopes import ActivityScope, LoopScope
 
-DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity_name} | {trace_name} | {activity_elapsed}s | {trace_message} | {trace_snapshot} | {trace_tags}"
+DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {$activity.name} | {$trace.name} | {$activity.elapsed}s | {trace_message} | {trace_snapshot} | {trace_tags}"
 
 DEFAULT_FILTERS: list[logging.Filter | Callable[[logging.LogRecord], bool]] = [
-    filters.AddTimestampExtra(tz="utc"),
-    filters.AddDefaultActivity(),
-    filters.AddCurrentActivity(),
-    filters.DumpException()
+    filters.TimestampField(tz="utc"),
+    #filters.ActivityField(),
+    #filters.PreviousField(),
+    #filters.SequenceField(),
+    #filters.TraceField(),
+    #filters.SourceField(),
+    #filters.ExceptionField(),
+    #filters.ConsoleFields()
 ]
 
 
@@ -47,8 +51,14 @@ def log_activity(
     from _reusable import Node
     stack = inspect.stack(2)
     frame = stack[2]
-    scope = ActivityScope(name=name or frame.function, frame=frame, snapshot=snapshot, tags=tags, **kwargs)
     parent = current_activity.get()
+    scope = ActivityScope(
+        parent=parent.value if parent else None,
+        name=name or frame.function,
+        frame=frame,
+        snapshot=snapshot,
+        tags=tags, **kwargs
+    )
     # The UUID needs to be created here,
     # because for some stupid pythonic reason creating a new Node isn't enough.
     token = current_activity.set(Node(value=scope, parent=parent, id=scope.id))
