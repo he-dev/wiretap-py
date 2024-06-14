@@ -7,10 +7,10 @@ from enum import Enum
 from typing import Any, Optional, Iterator
 
 from _reusable import Elapsed
+from wiretap.data import Activity, TRACE_KEY, Trace
 
-TRACE_KEY =  "_trace"
 
-class ActivityScope:
+class ActivityScope(Activity):
     """
     This class represents an activity for which telemetry is collected.
     """
@@ -186,16 +186,3 @@ class ActivityScope:
             in_progress=False,
             **kwargs
         )
-
-
-@dataclasses.dataclass
-class Trace:
-    activity: ActivityScope
-    name: str
-    message: str
-    snapshot: dict[str, Any]
-    tags: set[str]
-
-    @property
-    def tags_sorted(self) -> list[str]:
-        return sorted(self.tags, key=lambda x: str(x) if isinstance(x, Enum) else x)

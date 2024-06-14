@@ -29,7 +29,7 @@ formatters:
         - $app_id
 filters:
   timestamp_local:
-    (): wiretap.filters.TimestampField
+    (): wiretap.filters.fields.TimestampField
     tz: local
   timestamp_utc:
     (): wiretap.filters.TimestampField

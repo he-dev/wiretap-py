@@ -1,10 +1,27 @@
 import logging
+import traceback
 from enum import Enum
 from functools import reduce
+from typing import Any
+from datetime import datetime, timezone
 
-from _reusable import nth_or_default
 from wiretap import tag
-from wiretap.scopes.activity import Trace, ActivityScope, TRACE_KEY
+from _reusable import nth_or_default
+from wiretap.data import Activity, TRACE_KEY, Trace
+
+
+class TimestampField(logging.Filter):
+    def __init__(self, tz: str = "utc"):
+        super().__init__()
+        match tz.casefold().strip():
+            case "utc":
+                self.tz = datetime.now(timezone.utc).tzinfo  # timezone.utc
+            case "local" | "lt":
+                self.tz = datetime.now(timezone.utc).astimezone().tzinfo
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        setattr(record, "$timestamp", datetime.fromtimestamp(record.created, tz=self.tz))
+        return True
 
 
 class ActivityField(logging.Filter):
@@ -34,7 +51,7 @@ class PreviousField(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         if TRACE_KEY in record.__dict__:
             trace: Trace = record.__dict__[TRACE_KEY]
-            previous: ActivityScope | None = nth_or_default(list(trace.activity), 1)
+            previous: Activity | None = nth_or_default(list(trace.activity), 1)
             if previous:
                 record.__dict__["$previous"] = {
                     "elapsed": round(float(previous.elapsed), 3),
@@ -97,6 +114,43 @@ class SourceField(logging.Filter):
                 "line": record.lineno
             }
 
+        return True
+
+
+class ExceptionField(logging.Filter):
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.exc_info:
+            exc_cls, exc, exc_tb = record.exc_info
+            # format_exception return a list of lines. Join it a single sing or otherwise an array will be logged.
+            record.__dict__["$exception"] = "".join(traceback.format_exception(exc_cls, exc, exc_tb))
+
+        return True
+
+
+class IndentField(logging.Filter):
+
+    def __init__(self, char: str = "."):
+        super().__init__()
+        self.char = char
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        setattr(record, "indent", self.char)
+        if TRACE_KEY in record.__dict__:
+            trace: Trace = record.__dict__[TRACE_KEY]
+            setattr(record, "indent", self.char * trace.activity.depth)
+
+        return True
+
+
+class ConstField(logging.Filter):
+    def __init__(self, mapping: dict[str, Any]):
+        super().__init__()
+        self.mapping = mapping
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        for key, value in self.mapping.items():
+            setattr(record, key, value)
         return True
 
 
