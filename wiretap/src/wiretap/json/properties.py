@@ -7,7 +7,7 @@ from typing import Protocol, Any
 
 from _reusable import nth_or_default
 from wiretap import tag
-from wiretap.data import WIRETAP_KEY, Trace, Activity, Entry
+from wiretap.data import WIRETAP_KEY, Activity, Entry
 
 
 class JSONProperty(Protocol):
@@ -38,7 +38,7 @@ class ActivityProperty(JSONProperty):
             return {
                 "activity": {
                     "name": entry.activity.name,
-                    "elapsed": round(float(entry.activity.elapsed), 3),
+                    "elapsed": float(entry.activity.elapsed),
                     "depth": entry.activity.depth,
                     "id": entry.activity.id,
                 }
@@ -64,7 +64,7 @@ class PreviousProperty(JSONProperty):
                 return {
                     "previous": {
                         "name": previous.name,
-                        "elapsed": round(float(previous.elapsed), 3),
+                        "elapsed": float(previous.elapsed),
                         "depth": previous.depth,
                         "id": previous.id,
                     }
@@ -81,7 +81,7 @@ class SequenceProperty(JSONProperty):
             return {
                 "sequence": {
                     "name": [a.name for a in entry.activity],
-                    "elapsed": [round(float(entry.activity.elapsed), 3) for a in entry.activity],
+                    "elapsed": [float(entry.activity.elapsed) for a in entry.activity],
                     "id": [a.id for a in entry.activity],
                 }
             }

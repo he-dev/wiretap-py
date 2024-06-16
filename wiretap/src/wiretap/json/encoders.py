@@ -34,6 +34,18 @@ class DateTimeEncoder(json.JSONEncoder):
         return obj.isoformat()
 
 
+class FloatEncoder(json.JSONEncoder):
+    types: set[Type] = {float}
+
+    def __init__(self, precision: int = 3):
+        super().__init__()
+        self.precision = precision
+
+    def default(self, obj):
+        print(obj)
+        return super().default(round(obj, self.precision))
+
+
 class UUIDEncoder(json.JSONEncoder):
     types: set[Type] = {uuid.UUID}
 

@@ -1,9 +1,9 @@
 import logging
 
 from wiretap import tag
-from wiretap.data import WIRETAP_KEY, Trace, Entry
+from wiretap.data import WIRETAP_KEY, Entry
 
-DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {$activity.name} | {$trace.name} | {$activity.elapsed}s | {trace_message} | {trace_snapshot} | {trace_tags}"
+DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:0.1f} | {message} | {note} | {tags}"
 
 
 class TextFormatter(logging.Formatter):
