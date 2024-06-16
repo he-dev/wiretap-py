@@ -7,7 +7,7 @@ from typing import Protocol, Any
 
 from _reusable import nth_or_default
 from wiretap import tag
-from wiretap.data import WIRETAP_KEY, Trace, Activity, Bag
+from wiretap.data import WIRETAP_KEY, Trace, Activity, Entry
 
 
 class JSONProperty(Protocol):
@@ -34,13 +34,13 @@ class ActivityProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
         if WIRETAP_KEY in record.__dict__:
-            bag: Bag = record.__dict__[WIRETAP_KEY]
+            entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
                 "activity": {
-                    "name": bag.activity.name,
-                    "elapsed": round(float(bag.activity.elapsed), 3),
-                    "depth": bag.activity.depth,
-                    "id": bag.activity.id,
+                    "name": entry.activity.name,
+                    "elapsed": round(float(entry.activity.elapsed), 3),
+                    "depth": entry.activity.depth,
+                    "id": entry.activity.id,
                 }
             }
         else:
@@ -58,8 +58,8 @@ class PreviousProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
         if WIRETAP_KEY in record.__dict__:
-            bag: Bag = record.__dict__[WIRETAP_KEY]
-            previous: Activity | None = nth_or_default(list(bag.activity), 1)
+            entry: Entry = record.__dict__[WIRETAP_KEY]
+            previous: Activity | None = nth_or_default(list(entry.activity), 1)
             if previous:
                 return {
                     "previous": {
@@ -77,12 +77,12 @@ class SequenceProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
         if WIRETAP_KEY in record.__dict__:
-            bag: Bag = record.__dict__[WIRETAP_KEY]
+            entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
                 "sequence": {
-                    "name": [a.name for a in bag.activity],
-                    "elapsed": [round(float(bag.activity.elapsed), 3) for a in bag.activity],
-                    "id": [a.id for a in bag.activity],
+                    "name": [a.name for a in entry.activity],
+                    "elapsed": [round(float(entry.activity.elapsed), 3) for a in entry.activity],
+                    "id": [a.id for a in entry.activity],
                 }
             }
         else:
@@ -93,12 +93,11 @@ class TraceProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
         if WIRETAP_KEY in record.__dict__:
-            bag: Bag = record.__dict__[WIRETAP_KEY]
+            entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
                 "trace": {
-                    "name": bag.trace.name,
-                    "message": bag.trace.message,
-                    "tags": sorted(bag.trace.tags, key=lambda x: str(x) if isinstance(x, Enum) else x),
+                    "name": entry.trace.name,
+                    "message": entry.trace.message
                 }
             }
         else:
@@ -106,22 +105,35 @@ class TraceProperty(JSONProperty):
                 "trace": {
                     "name": f":{record.levelname}",
                     "message": record.msg,
-                    "tags": [tag.PLAIN],
                 }
             }
 
 
-class SnapshotProperty(JSONProperty):
+class NoteProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
         if WIRETAP_KEY in record.__dict__:
-            bag: Bag = record.__dict__[WIRETAP_KEY]
+            entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
-                "snapshot": bag.snapshot,
+                "note": entry.note,
             }
         else:
             return {
-                "snapshot": None
+                "note": {}
+            }
+
+
+class TagProperty(JSONProperty):
+
+    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
+        if WIRETAP_KEY in record.__dict__:
+            entry: Entry = record.__dict__[WIRETAP_KEY]
+            return {
+                "tags": sorted(entry.tags, key=lambda x: str(x) if isinstance(x, Enum) else x),
+            }
+        else:
+            return {
+                "tags": [tag.PLAIN]
             }
 
 
@@ -129,12 +141,12 @@ class SourceProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
         if WIRETAP_KEY in record.__dict__:
-            bag: Bag = record.__dict__[WIRETAP_KEY]
-            if bag.activity.name == "begin":
+            entry: Entry = record.__dict__[WIRETAP_KEY]
+            if entry.activity.name == "begin":
                 return {
                     "source": {
-                        "file": bag.activity.frame.filename,
-                        "line": bag.activity.frame.lineno,
+                        "file": entry.activity.frame.filename,
+                        "line": entry.activity.frame.lineno,
                     }
                 }
             else:
@@ -159,7 +171,7 @@ class ExceptionProperty(JSONProperty):
             return {}
 
 
-class EnvironmentProperty(JSONProperty):
+class ConstProperty(JSONProperty):
 
     def __init__(self, keys: list[str]):
         self.keys = keys

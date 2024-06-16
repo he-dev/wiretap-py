@@ -7,7 +7,7 @@ from enum import Enum
 from typing import Any, Optional, Iterator
 
 from _reusable import Elapsed
-from wiretap.data import Activity, WIRETAP_KEY, Trace, Bag
+from wiretap.data import Activity, WIRETAP_KEY, Trace, Entry
 
 
 class ActivityScope(Activity):
@@ -66,10 +66,11 @@ class ActivityScope(Activity):
             msg=message,
             exc_info=exc_info,
             extra={
-                WIRETAP_KEY: Bag(
+                WIRETAP_KEY: Entry(
                     activity=self,
-                    trace=Trace(name=name, message=message, tags=tags),
-                    snapshot=(snapshot or {}) | kwargs
+                    trace=Trace(name=name, message=message),
+                    note=(snapshot or {}) | kwargs,
+                    tags=tags
                 )
             }
         )

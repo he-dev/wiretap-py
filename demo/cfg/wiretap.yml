@@ -24,12 +24,13 @@ formatters:
       - wiretap.json.properties.TimestampProperty
       - wiretap.json.properties.ActivityProperty
       - wiretap.json.properties.TraceProperty
-      - wiretap.json.properties.SnapshotProperty
+      - wiretap.json.properties.NoteProperty
+      - wiretap.json.properties.TagProperty
       - wiretap.json.properties.PreviousProperty
-      #- wiretap.json.properties.SequenceProperty
+      # - wiretap.json.properties.SequenceProperty
       - wiretap.json.properties.SourceProperty
       - wiretap.json.properties.ExceptionProperty
-      - (): wiretap.json.properties.EnvironmentProperty
+      - (): wiretap.json.properties.ConstProperty
         keys:
           - app_id
 handlers:
