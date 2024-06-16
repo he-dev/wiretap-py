@@ -14,8 +14,8 @@ class Activity(Protocol):
     id: uuid.UUID
     name: str
     frame: inspect.FrameInfo
-    snapshot = Optional[dict[str, Any]]
-    tags: Optional[set[str | Enum]]
+    note: dict[str, Any] | None
+    tags: set[str] | None
     elapsed: Elapsed
 
     @property
@@ -29,7 +29,7 @@ class Activity(Protocol):
 @dataclasses.dataclass
 class Trace:
     name: str
-    message: str
+    message: str | None
 
 
 @dataclasses.dataclass

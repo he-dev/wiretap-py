@@ -13,10 +13,10 @@ def nth_or_default_(source: list[T], index: int) -> Optional[T]:
 
 
 def nth_or_default(source: Iterable[T], index: int, default: Optional[T] = None) -> Optional[T]:
-    return next(itertools.islice(source, index, default), default)
+    return next(itertools.islice(source, index), default)
 
 
-def resolve_class(name: str) -> Type[T]:
+def resolve_class(name: str) -> Type:
     # Parses the path and loads the class it dynamically.
     *module_names, class_name = name.split(".")
     return getattr(import_module(".".join(module_names)), class_name)

@@ -4,6 +4,7 @@ import sys
 from enum import Enum
 from typing import Any, Iterator, Callable, Type, Tuple
 
+from _reusable import Node
 from . import formatters
 from . import json
 from . import scopes
@@ -21,8 +22,8 @@ def dict_config(data: dict):
 def log_activity(
         name: str | None = None,
         message: str | None = None,
-        snapshot: dict[str, Any] | None = None,
-        tags: set[str | Enum] | None = None,
+        note: dict[str, Any] | None = None,
+        tags: set[str] | None = None,
         **kwargs
 ) -> Iterator[ActivityScope]:
     """This function logs telemetry for an activity scope. It returns the activity scope that provides additional APIs."""
@@ -38,14 +39,14 @@ def log_activity(
         parent=parent.value if parent else None,
         name=name or frame.function,
         frame=frame,
-        snapshot=snapshot,
+        note=note,
         tags=tags, **kwargs
     )
     # The UUID needs to be created here,
     # because for some stupid pythonic reason creating a new Node isn't enough.
     token = current_activity.set(Node(value=scope, parent=parent, id=scope.id))
     try:
-        scope.log_trace(name="begin", message=message, snapshot=snapshot, **kwargs)
+        scope.log_trace(name="begin", message=message, note=note, **kwargs)
         yield scope
     except Exception:
         exc_cls, exc, exc_tb = sys.exc_info()
@@ -72,12 +73,12 @@ def log_activity(
 def log_resource(
         name: str,
         message: str | None = None,
-        snapshot: dict[str, Any] | None = None,
-        tags: set[str | Enum] | None = None,
+        note: dict[str, Any] | None = None,
+        tags: set[str] | None = None,
         **kwargs
 ) -> Callable[[], None]:
     """This function logs telemetry for a resource. It returns a function that logs the end of its usage when called."""
-    scope = log_activity(name, message, snapshot, tags, **kwargs)
+    scope = log_activity(name, message, note, tags, **kwargs)
     scope.__enter__()
 
     def dispose():
@@ -89,7 +90,7 @@ def log_resource(
 @contextlib.contextmanager
 def log_loop(
         message: str | None = None,
-        tags: set[str | Enum] | None = None,
+        tags: set[str] | None = None,
         activity: ActivityScope | None = None,
         **kwargs,
 ) -> Iterator[LoopScope]:
@@ -98,10 +99,15 @@ def log_loop(
     try:
         yield loop
     finally:
-        (activity or current_activity.get().value).log_trace(
+        if activity is None:
+            node: Node | None = current_activity.get()
+            if node is None:
+                raise ValueError("There is no activity in scope.")
+            activity = node.value
+        activity.log_trace(
             name="loop",
             message=message,
-            snapshot=loop.dump(),
+            note=loop.dump(),
             tags=tags,
             **kwargs
         )

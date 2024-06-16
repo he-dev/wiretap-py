@@ -1,7 +1,7 @@
 import functools
 import json
 import logging
-from typing import Any
+from typing import Any, Tuple
 
 from _reusable import resolve_class
 from wiretap.json import JSONMultiEncoder
@@ -13,7 +13,7 @@ class JSONFormatter(logging.Formatter):
         super().__init__()
         self.encoders = encoders
 
-        def parse(item: Any) -> tuple[str, {}]:
+        def parse(item: Any) -> Tuple[str, dict[str, Any]]:
             """Parses JSONProperty into type name and parameters."""
             if isinstance(item, str):
                 return item, {}

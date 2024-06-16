@@ -20,16 +20,16 @@ class ActivityScope(Activity):
             parent: Optional["ActivityScope"],
             name: str,
             frame: inspect.FrameInfo,
-            snapshot: dict[str, Any] | None = None,
-            tags: set[str | Enum] | None = None,
+            note: dict[str, Any] | None = None,
+            tags: set[str] | None = None,
             **kwargs: Any
     ):
         self.parent = parent
         self.id = uuid.uuid4()
         self.name = name
         self.frame = frame
-        self.snapshot = (snapshot or {}) | kwargs
-        self.tags = tags or set()
+        self.note = (note or {}) | kwargs
+        self.tags: set[str] = tags or set()
         self.elapsed = Elapsed()
         self.in_progress = True
         self.logger = logging.getLogger(name)
@@ -48,8 +48,8 @@ class ActivityScope(Activity):
             self,
             name: str,
             message: str | None = None,
-            snapshot: dict | None = None,
-            tags: set[str | Enum] | None = None,
+            note: dict | None = None,
+            tags: set[str] | None = None,
             exc_info: bool = False,
             in_progress: bool = True,
             **kwargs
@@ -60,7 +60,6 @@ class ActivityScope(Activity):
             else:
                 return
 
-        tags = (tags or set()) | self.tags
         self.logger.log(
             level=logging.INFO,
             msg=message,
@@ -69,8 +68,8 @@ class ActivityScope(Activity):
                 WIRETAP_KEY: Entry(
                     activity=self,
                     trace=Trace(name=name, message=message),
-                    note=(snapshot or {}) | kwargs,
-                    tags=tags
+                    note=(note or {}) | kwargs,
+                    tags=(tags or set()) | self.tags
                 )
             }
         )
@@ -80,15 +79,15 @@ class ActivityScope(Activity):
     def log_info(
             self,
             message: str | None = None,
-            snapshot: dict | None = None,
-            tags: set[str | Enum] | None = None,
+            note: dict | None = None,
+            tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs any state."""
         self.log_trace(
             name="info",
             message=message,
-            snapshot=snapshot,
+            note=note,
             tags=tags,
             in_progress=True,
             **kwargs
@@ -97,15 +96,15 @@ class ActivityScope(Activity):
     def log_metric(
             self,
             message: str | None = None,
-            snapshot: dict | None = None,
-            tags: set[str | Enum] | None = None,
+            note: dict | None = None,
+            tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs any state."""
         self.log_trace(
             name="metric",
             message=message,
-            snapshot=snapshot,
+            note=note,
             tags=tags,
             in_progress=True,
             **kwargs
@@ -114,15 +113,15 @@ class ActivityScope(Activity):
     def log_branch(
             self,
             message: str,
-            snapshot: dict | None = None,
-            tags: set[str | Enum] | None = None,
+            note: dict | None = None,
+            tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs conditional branches."""
         self.log_trace(
             name="branch",
             message=message,
-            snapshot=snapshot,
+            note=note,
             tags=tags,
             in_progress=True,
             **kwargs
@@ -131,15 +130,15 @@ class ActivityScope(Activity):
     def log_end(
             self,
             message: str | None = None,
-            snapshot: dict | None = None,
-            tags: set[str | Enum] | None = None,
+            note: dict | None = None,
+            tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs a regular end of an activity."""
         self.log_trace(
             name="end",
             message=message,
-            snapshot=(snapshot or {}) | self.snapshot,
+            note=(note or {}) | self.note,
             tags=tags,
             in_progress=False,
             **kwargs
@@ -148,15 +147,15 @@ class ActivityScope(Activity):
     def log_exit(
             self,
             message: str | None = None,
-            snapshot: dict | None = None,
-            tags: set[str | Enum] | None = None,
+            note: dict | None = None,
+            tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs an unusual end of an activity."""
         self.log_trace(
             name="exit",
             message=message,
-            snapshot=(snapshot or {}) | self.snapshot,
+            note=(note or {}) | self.note,
             tags=tags,
             in_progress=False,
             **kwargs
@@ -165,21 +164,21 @@ class ActivityScope(Activity):
     def log_error(
             self,
             message: str | None = None,
-            snapshot: dict | None = None,
-            tags: set[str | Enum] | None = None,
+            note: dict | None = None,
+            tags: set[str] | None = None,
             exc_info: bool = True,
             **kwargs
     ) -> None:
         """This function logs an error in an activity."""
         exc_cls, exc, exc_tb = sys.exc_info()
-        snapshot = snapshot or {}
+        note = note or {}
         if exc_cls:
-            snapshot["reason"] = exc_cls.__name__
+            note["reason"] = exc_cls.__name__
             # snapshot["message"] = str(exc) or None
         self.log_trace(
             name="error",
             message=message or str(exc) or None,
-            snapshot=(snapshot or {}) | self.snapshot,
+            note=(note or {}) | self.note,
             tags=tags,
             exc_info=exc_info,
             in_progress=False,

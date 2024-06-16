@@ -11,21 +11,21 @@ class TextFormatter(logging.Formatter):
 
     def format(self, record):
         if WIRETAP_KEY in record.__dict__:
-            bag: Entry = record.__dict__[WIRETAP_KEY]
-            record.activity_name = bag.activity.name
-            record.activity_elapsed = round(float(bag.activity.elapsed), 3)
-            record.trace_name = bag.trace.name
-            record.trace_message = bag.trace.message
-            record.trace_snapshot = bag.note
-            record.trace_tags = bag.tags_sorted
-            record.indent = self.indent * bag.activity.depth
+            entry: Entry = record.__dict__[WIRETAP_KEY]
+            record.activity = entry.activity.name
+            record.elapsed = round(float(entry.activity.elapsed), 3)
+            record.trace = entry.trace.name
+            record.message = entry.trace.message
+            record.note = entry.note
+            record.tags = entry.tags_sorted
+            record.indent = self.indent * entry.activity.depth
         else:
-            record.activity_name = record.funcName
-            record.activity_elapsed = -1
-            record.trace_name = f":{record.levelname}"
-            record.trace_message = record.msg
-            record.trace_snapshot = None
-            record.trace_tags = [tag.PLAIN]
+            record.activity = record.funcName
+            record.elapsed = -1
+            record.trace = f":{record.levelname}"
+            record.message = record.msg
+            record.note = None
+            record.tags = [tag.PLAIN]
             record.indent = self.indent
 
         return super().format(record)
