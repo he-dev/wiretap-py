@@ -13,7 +13,7 @@ def test_counter():
     assert c.count == 0
     assert c.min.item_id is None
     assert c.max.item_id is None
-    assert c.avg == 0
+    assert c.mean == 0
 
     with c.measure("foo"):
         time.sleep(3)
@@ -30,7 +30,7 @@ def test_counter():
     assert c.count == 4
     assert round(c.min.elapsed, 1) == 1
     assert round(c.max.elapsed, 1) == 4
-    assert round(c.avg, 1) == 2.5
+    assert round(c.mean, 1) == 2.5
     assert round(c.elapsed, 1) == 10
 
     pprint(c.dump())

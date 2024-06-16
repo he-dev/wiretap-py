@@ -1,5 +1,4 @@
-from .json_multi_encoder import JSONMultiEncoder
+from .encoders import JSONMultiEncoder
 
 
-def json_key(value: str) -> str:
-    return f"${value}"
+

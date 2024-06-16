@@ -6,7 +6,7 @@ from typing import Protocol, Optional, Any, Iterator
 
 from _reusable import Elapsed
 
-TRACE_KEY = "_trace"
+WIRETAP_KEY = "_wiretap"
 
 
 class Activity(Protocol):
@@ -28,12 +28,17 @@ class Activity(Protocol):
 
 @dataclasses.dataclass
 class Trace:
-    activity: Activity
     name: str
     message: str
-    snapshot: dict[str, Any]
     tags: set[str]
 
     @property
     def tags_sorted(self) -> list[str]:
         return sorted(self.tags, key=lambda x: str(x) if isinstance(x, Enum) else x)
+
+
+@dataclasses.dataclass
+class Bag:
+    activity: Activity
+    trace: Trace
+    snapshot: dict[str, Any]

@@ -3,6 +3,7 @@ import datetime
 import logging
 import logging.config
 import logging.handlers
+import os
 import time
 from enum import Enum
 
@@ -76,10 +77,13 @@ def can_everything():
         s1.log_info(some_enum=TestEnum.SOME_NAME)
         time.sleep(0.2)
         s1.log_info("200ms later...", snapshot=dict(bar="baz"))
+        s1.log_metric(row_count=7)
         with wiretap.log_activity(name="can_cancel") as s2:
-            with wiretap.log_loop(s2, "This is a loop!") as c:
+            with wiretap.log_loop("This is a loop!") as c:
                 with c.measure():
                     time.sleep(0.3)
+                with c.measure():
+                    time.sleep(0.7)
                 logging.warning("Didn't use wiretap!")
             s2.log_exit("There wasn't anything to do here!")
             # wiretap.log_info("This won't work!")
@@ -99,6 +103,8 @@ def can_everything():
 if __name__ == "__main__":
     # asyncio.run(main())
     # main_proc()
+
+    os.environ["app_id"] = "demo-app"
 
     with open(r"..\..\cfg\wiretap.yml", "r") as file:
         config = yaml.safe_load(file)

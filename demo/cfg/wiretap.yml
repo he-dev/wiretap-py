@@ -1,6 +1,6 @@
 version: 1
 formatters:
-  console:
+  classic:
     style: "{"
     format: "{asctime}.{msecs:03d} | {module}.{funcName} | {message}"
     datefmt: "%Y-%m-%d %H:%M:%S"
@@ -9,69 +9,34 @@ formatters:
       correlation: "<correlation>"
       extra: "<extra>"
   wiretap:
-    (): "logging.Formatter"
-    # "()": wiretap.formatters.DotFormatter
+    (): wiretap.formatters.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
-    fmt: "{asctime}.{msecs:03.0f} {indent} {activity_name} | {trace_name} | {activity_elapsed} | {trace_message} | {trace_snapshot} | {trace_tags}"
+    fmt: "{asctime}.{msecs:03.0f} {indent} {activity_name} | {trace_name} | {activity_elapsed:0.1f} | {trace_message} | {trace_snapshot} | {trace_tags}"
   elastic:
-    "()": wiretap.formatters.JSONFormatter
-    ".":
-      json_encoder_cls: wiretap.json.JSONMultiEncoder
-      fields:
-        - $timestamp
-        - $activity
-        - $trace
-        - $source
-        - $exception
-        - $previous
-        - $sequence
-        - $app_id
-filters:
-  timestamp_local:
-    (): wiretap.filters.fields.TimestampField
-    tz: local
-  timestamp_utc:
-    (): wiretap.filters.TimestampField
-    tz: utc
-  indent:
-    (): wiretap.filters.IndentField
-    char: _
-  strip_exc_info:
-    (): wiretap.filters.StripExcInfo
-  instance:
-    (): wiretap.filters.ConstField
-    mapping:
-      $app_id: demo-1
-  activity:
-    (): wiretap.filters.ActivityField
-  previous:
-    (): wiretap.filters.PreviousField
-  sequence:
-    (): wiretap.filters.SequenceField
-  trace:
-    (): wiretap.filters.TraceField
-  source:
-    (): wiretap.filters.SourceField
-  console:
-    (): wiretap.filters.TemplateField
-    mapping:
-      activity_name: $activity.name
-      activity_elapsed: $activity.elapsed
-      trace_name: $trace.name
-      trace_message: $trace.message
-      trace_snapshot: $trace.snapshot
-      trace_tags: $trace.tags
+    (): wiretap.formatters.JSONFormatter
+    encoders:
+      - wiretap.json.encoders.DateTimeEncoder
+      - wiretap.json.encoders.UUIDEncoder
+      - wiretap.json.encoders.SetEncoder
+      - wiretap.json.encoders.PathEncoder
+    properties:
+      - wiretap.json.properties.TimestampProperty
+      - wiretap.json.properties.ActivityProperty
+      - wiretap.json.properties.TraceProperty
+      - wiretap.json.properties.SnapshotProperty
+      - wiretap.json.properties.PreviousProperty
+      #- wiretap.json.properties.SequenceProperty
+      - wiretap.json.properties.SourceProperty
+      - wiretap.json.properties.ExceptionProperty
+      - (): wiretap.json.properties.EnvironmentProperty
+        keys:
+          - app_id
 handlers:
   console:
-    class: "logging.StreamHandler"
-    formatter: "wiretap"
-    level: "DEBUG"
-    filters:
-      - indent
-      - activity
-      - trace
-      - console
+    class: logging.StreamHandler
+    formatter: wiretap
+    level: DEBUG
   file:
     class: "logging.handlers.TimedRotatingFileHandler"
     when: "d"
@@ -79,22 +44,11 @@ handlers:
     filename: "c:\\temp\\wiretap.log"
     formatter: wiretap
     level: "DEBUG"
-    filters:
-      - indent
-      - timestamp_local
-      - strip_exc_info
   elastic_file:
     class: "logging.FileHandler"
     filename: "c:\\temp\\elastic.log"
     formatter: elastic
     level: "DEBUG"
-    filters:
-      - timestamp_utc
-      - previous
-      - sequence
-      - source
-      - instance
-      - strip_exc_info
   #sqlserver:
   #  class: "wiretap_sqlserver.SqlServerHandler"
   #  #connection_string: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost,1433;DATABASE=automation;UID=sa;PWD=;"

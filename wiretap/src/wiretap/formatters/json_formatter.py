@@ -1,24 +1,40 @@
+import functools
 import json
 import logging
-from importlib import import_module
+from typing import Any
 
+from _reusable import resolve_class
 from wiretap.json import JSONMultiEncoder
 
 
 class JSONFormatter(logging.Formatter):
-    json_encoder_cls: json.JSONEncoder | str | None = JSONMultiEncoder()
-    fields: set[str] = {"$activity"}
+
+    def __init__(self, encoders: list[str], properties: list[str]) -> None:
+        super().__init__()
+        self.encoders = encoders
+
+        def parse(item: Any) -> tuple[str, {}]:
+            """Parses JSONProperty into type name and parameters."""
+            if isinstance(item, str):
+                return item, {}
+
+            if isinstance(item, dict):
+                if "()" not in item:
+                    raise KeyError(f"Constructor key '()' missing in: {item}")
+                return item["()"], {k: v for k, v in item.items() if k != "()"}
+
+            raise TypeError(f"Cannot parse JSONProperty due to an unexpected type '{type(item)}'. Only [str | dict] are supported. Value: {item}")
+
+        self.properties = [resolve_class(class_name)(**params) for class_name, params in [parse(p) for p in properties]]
 
     def format(self, record):
-        entry = {k.lstrip("$"): v for k, v in record.__dict__.items() if k in self.fields}
+        # Merges each new dictionary with the previous one.
+        entry = functools.reduce(lambda e, p: e | p.emit(record), self.properties, {})
 
-        # Path to JOSONEncoder class is specified, e.g.: json_encoder_cls: wiretap.tools.JSONMultiEncoder
-        if isinstance(self.json_encoder_cls, str):
-            # parses the path and loads the class it dynamically:
-            *module, cls = self.json_encoder_cls.split(".")
-            self.json_encoder_cls = getattr(import_module(".".join(module)), cls)
-
-        return json.dumps(entry, sort_keys=False, allow_nan=False, cls=self.json_encoder_cls)
-
-
-
+        return json.dumps(
+            entry,
+            sort_keys=False,
+            allow_nan=False,
+            cls=JSONMultiEncoder,
+            encoders=self.encoders
+        )

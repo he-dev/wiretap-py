@@ -1,12 +1,9 @@
 import contextlib
 import inspect
-import logging
 import sys
 from enum import Enum
-from typing import Optional, Any, Iterator, Callable, Type, Tuple
+from typing import Any, Iterator, Callable, Type, Tuple
 
-from . import filters
-from .filters.fields import *
 from . import formatters
 from . import json
 from . import scopes
@@ -14,25 +11,10 @@ from . import tag
 from .context import current_activity
 from .scopes import ActivityScope, LoopScope
 
-DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {$activity.name} | {$trace.name} | {$activity.elapsed}s | {trace_message} | {trace_snapshot} | {trace_tags}"
 
-DEFAULT_FILTERS: list[logging.Filter | Callable[[logging.LogRecord], bool]] = [
-    filters.TimestampField(tz="utc"),
-    #filters.ActivityField(),
-    #filters.PreviousField(),
-    #filters.SequenceField(),
-    #filters.TraceField(),
-    #filters.SourceField(),
-    #filters.ExceptionField(),
-    #filters.ConsoleFields()
-]
-
-
-def dict_config(data: dict, default_filters: Optional[list[logging.Filter | Callable[[logging.LogRecord], bool]]] = None):
+def dict_config(data: dict):
     import logging.config
     logging.config.dictConfig(data)
-    for handler in logging.root.handlers:
-        handler.filters = (default_filters or DEFAULT_FILTERS) + handler.filters
 
 
 @contextlib.contextmanager
@@ -75,16 +57,16 @@ def log_activity(
         current_activity.reset(token)
 
 
-def log_error(
-        message: str | None = None,
-        snapshot: dict | None = None,
-        tags: set[str | Enum] | None = None,
-        exc_info: bool = True,
-        **kwargs
-) -> None:
-    parent = current_activity.get()
-    if parent:
-        parent.value.log_error(message, snapshot, tags, exc_info=exc_info, **kwargs)
+# def log_error(
+#         message: str | None = None,
+#         snapshot: dict | None = None,
+#         tags: set[str | Enum] | None = None,
+#         exc_info: bool = True,
+#         **kwargs
+# ) -> None:
+#     parent = current_activity.get()
+#     if parent:
+#         parent.value.log_error(message, snapshot, tags, exc_info=exc_info, **kwargs)
 
 
 def log_resource(
@@ -106,20 +88,20 @@ def log_resource(
 
 @contextlib.contextmanager
 def log_loop(
-        activity: ActivityScope,
         message: str | None = None,
         tags: set[str | Enum] | None = None,
+        activity: ActivityScope | None = None,
         **kwargs,
 ) -> Iterator[LoopScope]:
     """This function initializes a new scope for loop telemetry."""
-    scope = LoopScope()
+    loop = LoopScope()
     try:
-        yield scope
+        yield loop
     finally:
-        activity.log_trace(
+        (activity or current_activity.get().value).log_trace(
             name="loop",
             message=message,
-            snapshot=scope.dump(),
+            snapshot=loop.dump(),
             tags=tags,
             **kwargs
         )
