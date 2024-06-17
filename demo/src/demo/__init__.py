@@ -74,6 +74,7 @@ def can_everything():
 
     dispose = wiretap.log_resource("read_nothing", db="test")
     with wiretap.log_activity(message="This is the main scope!", extra=dict(foo="bar"), tags={"qux"}, bar="baz") as s1:
+        logging.info("There is main scope!")
         s1.log_snapshot(some_enum=TestEnum.SOME_NAME)
         time.sleep(0.2)
         s1.log_snapshot("200ms later...", extra=dict(bar="baz"))

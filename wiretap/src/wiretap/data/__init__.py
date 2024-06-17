@@ -12,11 +12,13 @@ WIRETAP_KEY = "_wiretap"
 class Activity(Protocol):
     parent: Optional["Activity"]
     id: uuid.UUID
+    type: str
     name: str
     frame: inspect.FrameInfo
     extra: dict[str, Any] | None
     tags: set[str] | None
     elapsed: Elapsed
+    correlation: "Correlation"
 
     @property
     def depth(self) -> int:
@@ -27,8 +29,14 @@ class Activity(Protocol):
 
 
 @dataclasses.dataclass
+class Correlation:
+    id: Any
+    type: str = "default"
+
+
+@dataclasses.dataclass
 class Trace:
-    unit: str
+    type: str
     name: str | None
     message: str | None
 

@@ -10,6 +10,7 @@ from . import json
 from . import scopes
 from . import tag
 from .context import current_activity
+from .data import Correlation
 from .scopes import ActivityScope, LoopScope
 
 
@@ -24,23 +25,32 @@ def log_activity(
         message: str | None = None,
         extra: dict[str, Any] | None = None,
         tags: set[str] | None = None,
+        correlation_id: Any | None = None,
         **kwargs
 ) -> Iterator[ActivityScope]:
     """This function logs telemetry for an activity scope. It returns the activity scope that provides additional APIs."""
-    tags = (tags or set())  # | {tag.AUTO}
-    if name:
-        tags.add(tag.VIRTUAL)
-
+    tags = (tags or set())
     from _reusable import Node
     stack = inspect.stack(2)
     frame = stack[2]
     parent = current_activity.get()
+
+    correlation: Correlation | None = None
+    if parent:
+        correlation = parent.value.correlation
+
+    if correlation_id:
+        correlation = Correlation(id=correlation_id, type="custom")
+
     scope = ActivityScope(
         parent=parent.value if parent else None,
+        type="actual" if name else "virtual",
         name=name or frame.function,
         frame=frame,
         extra=extra,
-        tags=tags, **kwargs
+        tags=tags,
+        correlation=correlation,
+        **kwargs
     )
     # The UUID needs to be created here,
     # because for some stupid pythonic reason creating a new Node isn't enough.

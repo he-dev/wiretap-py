@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Protocol, Any
 
-from _reusable import nth_or_default
-from wiretap import tag
+from _reusable import nth_or_default, Node
+from wiretap import current_activity
 from wiretap.data import WIRETAP_KEY, Activity, Entry
 
 
@@ -37,6 +37,7 @@ class ActivityProperty(JSONProperty):
             entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
                 "activity": {
+                    "type": entry.activity.type,
                     "name": entry.activity.name,
                     "elapsed": float(entry.activity.elapsed),
                     "depth": entry.activity.depth,
@@ -44,12 +45,14 @@ class ActivityProperty(JSONProperty):
                 }
             }
         else:
+            node: Node | None = current_activity.get()
             return {
                 "activity": {
-                    "name": record.funcName,
-                    "elapsed": None,
-                    "depth": None,
-                    "id": None,
+                    "type": node.value.type if node else "actual",
+                    "name": node.value.name if node else record.funcName,
+                    "elapsed": float(node.value.elapsed) if node else None,
+                    "depth": node.value.depth if node else None,
+                    "id": node.value.id if node else None,
                 }
             }
 
@@ -63,6 +66,7 @@ class PreviousProperty(JSONProperty):
             if previous:
                 return {
                     "previous": {
+                        "type": previous.type,
                         "name": previous.name,
                         "elapsed": float(previous.elapsed),
                         "depth": previous.depth,
@@ -89,6 +93,32 @@ class SequenceProperty(JSONProperty):
             return {}
 
 
+class CorrelationProperty(JSONProperty):
+
+    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
+        if WIRETAP_KEY in record.__dict__:
+            entry: Entry = record.__dict__[WIRETAP_KEY]
+            return {
+                "correlation": {
+                    # "id": [a.id for a in entry.activity][-1]
+                    "id": entry.activity.correlation.id,
+                    "type": entry.activity.correlation.type,
+                }
+            }
+        else:
+            node: Node | None = current_activity.get()
+            if node:
+                return {
+                    "correlation": {
+                        # "id": [a.id for a in entry.activity][-1]
+                        "id": node.value.correlation.id,
+                        "type": node.value.correlation.type,
+                    }
+                }
+            else:
+                return {}
+
+
 class TraceProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
@@ -96,7 +126,7 @@ class TraceProperty(JSONProperty):
             entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
                 "trace": {
-                    "unit": entry.trace.unit,
+                    "type": entry.trace.type,
                     "name": entry.trace.name,
                     "level": record.levelname.lower(),
                 }
@@ -104,7 +134,7 @@ class TraceProperty(JSONProperty):
         else:
             return {
                 "trace": {
-                    "unit": None,
+                    "type": "native",
                     "name": None,
                     "level": record.levelname.lower(),
                 }
@@ -149,7 +179,7 @@ class TagProperty(JSONProperty):
             }
         else:
             return {
-                "tags": [tag.PLAIN]
+                "tags": []
             }
 
 

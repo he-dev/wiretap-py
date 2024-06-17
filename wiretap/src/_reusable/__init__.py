@@ -13,7 +13,7 @@ def nth_or_default_(source: list[T], index: int) -> Optional[T]:
 
 
 def nth_or_default(source: Iterable[T], index: int, default: Optional[T] = None) -> Optional[T]:
-    return next(itertools.islice(source, index), default)
+    return next(itertools.islice(source, index, None), default)
 
 
 def resolve_class(name: str) -> Type:

@@ -5,7 +5,7 @@ import uuid
 from typing import Any, Optional, Iterator
 
 from _reusable import Elapsed
-from wiretap.data import Activity, WIRETAP_KEY, Trace, Entry
+from wiretap.data import Activity, WIRETAP_KEY, Trace, Entry, Correlation
 
 
 class ActivityScope(Activity):
@@ -16,20 +16,24 @@ class ActivityScope(Activity):
     def __init__(
             self,
             parent: Optional["ActivityScope"],
+            type: str,
             name: str,
             frame: inspect.FrameInfo,
             extra: dict[str, Any] | None = None,
             tags: set[str] | None = None,
+            correlation: Correlation | None = None,
             **kwargs: Any
     ):
         self.parent = parent
         self.id = uuid.uuid4()
+        self.type = type
         self.name = name
         self.frame = frame
         self.extra = (extra or {}) | kwargs
         self.tags: set[str] = tags or set()
         self.elapsed = Elapsed()
         self.in_progress = True
+        self.correlation = correlation or Correlation(self.id, type="default")
         self.logger = logging.getLogger(name)
 
     @property
@@ -67,7 +71,7 @@ class ActivityScope(Activity):
             extra={
                 WIRETAP_KEY: Entry(
                     activity=self,
-                    trace=Trace(unit=unit, name=name, message=message),
+                    trace=Trace(type=unit, name=name, message=message),
                     extra=(extra or {}) | kwargs,
                     tags=(tags or set()) | self.tags
                 )
