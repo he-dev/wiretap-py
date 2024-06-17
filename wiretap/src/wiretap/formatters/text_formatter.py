@@ -3,7 +3,7 @@ import logging
 from wiretap import tag
 from wiretap.data import WIRETAP_KEY, Entry
 
-DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:0.1f} | {message} | {note} | {tags}"
+DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:0.1f} | {message} | {extra} | {tags}"
 
 
 class TextFormatter(logging.Formatter):
@@ -14,17 +14,19 @@ class TextFormatter(logging.Formatter):
             entry: Entry = record.__dict__[WIRETAP_KEY]
             record.activity = entry.activity.name
             record.elapsed = round(float(entry.activity.elapsed), 3)
+            record.unit = entry.trace.unit
             record.trace = entry.trace.name
             record.message = entry.trace.message
-            record.note = entry.note
+            record.extra = entry.extra
             record.tags = entry.tags_sorted
             record.indent = self.indent * entry.activity.depth
         else:
             record.activity = record.funcName
             record.elapsed = -1
+            record.unit = None
             record.trace = f":{record.levelname}"
             record.message = record.msg
-            record.note = None
+            record.extra = None
             record.tags = [tag.PLAIN]
             record.indent = self.indent
 

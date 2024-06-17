@@ -22,7 +22,7 @@ def dict_config(data: dict):
 def log_activity(
         name: str | None = None,
         message: str | None = None,
-        note: dict[str, Any] | None = None,
+        extra: dict[str, Any] | None = None,
         tags: set[str] | None = None,
         **kwargs
 ) -> Iterator[ActivityScope]:
@@ -39,14 +39,14 @@ def log_activity(
         parent=parent.value if parent else None,
         name=name or frame.function,
         frame=frame,
-        note=note,
+        extra=extra,
         tags=tags, **kwargs
     )
     # The UUID needs to be created here,
     # because for some stupid pythonic reason creating a new Node isn't enough.
     token = current_activity.set(Node(value=scope, parent=parent, id=scope.id))
     try:
-        scope.log_trace(name="begin", message=message, note=note, **kwargs)
+        scope.log_trace(unit="begin", message=message, extra=extra, **kwargs)
         yield scope
     except Exception:
         exc_cls, exc, exc_tb = sys.exc_info()
@@ -56,18 +56,6 @@ def log_activity(
     finally:
         scope.log_end()
         current_activity.reset(token)
-
-
-# def log_error(
-#         message: str | None = None,
-#         snapshot: dict | None = None,
-#         tags: set[str | Enum] | None = None,
-#         exc_info: bool = True,
-#         **kwargs
-# ) -> None:
-#     parent = current_activity.get()
-#     if parent:
-#         parent.value.log_error(message, snapshot, tags, exc_info=exc_info, **kwargs)
 
 
 def log_resource(
@@ -89,6 +77,7 @@ def log_resource(
 
 @contextlib.contextmanager
 def log_loop(
+        name: str,
         message: str | None = None,
         tags: set[str] | None = None,
         activity: ActivityScope | None = None,
@@ -102,12 +91,12 @@ def log_loop(
         if activity is None:
             node: Node | None = current_activity.get()
             if node is None:
-                raise ValueError("There is no activity in scope.")
+                raise ValueError("There is no activity in the current scope.")
             activity = node.value
-        activity.log_trace(
-            name="loop",
+        activity.log_metric(
+            name=name,
             message=message,
-            note=loop.dump(),
+            extra=loop.dump(),
             tags=tags,
             **kwargs
         )

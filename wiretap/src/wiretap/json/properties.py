@@ -96,30 +96,46 @@ class TraceProperty(JSONProperty):
             entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
                 "trace": {
+                    "unit": entry.trace.unit,
                     "name": entry.trace.name,
-                    "message": entry.trace.message
+                    "level": record.levelname.lower(),
                 }
             }
         else:
             return {
                 "trace": {
-                    "name": f":{record.levelname}",
-                    "message": record.msg,
+                    "unit": None,
+                    "name": None,
+                    "level": record.levelname.lower(),
                 }
             }
 
 
-class NoteProperty(JSONProperty):
+class MessageProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
         if WIRETAP_KEY in record.__dict__:
             entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
-                "note": entry.note,
+                "message": entry.trace.message
             }
         else:
             return {
-                "note": {}
+                "message": record.msg
+            }
+
+
+class ExtraProperty(JSONProperty):
+
+    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
+        if WIRETAP_KEY in record.__dict__:
+            entry: Entry = record.__dict__[WIRETAP_KEY]
+            return {
+                "extra": entry.extra,
+            }
+        else:
+            return {
+                "extra": {}
             }
 
 

@@ -12,7 +12,7 @@ formatters:
     (): wiretap.formatters.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
-    fmt: "{asctime}.{msecs:03.0f} {indent} {activity} | {trace} | {elapsed:0.3f} | {message} | {note} | {tags}"
+    fmt: "{asctime}.{msecs:03.0f} {indent} {activity} | {unit} | {trace} | {elapsed:0.3f} | {message} | {extra} | {tags}"
   elastic:
     (): wiretap.formatters.JSONFormatter
     encoders:
@@ -24,7 +24,8 @@ formatters:
       - wiretap.json.properties.TimestampProperty
       - wiretap.json.properties.ActivityProperty
       - wiretap.json.properties.TraceProperty
-      - wiretap.json.properties.NoteProperty
+      - wiretap.json.properties.MessageProperty
+      - wiretap.json.properties.ExtraProperty
       - wiretap.json.properties.TagProperty
       - wiretap.json.properties.PreviousProperty
       # - wiretap.json.properties.SequenceProperty

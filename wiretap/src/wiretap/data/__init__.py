@@ -14,7 +14,7 @@ class Activity(Protocol):
     id: uuid.UUID
     name: str
     frame: inspect.FrameInfo
-    note: dict[str, Any] | None
+    extra: dict[str, Any] | None
     tags: set[str] | None
     elapsed: Elapsed
 
@@ -28,7 +28,8 @@ class Activity(Protocol):
 
 @dataclasses.dataclass
 class Trace:
-    name: str
+    unit: str
+    name: str | None
     message: str | None
 
 
@@ -36,7 +37,7 @@ class Trace:
 class Entry:
     activity: Activity
     trace: Trace
-    note: dict[str, Any]
+    extra: dict[str, Any]
     tags: set[str]
 
     @property

@@ -1,9 +1,7 @@
-import dataclasses
 import inspect
 import logging
 import sys
 import uuid
-from enum import Enum
 from typing import Any, Optional, Iterator
 
 from _reusable import Elapsed
@@ -20,7 +18,7 @@ class ActivityScope(Activity):
             parent: Optional["ActivityScope"],
             name: str,
             frame: inspect.FrameInfo,
-            note: dict[str, Any] | None = None,
+            extra: dict[str, Any] | None = None,
             tags: set[str] | None = None,
             **kwargs: Any
     ):
@@ -28,7 +26,7 @@ class ActivityScope(Activity):
         self.id = uuid.uuid4()
         self.name = name
         self.frame = frame
-        self.note = (note or {}) | kwargs
+        self.extra = (extra or {}) | kwargs
         self.tags: set[str] = tags or set()
         self.elapsed = Elapsed()
         self.in_progress = True
@@ -46,10 +44,12 @@ class ActivityScope(Activity):
 
     def log_trace(
             self,
-            name: str,
+            unit: str,
+            name: str | None = None,
             message: str | None = None,
-            note: dict | None = None,
+            extra: dict | None = None,
             tags: set[str] | None = None,
+            level: int = logging.INFO,
             exc_info: bool = False,
             in_progress: bool = True,
             **kwargs
@@ -61,14 +61,14 @@ class ActivityScope(Activity):
                 return
 
         self.logger.log(
-            level=logging.INFO,
+            level=level,
             msg=message,
             exc_info=exc_info,
             extra={
                 WIRETAP_KEY: Entry(
                     activity=self,
-                    trace=Trace(name=name, message=message),
-                    note=(note or {}) | kwargs,
+                    trace=Trace(unit=unit, name=name, message=message),
+                    extra=(extra or {}) | kwargs,
                     tags=(tags or set()) | self.tags
                 )
             }
@@ -76,111 +76,131 @@ class ActivityScope(Activity):
         if not in_progress:
             self.in_progress = False
 
-    def log_info(
+    def log_snapshot(
             self,
+            name: str | None = None,
             message: str | None = None,
-            note: dict | None = None,
+            extra: dict | None = None,
             tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs any state."""
+
+        if not extra and not kwargs:
+            raise ValueError("Snapshot trace requires 'extra' arguments.")
+
         self.log_trace(
-            name="info",
+            unit="snapshot",
+            name=name,
             message=message,
-            note=note,
+            extra=extra,
             tags=tags,
             in_progress=True,
+            level=logging.DEBUG,
             **kwargs
         )
 
     def log_metric(
             self,
+            name: str | None = None,
             message: str | None = None,
-            note: dict | None = None,
+            extra: dict | None = None,
             tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs any state."""
+
+        if not extra and not kwargs:
+            raise ValueError("Metric trace requires 'extra' arguments.")
+
         self.log_trace(
-            name="metric",
+            unit="metric",
+            name=name,
             message=message,
-            note=note,
+            extra=extra,
             tags=tags,
             in_progress=True,
+            level=logging.INFO,
             **kwargs
         )
 
     def log_branch(
             self,
-            message: str,
-            note: dict | None = None,
+            name: str,
+            message: str | None = None,
+            extra: dict | None = None,
             tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs conditional branches."""
         self.log_trace(
-            name="branch",
+            unit="branch",
+            name=name,
             message=message,
-            note=note,
+            extra=extra,
             tags=tags,
             in_progress=True,
+            level=logging.DEBUG,
             **kwargs
         )
 
     def log_end(
             self,
             message: str | None = None,
-            note: dict | None = None,
+            extra: dict | None = None,
             tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs a regular end of an activity."""
         self.log_trace(
-            name="end",
+            unit="end",
             message=message,
-            note=(note or {}) | self.note,
+            extra=(extra or {}) | self.extra,
             tags=tags,
             in_progress=False,
+            level=logging.INFO,
             **kwargs
         )
 
     def log_exit(
             self,
             message: str | None = None,
-            note: dict | None = None,
+            extra: dict | None = None,
             tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs an unusual end of an activity."""
         self.log_trace(
-            name="exit",
+            unit="exit",
             message=message,
-            note=(note or {}) | self.note,
+            extra=(extra or {}) | self.extra,
             tags=tags,
             in_progress=False,
+            level=logging.DEBUG,
             **kwargs
         )
 
     def log_error(
             self,
             message: str | None = None,
-            note: dict | None = None,
+            extra: dict | None = None,
             tags: set[str] | None = None,
             exc_info: bool = True,
             **kwargs
     ) -> None:
         """This function logs an error in an activity."""
         exc_cls, exc, exc_tb = sys.exc_info()
-        note = note or {}
+        extra = extra or {}
         if exc_cls:
-            note["reason"] = exc_cls.__name__
+            extra["reason"] = exc_cls.__name__
             # snapshot["message"] = str(exc) or None
         self.log_trace(
-            name="error",
+            unit="error",
             message=message or str(exc) or None,
-            note=(note or {}) | self.note,
+            extra=(extra or {}) | self.extra,
             tags=tags,
             exc_info=exc_info,
             in_progress=False,
+            level=logging.ERROR,
             **kwargs
         )
