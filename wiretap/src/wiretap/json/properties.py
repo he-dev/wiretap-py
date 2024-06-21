@@ -37,7 +37,7 @@ class ActivityProperty(JSONProperty):
             entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
                 "activity": {
-                    "type": entry.activity.type,
+                    "func": entry.activity.func,
                     "name": entry.activity.name,
                     "elapsed": float(entry.activity.elapsed),
                     "depth": entry.activity.depth,
@@ -48,7 +48,7 @@ class ActivityProperty(JSONProperty):
             node: Node | None = current_activity.get()
             return {
                 "activity": {
-                    "type": node.value.type if node else "actual",
+                    "func": node.value.func if node else record.funcName,
                     "name": node.value.name if node else record.funcName,
                     "elapsed": float(node.value.elapsed) if node else None,
                     "depth": node.value.depth if node else None,
@@ -66,7 +66,7 @@ class PreviousProperty(JSONProperty):
             if previous:
                 return {
                     "previous": {
-                        "type": previous.type,
+                        "func": previous.func,
                         "name": previous.name,
                         "elapsed": float(previous.elapsed),
                         "depth": previous.depth,
@@ -126,17 +126,15 @@ class TraceProperty(JSONProperty):
             entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
                 "trace": {
-                    "type": entry.trace.type,
+                    "code": entry.trace.code,
                     "name": entry.trace.name,
-                    "level": record.levelname.lower(),
                 }
             }
         else:
             return {
                 "trace": {
-                    "type": "native",
-                    "name": None,
-                    "level": record.levelname.lower(),
+                    "code": "plain",
+                    "name": record.levelname.lower()
                 }
             }
 
@@ -175,7 +173,7 @@ class TagProperty(JSONProperty):
         if WIRETAP_KEY in record.__dict__:
             entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
-                "tags": sorted(entry.tags, key=lambda x: str(x) if isinstance(x, Enum) else x),
+                "tags": sorted(entry.tags),
             }
         else:
             return {
@@ -188,9 +186,10 @@ class SourceProperty(JSONProperty):
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
         if WIRETAP_KEY in record.__dict__:
             entry: Entry = record.__dict__[WIRETAP_KEY]
-            if entry.activity.name == "begin":
+            if entry.trace.code == "begin":
                 return {
                     "source": {
+                        "func": entry.activity.func,
                         "file": entry.activity.frame.filename,
                         "line": entry.activity.frame.lineno,
                     }
@@ -200,6 +199,7 @@ class SourceProperty(JSONProperty):
         else:
             return {
                 "source": {
+                    "func": record.funcName,
                     "file": record.filename,
                     "line": record.lineno
                 }

@@ -4,6 +4,7 @@ import logging
 import logging.config
 import logging.handlers
 import os
+import random
 import time
 from enum import Enum
 
@@ -48,11 +49,6 @@ def main_proc():
     pass
 
 
-def will_fail():
-    with wiretap.log_activity():
-        raise TestException("Uses the message!", other="Has some custom value!")
-
-
 class TestException(Exception):
     def __init__(self, message: str, other: str):
         super().__init__(message)
@@ -69,36 +65,70 @@ class TestEnum(Enum):
         return self.name
 
 
-def can_everything():
+def logging_without_scope():
     logging.info("There is no scope here!")
 
-    dispose = wiretap.log_resource("read_nothing", db="test")
-    with wiretap.log_activity(message="This is the main scope!", extra=dict(foo="bar"), tags={"qux"}, bar="baz") as s1:
-        logging.info("There is main scope!")
-        s1.log_snapshot(some_enum=TestEnum.SOME_NAME)
-        time.sleep(0.2)
-        s1.log_snapshot("200ms later...", extra=dict(bar="baz"))
-        s1.log_metric(name="test_number", row_count=7)
-        with wiretap.log_activity(name="can_cancel") as s2:
-            with wiretap.log_loop("This is a loop!") as c:
-                with c.measure():
-                    time.sleep(0.3)
-                with c.measure():
-                    time.sleep(0.7)
-                logging.warning("Didn't use wiretap!")
-            s2.log_exit("There wasn't anything to do here!")
-            # wiretap.log_info("This won't work!")
-        s1.log_trace("click", "Check!")
-        time.sleep(0.3)
 
-        with wiretap.log_activity("catches") as s3:
-            try:
-                will_fail()
-            except TestException as e:
-                # s3.log_exit("Caught ZeroDivisionError!")
-                s3.log_error(exc_info=False)
+def logging_with_defaults():
+    with wiretap.log_activity(tags={"baz", "bar"}) as t:
+        t.log_info(message="This is an ordinary info.")
+        t.log_branch(name="test_branch")
+        t.log_metric(name="test_metric", value=1)
+        t.log_snapshot(name="test_snapshot", foo="bar")
+        t.log_trace(code="test", name="test", message="This is a custom trace.")
+        logging.info("This is a plain info.")
 
-    dispose()
+
+def logging_nested_activities():
+    with wiretap.log_activity(tags={"foo"}) as foo:
+        foo.log_info("This is the first activity")
+        with wiretap.log_activity(tags={"bar"}) as bar:
+            bar.log_info("This is the second activity")
+            with wiretap.log_activity(tags={"baz"}) as baz:
+                baz.log_info("This is the third activity")
+                baz.log_exit("This activity didn't end.")
+
+
+def logging_empty_loop():
+    with wiretap.log_activity() as t, t.log_loop(name="test_loop_0") as l:
+        pass
+
+
+def logging_single_loop():
+    with wiretap.log_activity() as t, t.log_loop(name="test_loop_1") as l:
+        with l.iteration():
+            pass
+
+
+def logging_multiple_loops():
+    with wiretap.log_activity() as t, t.log_loop(name="test_loop_n") as l:
+        for i in range(5):
+            with l.iteration():
+                time.sleep(random.randint(1, 100) / 1000)  # waits for a random time between 1 and 100 milliseconds
+
+
+def logging_exception_with_stack():
+    def always_fails():
+        with wiretap.log_activity() as t:
+            raise TestException("Uses the message!", other="Has some custom value!")
+
+    with wiretap.log_activity() as t:
+        try:
+            always_fails()
+        except:
+            pass
+
+
+def logging_exception_without_stack():
+    def always_fails():
+        with wiretap.log_activity() as t:
+            raise TestException("Uses the message!", other="Has some custom value!")
+
+    with wiretap.log_activity() as t:
+        try:
+            always_fails()
+        except:
+            t.log_error(exc_info=wiretap.no_exc_info_if(TestException))
 
 
 if __name__ == "__main__":
@@ -112,4 +142,13 @@ if __name__ == "__main__":
         # config["handlers"]["elastic_file"]["filename"] = rf"c:\temp\elastic-v8.0.0-{datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')}.log"
         wiretap.dict_config(config)
 
-    can_everything()
+    # can_everything()
+
+    logging_without_scope()
+    logging_with_defaults()
+    logging_nested_activities()
+    logging_empty_loop()
+    logging_single_loop()
+    logging_multiple_loops()
+    logging_exception_with_stack()
+    logging_exception_without_stack()

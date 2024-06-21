@@ -51,7 +51,7 @@ handlers:
     class: "logging.FileHandler"
     filename: "c:\\temp\\elastic.log"
     formatter: elastic
-    level: "DEBUG"
+    level: DEBUG
   #sqlserver:
   #  class: "wiretap_sqlserver.SqlServerHandler"
   #  #connection_string: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost,1433;DATABASE=automation;UID=sa;PWD=;"

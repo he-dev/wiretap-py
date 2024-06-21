@@ -12,8 +12,8 @@ WIRETAP_KEY = "_wiretap"
 class Activity(Protocol):
     parent: Optional["Activity"]
     id: uuid.UUID
-    type: str
-    name: str
+    func: str
+    name: str | None
     frame: inspect.FrameInfo
     extra: dict[str, Any] | None
     tags: set[str] | None
@@ -36,7 +36,7 @@ class Correlation:
 
 @dataclasses.dataclass
 class Trace:
-    type: str
+    code: str
     name: str | None
     message: str | None
 
@@ -48,6 +48,8 @@ class Entry:
     extra: dict[str, Any]
     tags: set[str]
 
-    @property
-    def tags_sorted(self) -> list[str]:
-        return sorted(self.tags, key=lambda x: str(x) if isinstance(x, Enum) else x)
+
+@dataclasses.dataclass
+class Details:
+    name: str
+    data: dict[str, Any]

@@ -15,16 +15,16 @@ def test_counter():
     assert c.max.item_id is None
     assert c.mean == 0
 
-    with c.measure("foo"):
+    with c.iteration("foo"):
         time.sleep(3)
 
-    with c.measure("bar"):
+    with c.iteration("bar"):
         time.sleep(2)
 
-    with c.measure("baz"):
+    with c.iteration("baz"):
         time.sleep(1)
 
-    with c.measure("qux"):
+    with c.iteration("qux"):
         time.sleep(4)
 
     assert c.count == 4

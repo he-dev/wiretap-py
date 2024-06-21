@@ -22,12 +22,17 @@ def resolve_class(name: str) -> Type:
     return getattr(import_module(".".join(module_names)), class_name)
 
 
+def map_to_str(values: Iterable[Any] | None) -> set[str]:
+    return set(map(lambda x: str(x), values)) if values else set()
+
+
 class Welford:
     """
     Welford's algorithm is an efficient method for computing the mean and standard deviation
     of a dataset in a single pass. It is particularly useful for large datasets or streaming data
     because it avoids the need to store all data points in memory.
     """
+
     def __init__(self) -> None:
         self.n: int = 0  # Number of data points.
         self.mean: float = 0.0  # Mean of the data points.

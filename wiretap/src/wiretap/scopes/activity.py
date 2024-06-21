@@ -1,11 +1,13 @@
+import contextlib
 import inspect
 import logging
 import sys
 import uuid
 from typing import Any, Optional, Iterator
 
-from _reusable import Elapsed
+from _reusable import Elapsed, map_to_str
 from wiretap.data import Activity, WIRETAP_KEY, Trace, Entry, Correlation
+from wiretap.scopes.loop import LoopScope
 
 
 class ActivityScope(Activity):
@@ -16,21 +18,21 @@ class ActivityScope(Activity):
     def __init__(
             self,
             parent: Optional["ActivityScope"],
-            type: str,
-            name: str,
+            func: str,
+            name: str | None,
             frame: inspect.FrameInfo,
             extra: dict[str, Any] | None = None,
-            tags: set[str] | None = None,
+            tags: set[Any] | None = None,
             correlation: Correlation | None = None,
             **kwargs: Any
     ):
         self.parent = parent
         self.id = uuid.uuid4()
-        self.type = type
+        self.func = func
         self.name = name
         self.frame = frame
         self.extra = (extra or {}) | kwargs
-        self.tags: set[str] = tags or set()
+        self.tags: set[str] = map_to_str(tags)
         self.elapsed = Elapsed()
         self.in_progress = True
         self.correlation = correlation or Correlation(self.id, type="default")
@@ -48,12 +50,11 @@ class ActivityScope(Activity):
 
     def log_trace(
             self,
-            unit: str,
+            code: str,
             name: str | None = None,
             message: str | None = None,
             extra: dict | None = None,
-            tags: set[str] | None = None,
-            level: int = logging.INFO,
+            tags: set[Any] | None = None,
             exc_info: bool = False,
             in_progress: bool = True,
             **kwargs
@@ -65,15 +66,15 @@ class ActivityScope(Activity):
                 return
 
         self.logger.log(
-            level=level,
+            level=logging.INFO,
             msg=message,
             exc_info=exc_info,
             extra={
                 WIRETAP_KEY: Entry(
                     activity=self,
-                    trace=Trace(type=unit, name=name, message=message),
+                    trace=Trace(code=code, name=name, message=message),
                     extra=(extra or {}) | kwargs,
-                    tags=(tags or set()) | self.tags
+                    tags=map_to_str(tags) | self.tags,
                 )
             }
         )
@@ -94,13 +95,12 @@ class ActivityScope(Activity):
             raise ValueError("Snapshot trace requires 'extra' arguments.")
 
         self.log_trace(
-            unit="snapshot",
+            code="snapshot",
             name=name,
             message=message,
             extra=extra,
             tags=tags,
             in_progress=True,
-            level=logging.DEBUG,
             **kwargs
         )
 
@@ -118,13 +118,31 @@ class ActivityScope(Activity):
             raise ValueError("Metric trace requires 'extra' arguments.")
 
         self.log_trace(
-            unit="metric",
+            code="metric",
             name=name,
             message=message,
             extra=extra,
             tags=tags,
             in_progress=True,
-            level=logging.INFO,
+            **kwargs
+        )
+
+    def log_info(
+            self,
+            name: str | None = None,
+            message: str | None = None,
+            extra: dict | None = None,
+            tags: set[str] | None = None,
+            **kwargs
+    ) -> None:
+        """This function logs conditional branches."""
+        self.log_trace(
+            code="info",
+            name=name,
+            message=message,
+            extra=extra,
+            tags=tags,
+            in_progress=True,
             **kwargs
         )
 
@@ -138,15 +156,36 @@ class ActivityScope(Activity):
     ) -> None:
         """This function logs conditional branches."""
         self.log_trace(
-            unit="branch",
+            code="branch",
             name=name,
             message=message,
             extra=extra,
             tags=tags,
             in_progress=True,
-            level=logging.DEBUG,
             **kwargs
         )
+
+    @contextlib.contextmanager
+    def log_loop(
+            self,
+            name: str,
+            message: str | None = None,
+            tags: set[str] | None = None,
+            **kwargs,
+    ) -> Iterator[LoopScope]:
+        """This function initializes a new scope for loop telemetry."""
+        loop = LoopScope()
+        try:
+            yield loop
+        finally:
+            self.log_trace(
+                code="loop",
+                name=name,
+                message=message,
+                extra=loop.dump(),
+                tags=tags,
+                **kwargs
+            )
 
     def log_end(
             self,
@@ -157,12 +196,11 @@ class ActivityScope(Activity):
     ) -> None:
         """This function logs a regular end of an activity."""
         self.log_trace(
-            unit="end",
+            code="end",
             message=message,
             extra=(extra or {}) | self.extra,
             tags=tags,
             in_progress=False,
-            level=logging.INFO,
             **kwargs
         )
 
@@ -175,12 +213,11 @@ class ActivityScope(Activity):
     ) -> None:
         """This function logs an unusual end of an activity."""
         self.log_trace(
-            unit="exit",
+            code="exit",
             message=message,
             extra=(extra or {}) | self.extra,
             tags=tags,
             in_progress=False,
-            level=logging.DEBUG,
             **kwargs
         )
 
@@ -199,12 +236,11 @@ class ActivityScope(Activity):
             extra["reason"] = exc_cls.__name__
             # snapshot["message"] = str(exc) or None
         self.log_trace(
-            unit="error",
+            code="error",
             message=message or str(exc) or None,
             extra=(extra or {}) | self.extra,
             tags=tags,
             exc_info=exc_info,
             in_progress=False,
-            level=logging.ERROR,
             **kwargs
         )
