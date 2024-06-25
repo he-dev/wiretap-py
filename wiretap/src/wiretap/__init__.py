@@ -2,14 +2,14 @@ import contextlib
 import inspect
 import sys
 from enum import Enum
-from typing import Any, Iterator, Callable, Type, Tuple
+from typing import Any, Iterator, Callable, Type, Tuple, ContextManager
 
 from . import formatters
 from . import json
 from . import tag
 from .context import current_activity
 from .data import Correlation
-from .scopes import ActivityScope
+from .contexts import ActivityContext
 
 
 def dict_config(config: dict):
@@ -19,13 +19,14 @@ def dict_config(config: dict):
 
 @contextlib.contextmanager
 def log_activity(
+        enclosing_trace_codes: Tuple[str, str] = ("begin", "end"),
         name: str | None = None,
         message: str | None = None,
-        extra: dict[str, Any] | None = None,
+        body: dict[str, Any] | None = None,
         tags: set[Any] | None = None,
         correlation_id: Any | None = None,
         **kwargs
-) -> Iterator[ActivityScope]:
+) -> Iterator[ActivityContext]:
     """This function logs telemetry for an activity scope. It returns the activity scope that provides additional APIs."""
     tags = (tags or set())
     from _reusable import Node
@@ -40,30 +41,87 @@ def log_activity(
     if correlation_id:
         correlation = Correlation(id=correlation_id, type="custom")
 
-    scope = ActivityScope(
+    activity = ActivityContext(
         parent=parent.value if parent else None,
         func=frame.function,
         name=name,
         frame=frame,
-        extra=extra,
+        body=body,
         tags=tags,
         correlation=correlation,
         **kwargs
     )
     # The UUID needs to be created here,
     # because for some stupid pythonic reason creating a new Node isn't enough.
-    token = current_activity.set(Node(value=scope, parent=parent, id=scope.id))
+    token = current_activity.set(Node(value=activity, parent=parent, id=activity.id))
     try:
-        scope.log_trace(code="begin", message=message, extra=extra, **kwargs)
-        yield scope
+        activity.log_trace(code=enclosing_trace_codes[0], message=message, body={})
+        yield activity
     except Exception:
         exc_cls, exc, exc_tb = sys.exc_info()
         if exc is not None:
-            scope.log_error(tags={tag.UNHANDLED})
+            activity.log_error(tags={tag.UNHANDLED})
         raise
     finally:
-        scope.log_end()
+        activity.log_trace(code=enclosing_trace_codes[1], in_progress=False)
         current_activity.reset(token)
+
+
+def log_begin(
+        name: str | None = None,
+        message: str | None = None,
+        body: dict[str, Any] | None = None,
+        tags: set[Any] | None = None,
+        correlation_id: Any | None = None,
+        **kwargs
+) -> ContextManager[ActivityContext]:
+    return log_activity(
+        enclosing_trace_codes=("begin", "end"),
+        name=name,
+        message=message,
+        body=body,
+        tags=tags,
+        correlation_id=correlation_id,
+        **kwargs
+    )
+
+
+def log_connect(
+        name: str | None = None,
+        message: str | None = None,
+        body: dict[str, Any] | None = None,
+        tags: set[Any] | None = None,
+        correlation_id: Any | None = None,
+        **kwargs
+) -> ContextManager[ActivityContext]:
+    return log_activity(
+        enclosing_trace_codes=("connect", "disconnect"),
+        name=name,
+        message=message,
+        body=body,
+        tags=tags,
+        correlation_id=correlation_id,
+        **kwargs
+    )
+
+
+def log_open(
+        name: str | None = None,
+        message: str | None = None,
+        body: dict[str, Any] | None = None,
+        tags: set[Any] | None = None,
+        correlation_id: Any | None = None,
+        **kwargs
+) -> ContextManager[ActivityContext]:
+    return log_activity(
+        enclosing_trace_codes=("open", "close"),
+        name=name,
+        message=message,
+        body=body,
+        tags=tags,
+        correlation_id=correlation_id,
+        **kwargs
+    )
 
 
 # def log_resource(

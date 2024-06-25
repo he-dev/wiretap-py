@@ -1,7 +1,7 @@
 from contextvars import ContextVar
 
 from _reusable import Node
-from .scopes import ActivityScope
+from .contexts import ActivityContext
 
-current_activity: ContextVar[Node[ActivityScope] | None] = ContextVar("current_activity", default=None)
+current_activity: ContextVar[Node[ActivityContext] | None] = ContextVar("current_activity", default=None)
 

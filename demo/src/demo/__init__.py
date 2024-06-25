@@ -70,7 +70,7 @@ def logging_without_scope():
 
 
 def logging_with_defaults():
-    with wiretap.log_activity(tags={"baz", "bar"}) as t:
+    with wiretap.log_begin(tags={"baz", "bar"}, foo="bar") as t:
         t.log_info(message="This is an ordinary info.")
         t.log_branch(name="test_branch")
         t.log_metric(name="test_metric", value=1)
@@ -80,30 +80,29 @@ def logging_with_defaults():
 
 
 def logging_nested_activities():
-    with wiretap.log_activity(tags={"foo"}) as foo:
+    with wiretap.log_begin(tags={"foo"}) as foo:
         foo.log_info("This is the first activity")
-        with wiretap.log_activity(tags={"bar"}) as bar:
+        with wiretap.log_connect(tags={"bar"}) as bar:
             bar.log_info("This is the second activity")
-            with wiretap.log_activity(tags={"baz"}) as baz:
+            with wiretap.log_open(tags={"baz"}) as baz:
                 baz.log_info("This is the third activity")
-                baz.log_exit("This activity didn't end.")
 
 
 def logging_empty_loop():
-    with wiretap.log_activity() as t, t.log_loop(name="test_loop_0") as l:
+    with wiretap.log_activity() as t, t.log_loop(name="test_loop_0") as iteration:
         pass
 
 
 def logging_single_loop():
-    with wiretap.log_activity() as t, t.log_loop(name="test_loop_1") as l:
-        with l.iteration():
+    with wiretap.log_activity() as t, t.log_loop(name="test_loop_1") as iteration:
+        with iteration():
             pass
 
 
 def logging_multiple_loops():
-    with wiretap.log_activity() as t, t.log_loop(name="test_loop_n") as l:
+    with wiretap.log_activity() as t, t.log_loop(name="test_loop_n") as iteration:
         for i in range(5):
-            with l.iteration():
+            with iteration():
                 time.sleep(random.randint(1, 100) / 1000)  # waits for a random time between 1 and 100 milliseconds
 
 
@@ -131,6 +130,11 @@ def logging_exception_without_stack():
             t.log_error(exc_info=wiretap.no_exc_info_if(TestException))
 
 
+def logging_with_custom_correlation():
+    with wiretap.log_activity(correlation_id="this-is-custom-id") as t:
+        pass
+
+
 if __name__ == "__main__":
     # asyncio.run(main())
     # main_proc()
@@ -152,3 +156,4 @@ if __name__ == "__main__":
     logging_multiple_loops()
     logging_exception_with_stack()
     logging_exception_without_stack()
+    logging_with_custom_correlation()

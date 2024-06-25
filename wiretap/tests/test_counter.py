@@ -4,7 +4,7 @@ from pprint import pprint
 import pytest
 
 import wiretap
-from wiretap.scopes import LoopScope
+from wiretap.contexts import LoopScope
 
 
 def test_counter():

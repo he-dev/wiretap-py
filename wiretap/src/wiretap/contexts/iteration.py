@@ -1,12 +1,11 @@
-import math
-import sys
 import contextlib
+import math
 from typing import Any
 
 from _reusable import Elapsed, Welford
 
 
-class LoopScope:
+class IterationContext:
 
     def __init__(self, precision: int = 3):
         self.precision = precision
@@ -21,7 +20,7 @@ class LoopScope:
         return self.welford.n / self.elapsed if self.elapsed > 0 else 0
 
     @contextlib.contextmanager
-    def iteration(self, item_id: str | None = None):
+    def __call__(self, item_id: str | None = None):
         elapsed = Elapsed(self.precision)
         try:
             yield
@@ -47,8 +46,8 @@ class LoopScope:
                     "mean": round(self.welford.mean, self.precision),
                     "var": round(self.welford.var, self.precision) if not math.isnan(self.welford.var) else None,
                     "std_dev": round(self.welford.std_dev, self.precision) if not math.isnan(self.welford.std_dev) else None,
-                    "min": self.min.dump(),
-                    "max": self.max.dump(),
+                    "min": self.min.dump() if self.min else None,
+                    "max": self.max.dump() if self.max else None,
                 },
                 "throughput": {
                     "per_second": round(self.throughput, self.precision),

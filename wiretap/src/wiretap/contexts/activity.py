@@ -7,21 +7,21 @@ from typing import Any, Optional, Iterator
 
 from _reusable import Elapsed, map_to_str
 from wiretap.data import Activity, WIRETAP_KEY, Trace, Entry, Correlation
-from wiretap.scopes.loop import LoopScope
+from wiretap.contexts.iteration import IterationContext
 
 
-class ActivityScope(Activity):
+class ActivityContext(Activity):
     """
     This class represents an activity for which telemetry is collected.
     """
 
     def __init__(
             self,
-            parent: Optional["ActivityScope"],
+            parent: Optional["ActivityContext"],
             func: str,
             name: str | None,
             frame: inspect.FrameInfo,
-            extra: dict[str, Any] | None = None,
+            body: dict[str, Any] | None = None,
             tags: set[Any] | None = None,
             correlation: Correlation | None = None,
             **kwargs: Any
@@ -31,7 +31,7 @@ class ActivityScope(Activity):
         self.func = func
         self.name = name
         self.frame = frame
-        self.extra = (extra or {}) | kwargs
+        self.body = (body or {}) | kwargs
         self.tags: set[str] = map_to_str(tags)
         self.elapsed = Elapsed()
         self.in_progress = True
@@ -42,8 +42,8 @@ class ActivityScope(Activity):
     def depth(self) -> int:
         return self.parent.depth + 1 if self.parent else 1
 
-    def __iter__(self) -> Iterator["ActivityScope"]:
-        current: Optional["ActivityScope"] = self
+    def __iter__(self) -> Iterator["ActivityContext"]:
+        current: Optional["ActivityContext"] = self
         while current:
             yield current
             current = current.parent
@@ -53,7 +53,7 @@ class ActivityScope(Activity):
             code: str,
             name: str | None = None,
             message: str | None = None,
-            extra: dict | None = None,
+            body: dict | None = None,
             tags: set[Any] | None = None,
             exc_info: bool = False,
             in_progress: bool = True,
@@ -73,8 +73,8 @@ class ActivityScope(Activity):
                 WIRETAP_KEY: Entry(
                     activity=self,
                     trace=Trace(code=code, name=name, message=message),
-                    extra=(extra or {}) | kwargs,
-                    tags=map_to_str(tags) | self.tags,
+                    body=(body or {}) | kwargs,
+                    tags=map_to_str(tags),
                 )
             }
         )
@@ -85,20 +85,20 @@ class ActivityScope(Activity):
             self,
             name: str | None = None,
             message: str | None = None,
-            extra: dict | None = None,
+            body: dict | None = None,
             tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs any state."""
 
-        if not extra and not kwargs:
-            raise ValueError("Snapshot trace requires 'extra' arguments.")
+        if not body and not kwargs:
+            raise ValueError("Snapshot trace requires 'body'.")
 
         self.log_trace(
             code="snapshot",
             name=name,
             message=message,
-            extra=extra,
+            body=body,
             tags=tags,
             in_progress=True,
             **kwargs
@@ -108,20 +108,20 @@ class ActivityScope(Activity):
             self,
             name: str | None = None,
             message: str | None = None,
-            extra: dict | None = None,
+            body: dict | None = None,
             tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs any state."""
 
-        if not extra and not kwargs:
-            raise ValueError("Metric trace requires 'extra' arguments.")
+        if not body and not kwargs:
+            raise ValueError("Metric trace requires 'body'.")
 
         self.log_trace(
             code="metric",
             name=name,
             message=message,
-            extra=extra,
+            body=body,
             tags=tags,
             in_progress=True,
             **kwargs
@@ -131,7 +131,7 @@ class ActivityScope(Activity):
             self,
             name: str | None = None,
             message: str | None = None,
-            extra: dict | None = None,
+            body: dict | None = None,
             tags: set[str] | None = None,
             **kwargs
     ) -> None:
@@ -140,7 +140,7 @@ class ActivityScope(Activity):
             code="info",
             name=name,
             message=message,
-            extra=extra,
+            body=body,
             tags=tags,
             in_progress=True,
             **kwargs
@@ -150,7 +150,7 @@ class ActivityScope(Activity):
             self,
             name: str,
             message: str | None = None,
-            extra: dict | None = None,
+            body: dict | None = None,
             tags: set[str] | None = None,
             **kwargs
     ) -> None:
@@ -159,7 +159,7 @@ class ActivityScope(Activity):
             code="branch",
             name=name,
             message=message,
-            extra=extra,
+            body=body,
             tags=tags,
             in_progress=True,
             **kwargs
@@ -172,9 +172,9 @@ class ActivityScope(Activity):
             message: str | None = None,
             tags: set[str] | None = None,
             **kwargs,
-    ) -> Iterator[LoopScope]:
+    ) -> Iterator[IterationContext]:
         """This function initializes a new scope for loop telemetry."""
-        loop = LoopScope()
+        loop = IterationContext()
         try:
             yield loop
         finally:
@@ -182,40 +182,24 @@ class ActivityScope(Activity):
                 code="loop",
                 name=name,
                 message=message,
-                extra=loop.dump(),
+                body=loop.dump(),
                 tags=tags,
                 **kwargs
             )
 
-    def log_end(
+    def log_last(
             self,
+            code: str,
             message: str | None = None,
-            extra: dict | None = None,
+            body: dict | None = None,
             tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs a regular end of an activity."""
         self.log_trace(
-            code="end",
+            code=code,
             message=message,
-            extra=(extra or {}) | self.extra,
-            tags=tags,
-            in_progress=False,
-            **kwargs
-        )
-
-    def log_exit(
-            self,
-            message: str | None = None,
-            extra: dict | None = None,
-            tags: set[str] | None = None,
-            **kwargs
-    ) -> None:
-        """This function logs an unusual end of an activity."""
-        self.log_trace(
-            code="exit",
-            message=message,
-            extra=(extra or {}) | self.extra,
+            body=(body or {}) | self.body,
             tags=tags,
             in_progress=False,
             **kwargs
@@ -224,21 +208,19 @@ class ActivityScope(Activity):
     def log_error(
             self,
             message: str | None = None,
-            extra: dict | None = None,
+            body: dict | None = None,
             tags: set[str] | None = None,
             exc_info: bool = True,
             **kwargs
     ) -> None:
         """This function logs an error in an activity."""
         exc_cls, exc, exc_tb = sys.exc_info()
-        extra = extra or {}
         if exc_cls:
-            extra["reason"] = exc_cls.__name__
-            # snapshot["message"] = str(exc) or None
+            body = (body or {}) | {"reason": exc_cls.__name__}
         self.log_trace(
             code="error",
             message=message or str(exc) or None,
-            extra=(extra or {}) | self.extra,
+            body=(body or {}) | self.body,
             tags=tags,
             exc_info=exc_info,
             in_progress=False,

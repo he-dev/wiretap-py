@@ -15,7 +15,7 @@ class Activity(Protocol):
     func: str
     name: str | None
     frame: inspect.FrameInfo
-    extra: dict[str, Any] | None
+    body: dict[str, Any] | None
     tags: set[str] | None
     elapsed: Elapsed
     correlation: "Correlation"
@@ -45,7 +45,7 @@ class Trace:
 class Entry:
     activity: Activity
     trace: Trace
-    extra: dict[str, Any]
+    body: dict[str, Any]
     tags: set[str]
 
 

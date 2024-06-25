@@ -153,27 +153,41 @@ class MessageProperty(JSONProperty):
             }
 
 
-class ExtraProperty(JSONProperty):
+class ContextProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
         if WIRETAP_KEY in record.__dict__:
             entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
-                "extra": entry.extra,
+                "context": entry.activity.body,
             }
         else:
             return {
-                "extra": {}
+                "context": {}
             }
 
 
-class TagProperty(JSONProperty):
+class BodyProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
         if WIRETAP_KEY in record.__dict__:
             entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
-                "tags": sorted(entry.tags),
+                "body": entry.body,
+            }
+        else:
+            return {
+                "body": {}
+            }
+
+
+class TagsProperty(JSONProperty):
+
+    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
+        if WIRETAP_KEY in record.__dict__:
+            entry: Entry = record.__dict__[WIRETAP_KEY]
+            return {
+                "tags": sorted(entry.tags | (entry.activity.tags or set())),
             }
         else:
             return {
@@ -217,10 +231,10 @@ class ExceptionProperty(JSONProperty):
             return {}
 
 
-class ConstProperty(JSONProperty):
+class EnvironmentProperty(JSONProperty):
 
-    def __init__(self, keys: list[str]):
-        self.keys = keys
+    def __init__(self, names: list[str]):
+        self.names = names
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        return {k: os.environ.get(k) for k in self.keys}
+        return {"environment": {k: os.environ.get(k) for k in self.names}}
