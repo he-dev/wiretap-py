@@ -7,7 +7,8 @@ from _reusable import Elapsed, Welford
 
 class IterationContext:
 
-    def __init__(self, precision: int = 3):
+    def __init__(self, counter_name: str | None = None, precision: int = 3):
+        self.counter_name = counter_name or "iteration_count"
         self.precision = precision
         self.welford = Welford()
         self.elapsed: float = 0
@@ -39,7 +40,7 @@ class IterationContext:
     def dump(self) -> dict[str, Any]:
         if self.welford.n > 0:
             return {
-                "iteration_count": self.welford.n,
+                self.counter_name: self.welford.n,
                 "error_count": self.error_count,
                 "elapsed": {
                     "sum": round(self.elapsed, self.precision),
@@ -56,7 +57,7 @@ class IterationContext:
             }
         else:
             return {
-                "iteration_count": self.welford.n,
+                self.counter_name: self.welford.n,
             }
 
 

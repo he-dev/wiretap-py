@@ -102,7 +102,7 @@ def logging_single_loop():
 
 
 def logging_multiple_loops():
-    with wiretap.log_activity() as t, t.log_loop(name="test_loop_n") as iteration:
+    with wiretap.log_activity() as t, t.log_loop(name="test_loop_n", counter_name="email_count") as iteration:
         for i in range(5):
             with iteration():
                 time.sleep(random.randint(1, 100) / 1000)  # waits for a random time between 1 and 100 milliseconds

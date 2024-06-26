@@ -1,7 +1,6 @@
 import dataclasses
 import inspect
 import uuid
-from enum import Enum
 from typing import Protocol, Optional, Any, Iterator
 
 from _reusable import Elapsed
@@ -19,14 +18,8 @@ class Activity(Protocol):
     tags: set[str] | None
     elapsed: Elapsed
     correlation: "Correlation"
-
-    @property
-    def depth(self) -> int:
-        pass
-
-    @property
-    def context(self) -> dict[str, Any]:
-        pass
+    depth: int
+    context: dict[str, Any]
 
     def __iter__(self) -> Iterator["Activity"]:
         pass

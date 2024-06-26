@@ -18,7 +18,7 @@ class TextFormatter(logging.Formatter):
             record.context = entry.activity.context
             record.message = entry.trace.message
             record.body = entry.body
-            record.tags = sorted(entry.tags)
+            record.tags = sorted(entry.activity.tags)
             record.indent = self.indent * entry.activity.depth
         else:
             record.activity = record.funcName

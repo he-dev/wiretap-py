@@ -64,7 +64,7 @@ def log_activity(
             activity.log_last(code=enclosing_trace_codes[2], tags={tag.UNHANDLED}, exc_info=True)
         raise
     finally:
-        activity.log_trace(code=enclosing_trace_codes[1], in_progress=False)
+        activity.log_last(code=enclosing_trace_codes[1])
         current_activity.reset(token)
 
 

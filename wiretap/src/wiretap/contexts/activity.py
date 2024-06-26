@@ -1,5 +1,4 @@
 import contextlib
-import functools
 import inspect
 import logging
 import sys
@@ -7,8 +6,8 @@ import uuid
 from typing import Any, Optional, Iterator
 
 from _reusable import Elapsed, map_to_str
-from wiretap.data import Activity, WIRETAP_KEY, Trace, Entry, Correlation
 from wiretap.contexts.iteration import IterationContext
+from wiretap.data import Activity, WIRETAP_KEY, Trace, Entry, Correlation
 
 
 class ActivityContext(Activity):
@@ -33,19 +32,13 @@ class ActivityContext(Activity):
         self.name = name
         self.frame = frame
         self.body = (body or {}) | kwargs
-        self.tags: set[str] = map_to_str(tags)
+        self.tags: set[str] = map_to_str(tags) | parent.tags if parent else map_to_str(tags)
         self.elapsed = Elapsed()
         self.in_progress = True
         self.correlation = correlation or Correlation(self.id, type="default")
         self.logger = logging.getLogger(name)
-
-    @property
-    def depth(self) -> int:
-        return self.parent.depth + 1 if self.parent else 1
-
-    @property
-    def context(self):
-        return functools.reduce(lambda c, a: a.body | c, self, {})
+        self.depth = parent.depth + 1 if parent else 0
+        self.context = parent.context | self.body if parent else self.body
 
     def __iter__(self) -> Iterator["ActivityContext"]:
         current: Optional["ActivityContext"] = self
@@ -176,10 +169,11 @@ class ActivityContext(Activity):
             name: str,
             message: str | None = None,
             tags: set[str] | None = None,
+            counter_name: str | None = None,
             **kwargs,
     ) -> Iterator[IterationContext]:
         """This function initializes a new scope for loop telemetry."""
-        loop = IterationContext()
+        loop = IterationContext(counter_name)
         try:
             yield loop
         finally:
