@@ -15,9 +15,9 @@ class TextFormatter(logging.Formatter):
             record.elapsed = round(float(entry.activity.elapsed), 3)
             record.code = entry.trace.code
             record.trace = entry.trace.name
-            record.context = entry.activity.body
+            record.context = entry.activity.context
             record.message = entry.trace.message
-            record.extra = entry.body
+            record.body = entry.body
             record.tags = sorted(entry.tags)
             record.indent = self.indent * entry.activity.depth
         else:
@@ -27,7 +27,7 @@ class TextFormatter(logging.Formatter):
             record.trace = None
             record.context = None
             record.message = record.msg
-            record.extra = None
+            record.body = None
             record.tags = []
             record.indent = self.indent
 

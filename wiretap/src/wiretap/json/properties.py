@@ -1,3 +1,4 @@
+import functools
 import logging
 import os
 import traceback
@@ -159,7 +160,7 @@ class ContextProperty(JSONProperty):
         if WIRETAP_KEY in record.__dict__:
             entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
-                "context": entry.activity.body,
+                "context": entry.activity.context,
             }
         else:
             return {

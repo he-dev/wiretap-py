@@ -2,14 +2,14 @@ import contextlib
 import inspect
 import sys
 from enum import Enum
-from typing import Any, Iterator, Callable, Type, Tuple, ContextManager
+from typing import Any, Iterator, Type, Tuple, ContextManager
 
 from . import formatters
 from . import json
 from . import tag
 from .context import current_activity
-from .data import Correlation
 from .contexts import ActivityContext
+from .data import Correlation
 
 
 def dict_config(config: dict):
@@ -19,7 +19,7 @@ def dict_config(config: dict):
 
 @contextlib.contextmanager
 def log_activity(
-        enclosing_trace_codes: Tuple[str, str] = ("begin", "end"),
+        enclosing_trace_codes: Tuple[str, str, str] = ("begin", "end", "error"),
         name: str | None = None,
         message: str | None = None,
         body: dict[str, Any] | None = None,
@@ -60,7 +60,8 @@ def log_activity(
     except Exception:
         exc_cls, exc, exc_tb = sys.exc_info()
         if exc is not None:
-            activity.log_error(tags={tag.UNHANDLED})
+            # activity.log_error(tags={tag.UNHANDLED})
+            activity.log_last(code=enclosing_trace_codes[2], tags={tag.UNHANDLED}, exc_info=True)
         raise
     finally:
         activity.log_trace(code=enclosing_trace_codes[1], in_progress=False)
@@ -76,7 +77,7 @@ def log_begin(
         **kwargs
 ) -> ContextManager[ActivityContext]:
     return log_activity(
-        enclosing_trace_codes=("begin", "end"),
+        enclosing_trace_codes=("begin", "end", "error"),
         name=name,
         message=message,
         body=body,
@@ -95,7 +96,7 @@ def log_connect(
         **kwargs
 ) -> ContextManager[ActivityContext]:
     return log_activity(
-        enclosing_trace_codes=("connect", "disconnect"),
+        enclosing_trace_codes=("connect", "disconnect", "error"),
         name=name,
         message=message,
         body=body,
@@ -114,7 +115,26 @@ def log_open(
         **kwargs
 ) -> ContextManager[ActivityContext]:
     return log_activity(
-        enclosing_trace_codes=("open", "close"),
+        enclosing_trace_codes=("open", "close", "error"),
+        name=name,
+        message=message,
+        body=body,
+        tags=tags,
+        correlation_id=correlation_id,
+        **kwargs
+    )
+
+
+def log_transaction(
+        name: str | None = None,
+        message: str | None = None,
+        body: dict[str, Any] | None = None,
+        tags: set[Any] | None = None,
+        correlation_id: Any | None = None,
+        **kwargs
+) -> ContextManager[ActivityContext]:
+    return log_activity(
+        enclosing_trace_codes=("begin", "commit", "rollback"),
         name=name,
         message=message,
         body=body,
@@ -139,34 +159,6 @@ def log_open(
 #         scope.__exit__(None, None, None)
 #
 #     return dispose
-
-#
-# @contextlib.contextmanager
-# def log_loop(
-#         name: str,
-#         message: str | None = None,
-#         tags: set[str] | None = None,
-#         activity: ActivityScope | None = None,
-#         **kwargs,
-# ) -> Iterator[LoopScope]:
-#     """This function initializes a new scope for loop telemetry."""
-#     loop = LoopScope()
-#     try:
-#         yield loop
-#     finally:
-#         if activity is None:
-#             node: Node | None = current_activity.get()
-#             if node is None:
-#                 raise ValueError("There is no activity in the current scope.")
-#             activity = node.value
-#         activity.log_trace(
-#             code="loop",
-#             name=name,
-#             message=message,
-#             extra=loop.dump(),
-#             tags=tags,
-#             **kwargs
-#         )
 
 
 def no_exc_info_if(exception_type: Type[BaseException] | Tuple[Type[BaseException], ...]) -> bool:

@@ -80,12 +80,14 @@ def logging_with_defaults():
 
 
 def logging_nested_activities():
-    with wiretap.log_begin(tags={"foo"}) as foo:
-        foo.log_info("This is the first activity")
-        with wiretap.log_connect(tags={"bar"}) as bar:
-            bar.log_info("This is the second activity")
+    with wiretap.log_begin(tags={"foo"}, foo="bar") as foo:
+        foo.log_info("This is the first activity.")
+        with wiretap.log_connect(tags={"bar"}, bar="baz") as bar:
+            bar.log_info("This is the second activity.")
             with wiretap.log_open(tags={"baz"}) as baz:
-                baz.log_info("This is the third activity")
+                baz.log_info("This is the third activity.")
+            with wiretap.log_transaction(baz="qux") as qux:
+                qux.log_info("This is a transaction.")
 
 
 def logging_empty_loop():

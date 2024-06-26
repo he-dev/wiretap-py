@@ -1,4 +1,5 @@
 import contextlib
+import functools
 import inspect
 import logging
 import sys
@@ -41,6 +42,10 @@ class ActivityContext(Activity):
     @property
     def depth(self) -> int:
         return self.parent.depth + 1 if self.parent else 1
+
+    @property
+    def context(self):
+        return functools.reduce(lambda c, a: a.body | c, self, {})
 
     def __iter__(self) -> Iterator["ActivityContext"]:
         current: Optional["ActivityContext"] = self
@@ -193,14 +198,20 @@ class ActivityContext(Activity):
             message: str | None = None,
             body: dict | None = None,
             tags: set[str] | None = None,
+            exc_info: bool = False,
             **kwargs
     ) -> None:
         """This function logs a regular end of an activity."""
+        exc_cls, exc, exc_tb = sys.exc_info()
+        if exc_cls:
+            body = (body or {}) | {"reason": exc_cls.__name__}
+
         self.log_trace(
             code=code,
             message=message,
             body=(body or {}) | self.body,
             tags=tags,
+            exc_info=exc_info,
             in_progress=False,
             **kwargs
         )
@@ -214,15 +225,11 @@ class ActivityContext(Activity):
             **kwargs
     ) -> None:
         """This function logs an error in an activity."""
-        exc_cls, exc, exc_tb = sys.exc_info()
-        if exc_cls:
-            body = (body or {}) | {"reason": exc_cls.__name__}
-        self.log_trace(
+        self.log_last(
             code="error",
-            message=message or str(exc) or None,
+            message=message,
             body=(body or {}) | self.body,
             tags=tags,
             exc_info=exc_info,
-            in_progress=False,
             **kwargs
         )

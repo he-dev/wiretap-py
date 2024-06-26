@@ -24,6 +24,10 @@ class Activity(Protocol):
     def depth(self) -> int:
         pass
 
+    @property
+    def context(self) -> dict[str, Any]:
+        pass
+
     def __iter__(self) -> Iterator["Activity"]:
         pass
 
