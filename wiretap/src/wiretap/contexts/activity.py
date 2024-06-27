@@ -37,8 +37,8 @@ class ActivityContext(Activity):
         self.in_progress = True
         self.correlation = correlation or Correlation(self.id, type="default")
         self.logger = logging.getLogger(name)
-        self.depth = parent.depth + 1 if parent else 0
-        self.context = parent.context | self.body if parent else self.body
+        self.depth: int = parent.depth + 1 if parent else 0
+        self.context: dict[str, Any] = parent.context | self.body if parent else self.body
 
     def __iter__(self) -> Iterator["ActivityContext"]:
         current: Optional["ActivityContext"] = self
