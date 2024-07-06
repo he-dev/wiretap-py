@@ -2,56 +2,65 @@ import contextlib
 import inspect
 import logging
 import sys
+import threading
 import uuid
-from typing import Any, Optional, Iterator
+from collections import defaultdict
+from contextvars import ContextVar
+from typing import Any, Optional, Iterator, Tuple
 
 from _reusable import Elapsed, map_to_str
 from wiretap.contexts.iteration import IterationContext
-from wiretap.data import Activity, WIRETAP_KEY, Trace, Entry, Correlation
+from wiretap.data import Procedure, WIRETAP_KEY, Trace, Entry, Correlation
+
+procedure_calls: ContextVar[dict[Tuple[str, ...], int]] = ContextVar("procedure_calls", default=defaultdict(lambda: 0))
 
 
-class ActivityContext(Activity):
+class ProcedureContext(Procedure):
     """
     This class represents an activity for which telemetry is collected.
     """
 
+    lock = threading.Lock()
+
     def __init__(
             self,
-            parent: Optional["ActivityContext"],
-            func: str,
-            name: str | None,
             frame: inspect.FrameInfo,
-            body: dict[str, Any] | None = None,
-            tags: set[Any] | None = None,
-            correlation: Correlation | None = None,
+            parent: Optional["ProcedureContext"],
+            name: str | None,
+            data: dict[str, Any] | None,
+            tags: set[Any] | None,
+            correlation: Correlation | None,
             **kwargs: Any
     ):
         self.parent = parent
         self.id = uuid.uuid4()
-        self.func = func
-        self.name = name
+        self.name = name or frame.function
         self.frame = frame
-        self.body = (body or {}) | kwargs
-        self.tags: set[str] = map_to_str(tags) | parent.tags if parent else map_to_str(tags)
+        self.data = (parent.data if parent else {}) | (data or {}) | kwargs
+        self.tags: set[str] = (parent.tags if parent else map_to_str(tags)) | map_to_str(tags)
         self.elapsed = Elapsed()
         self.in_progress = True
         self.correlation = correlation or Correlation(self.id, type="default")
         self.logger = logging.getLogger(name)
-        self.depth: int = parent.depth + 1 if parent else 0
-        self.context: dict[str, Any] = parent.context | self.body if parent else self.body
+        self.depth: int = parent.depth + 1 if parent else 1
+        self.trace_count: int = 0
+        with ProcedureContext.lock:
+            key = tuple((p.name for p in self))
+            calls = procedure_calls.get()
+            calls[key] += 1
+            self.times = calls[key]
 
-    def __iter__(self) -> Iterator["ActivityContext"]:
-        current: Optional["ActivityContext"] = self
+    def __iter__(self) -> Iterator["ProcedureContext"]:
+        current: Optional["ProcedureContext"] = self
         while current:
             yield current
             current = current.parent
 
     def log_trace(
             self,
-            code: str,
             name: str | None = None,
             message: str | None = None,
-            body: dict | None = None,
+            data: dict | None = None,
             tags: set[Any] | None = None,
             exc_info: bool = False,
             in_progress: bool = True,
@@ -63,16 +72,20 @@ class ActivityContext(Activity):
             else:
                 return
 
+        self.trace_count += 1
         self.logger.log(
             level=logging.INFO,
             msg=message,
             exc_info=exc_info,
             extra={
                 WIRETAP_KEY: Entry(
-                    activity=self,
-                    trace=Trace(code=code, name=name, message=message),
-                    body=(body or {}) | kwargs,
-                    tags=map_to_str(tags),
+                    procedure=self,
+                    trace=Trace(
+                        name=name,
+                        message=message,
+                        data=self.data | (data or {}) | kwargs,
+                        tags=self.tags | map_to_str(tags),
+                    )
                 )
             }
         )
@@ -81,22 +94,20 @@ class ActivityContext(Activity):
 
     def log_snapshot(
             self,
-            name: str | None = None,
             message: str | None = None,
-            body: dict | None = None,
+            data: dict | None = None,
             tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs any state."""
 
-        if not body and not kwargs:
-            raise ValueError("Snapshot trace requires 'body'.")
+        if not data and not kwargs:
+            raise ValueError("Snapshot trace requires 'data'.")
 
         self.log_trace(
-            code="snapshot",
-            name=name,
+            name="snapshot",
             message=message,
-            body=body,
+            data=data,
             tags=tags,
             in_progress=True,
             **kwargs
@@ -104,22 +115,20 @@ class ActivityContext(Activity):
 
     def log_metric(
             self,
-            name: str | None = None,
             message: str | None = None,
-            body: dict | None = None,
+            data: dict | None = None,
             tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs any state."""
 
-        if not body and not kwargs:
+        if not data and not kwargs:
             raise ValueError("Metric trace requires 'body'.")
 
         self.log_trace(
-            code="metric",
-            name=name,
+            name="metric",
             message=message,
-            body=body,
+            data=data,
             tags=tags,
             in_progress=True,
             **kwargs
@@ -127,18 +136,16 @@ class ActivityContext(Activity):
 
     def log_info(
             self,
-            name: str | None = None,
             message: str | None = None,
-            body: dict | None = None,
+            data: dict | None = None,
             tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs conditional branches."""
         self.log_trace(
-            code="info",
-            name=name,
+            name="info",
             message=message,
-            body=body,
+            data=data,
             tags=tags,
             in_progress=True,
             **kwargs
@@ -146,18 +153,16 @@ class ActivityContext(Activity):
 
     def log_branch(
             self,
-            name: str,
             message: str | None = None,
-            body: dict | None = None,
+            data: dict | None = None,
             tags: set[str] | None = None,
             **kwargs
     ) -> None:
         """This function logs conditional branches."""
         self.log_trace(
-            code="branch",
-            name=name,
+            name="branch",
             message=message,
-            body=body,
+            data=data,
             tags=tags,
             in_progress=True,
             **kwargs
@@ -166,7 +171,6 @@ class ActivityContext(Activity):
     @contextlib.contextmanager
     def log_loop(
             self,
-            name: str,
             message: str | None = None,
             tags: set[str] | None = None,
             counter_name: str | None = None,
@@ -177,20 +181,18 @@ class ActivityContext(Activity):
         try:
             yield loop
         finally:
-            self.log_trace(
-                code="loop",
-                name=name,
+            self.log_metric(
                 message=message,
-                body=loop.dump(),
-                tags=tags,
+                data=loop.dump(),
+                tags=(tags or set()) | {"loop"},
                 **kwargs
             )
 
     def log_last(
             self,
-            code: str,
+            name: str,
             message: str | None = None,
-            body: dict | None = None,
+            data: dict | None = None,
             tags: set[str] | None = None,
             exc_info: bool = False,
             **kwargs
@@ -198,12 +200,12 @@ class ActivityContext(Activity):
         """This function logs a regular end of an activity."""
         exc_cls, exc, exc_tb = sys.exc_info()
         if exc_cls:
-            body = (body or {}) | {"reason": exc_cls.__name__}
+            data = (data or {}) | {"reason": exc_cls.__name__}
 
         self.log_trace(
-            code=code,
+            name=name,
             message=message,
-            body=(body or {}) | self.body,
+            data=(data or {}) | self.data,
             tags=tags,
             exc_info=exc_info,
             in_progress=False,
@@ -213,16 +215,16 @@ class ActivityContext(Activity):
     def log_error(
             self,
             message: str | None = None,
-            body: dict | None = None,
+            data: dict | None = None,
             tags: set[str] | None = None,
             exc_info: bool = True,
             **kwargs
     ) -> None:
         """This function logs an error in an activity."""
         self.log_last(
-            code="error",
+            name="error",
             message=message,
-            body=(body or {}) | self.body,
+            data=(data or {}) | self.data,
             tags=tags,
             exc_info=exc_info,
             **kwargs

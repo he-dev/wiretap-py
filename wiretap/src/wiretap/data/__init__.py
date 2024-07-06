@@ -8,20 +8,20 @@ from _reusable import Elapsed
 WIRETAP_KEY = "_wiretap"
 
 
-class Activity(Protocol):
-    parent: Optional["Activity"]
+class Procedure(Protocol):
+    parent: Optional["Procedure"]
     id: uuid.UUID
-    func: str
     name: str | None
     frame: inspect.FrameInfo
-    body: dict[str, Any] | None
+    data: dict[str, Any] | None
     tags: set[str] | None
     elapsed: Elapsed
     correlation: "Correlation"
     depth: int
-    context: dict[str, Any]
+    times: int
+    trace_count: int
 
-    def __iter__(self) -> Iterator["Activity"]:
+    def __iter__(self) -> Iterator["Procedure"]:
         pass
 
 
@@ -33,20 +33,13 @@ class Correlation:
 
 @dataclasses.dataclass
 class Trace:
-    code: str
     name: str | None
     message: str | None
-
-
-@dataclasses.dataclass
-class Entry:
-    activity: Activity
-    trace: Trace
-    body: dict[str, Any]
+    data: dict[str, Any]
     tags: set[str]
 
 
 @dataclasses.dataclass
-class Details:
-    name: str
-    data: dict[str, Any]
+class Entry:
+    procedure: Procedure
+    trace: Trace

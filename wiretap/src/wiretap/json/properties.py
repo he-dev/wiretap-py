@@ -7,8 +7,8 @@ from enum import Enum
 from typing import Protocol, Any
 
 from _reusable import nth_or_default, Node
-from wiretap import current_activity
-from wiretap.data import WIRETAP_KEY, Activity, Entry
+from wiretap import current_procedure
+from wiretap.data import WIRETAP_KEY, Procedure, Entry
 
 
 class JSONProperty(Protocol):
@@ -31,67 +31,74 @@ class TimestampProperty(JSONProperty):
         }
 
 
-class ActivityProperty(JSONProperty):
+class ExecutionProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
         if WIRETAP_KEY in record.__dict__:
             entry: Entry = record.__dict__[WIRETAP_KEY]
+            procedure = entry.procedure
             return {
-                "activity": {
-                    "func": entry.activity.func,
-                    "name": entry.activity.name,
-                    "elapsed": float(entry.activity.elapsed),
-                    "depth": entry.activity.depth,
-                    "id": entry.activity.id,
+                "execution": {
+                    "path": [x.name for x in procedure],
+                    "elapsed": [x.elapsed.current for x in procedure][-1],
                 }
             }
         else:
-            node: Node | None = current_activity.get()
-            return {
-                "activity": {
-                    "func": node.value.func if node else record.funcName,
-                    "name": node.value.name if node else record.funcName,
-                    "elapsed": float(node.value.elapsed) if node else None,
-                    "depth": node.value.depth if node else None,
-                    "id": node.value.id if node else None,
-                }
-            }
-
-
-class PreviousProperty(JSONProperty):
-
-    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        if WIRETAP_KEY in record.__dict__:
-            entry: Entry = record.__dict__[WIRETAP_KEY]
-            previous: Activity | None = nth_or_default(list(entry.activity), 1)
-            if previous:
+            node: Node | None = current_procedure.get()
+            if node:
+                procedure = node.value
                 return {
-                    "previous": {
-                        "func": previous.func,
-                        "name": previous.name,
-                        "elapsed": float(previous.elapsed),
-                        "depth": previous.depth,
-                        "id": previous.id,
+                    "execution": {
+                        "path": [x.name for x in procedure],
+                        "elapsed": [x.elapsed.current for x in procedure][-1],
+                    }
+                }
+            else:
+                return {
+                    "execution": {
+                        "path": None,
+                        "elapsed": None,
                     }
                 }
 
-        return {}
 
-
-class SequenceProperty(JSONProperty):
+class ProcedureProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
         if WIRETAP_KEY in record.__dict__:
             entry: Entry = record.__dict__[WIRETAP_KEY]
+            procedure = entry.procedure
             return {
-                "sequence": {
-                    "name": [a.name for a in entry.activity],
-                    "elapsed": [float(entry.activity.elapsed) for a in entry.activity],
-                    "id": [a.id for a in entry.activity],
+                "procedure": {
+                    "id": procedure.id,
+                    "name": procedure.name,
+                    "elapsed": procedure.elapsed.current,
+                    "depth": procedure.depth,
+                    "times": procedure.times,
                 }
             }
         else:
-            return {}
+            node: Node | None = current_procedure.get()
+            if node:
+                procedure = node.value
+                return {
+                    "procedure": {
+                        "id": procedure.id,
+                        "name": procedure.name,
+                        "elapsed": procedure.elapsed.current,
+                        "depth": procedure.depth,
+                        "times": procedure.times,
+                    }
+                }
+            else:
+                return {
+                    "procedure": {
+                        "id": None,
+                        "name": record.funcName,
+                        "elapsed": None,
+                        "depth": None,
+                    }
+                }
 
 
 class CorrelationProperty(JSONProperty):
@@ -102,12 +109,12 @@ class CorrelationProperty(JSONProperty):
             return {
                 "correlation": {
                     # "id": [a.id for a in entry.activity][-1]
-                    "id": entry.activity.correlation.id,
-                    "type": entry.activity.correlation.type,
+                    "id": entry.procedure.correlation.id,
+                    "type": entry.procedure.correlation.type,
                 }
             }
         else:
-            node: Node | None = current_activity.get()
+            node: Node | None = current_procedure.get()
             if node:
                 return {
                     "correlation": {
@@ -127,72 +134,20 @@ class TraceProperty(JSONProperty):
             entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
                 "trace": {
-                    "code": entry.trace.code,
                     "name": entry.trace.name,
+                    "message": entry.trace.message,
+                    "data": entry.trace.data,
+                    "tags": sorted(entry.trace.tags),
                 }
             }
         else:
             return {
                 "trace": {
-                    "code": "plain",
-                    "name": record.levelname.lower()
+                    "name": record.levelname.lower(),
+                    "message": record.msg,
+                    "data": None,
+                    "tags": ["plain"]
                 }
-            }
-
-
-class MessageProperty(JSONProperty):
-
-    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        if WIRETAP_KEY in record.__dict__:
-            entry: Entry = record.__dict__[WIRETAP_KEY]
-            return {
-                "message": entry.trace.message
-            }
-        else:
-            return {
-                "message": record.msg
-            }
-
-
-class ContextProperty(JSONProperty):
-
-    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        if WIRETAP_KEY in record.__dict__:
-            entry: Entry = record.__dict__[WIRETAP_KEY]
-            return {
-                "context": entry.activity.context,
-            }
-        else:
-            return {
-                "context": {}
-            }
-
-
-class BodyProperty(JSONProperty):
-
-    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        if WIRETAP_KEY in record.__dict__:
-            entry: Entry = record.__dict__[WIRETAP_KEY]
-            return {
-                "body": entry.body,
-            }
-        else:
-            return {
-                "body": {}
-            }
-
-
-class TagsProperty(JSONProperty):
-
-    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        if WIRETAP_KEY in record.__dict__:
-            entry: Entry = record.__dict__[WIRETAP_KEY]
-            return {
-                "tags": sorted(entry.tags | (entry.activity.tags or set())),
-            }
-        else:
-            return {
-                "tags": []
             }
 
 
@@ -201,12 +156,12 @@ class SourceProperty(JSONProperty):
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
         if WIRETAP_KEY in record.__dict__:
             entry: Entry = record.__dict__[WIRETAP_KEY]
-            if entry.trace.code == "begin":
+            if entry.procedure.trace_count == 1:
                 return {
                     "source": {
-                        "func": entry.activity.func,
-                        "file": entry.activity.frame.filename,
-                        "line": entry.activity.frame.lineno,
+                        "func": entry.procedure.frame.function,
+                        "file": entry.procedure.frame.filename,
+                        "line": entry.procedure.frame.lineno,
                     }
                 }
             else:

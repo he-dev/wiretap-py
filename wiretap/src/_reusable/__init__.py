@@ -1,6 +1,7 @@
 import itertools
+from collections import deque
 from importlib import import_module
-from typing import TypeVar, Optional, Iterable, Type, Any
+from typing import TypeVar, Optional, Iterable, Type, Any, Generator
 
 from .elapsed import Elapsed
 from .node import Node
@@ -24,6 +25,12 @@ def resolve_class(name: str) -> Type:
 
 def map_to_str(values: Iterable[Any] | None) -> set[str]:
     return set(map(lambda x: str(x), values)) if values else set()
+
+
+def fast_reverse(iterable: Iterable[T]) -> Generator[T, None, None]:
+    stack = deque(iterable, maxlen=None)
+    while stack:
+        yield stack.pop()
 
 
 class Welford:

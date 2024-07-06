@@ -1,7 +1,8 @@
+from collections import defaultdict
 from contextvars import ContextVar
+from typing import Tuple
 
 from _reusable import Node
-from .contexts import ActivityContext
+from .contexts import ProcedureContext
 
-current_activity: ContextVar[Node[ActivityContext] | None] = ContextVar("current_activity", default=None)
-
+current_procedure: ContextVar[Node[ProcedureContext] | None] = ContextVar("current_procedure", default=None)

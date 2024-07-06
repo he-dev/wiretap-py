@@ -1,14 +1,13 @@
 import contextlib
 import inspect
 import sys
-from enum import Enum
 from typing import Any, Iterator, Type, Tuple, ContextManager
 
 from . import formatters
 from . import json
 from . import tag
-from .context import current_activity
-from .contexts import ActivityContext
+from .context import current_procedure
+from .contexts import ProcedureContext
 from .data import Correlation
 
 
@@ -18,21 +17,20 @@ def dict_config(config: dict):
 
 
 @contextlib.contextmanager
-def log_activity(
-        enclosing_trace_codes: Tuple[str, str, str] = ("begin", "end", "error"),
+def log_procedure(
+        enclosing_trace_names: Tuple[str, str, str] = ("begin", "end", "error"),
         name: str | None = None,
         message: str | None = None,
-        body: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
         tags: set[Any] | None = None,
         correlation_id: Any | None = None,
         **kwargs
-) -> Iterator[ActivityContext]:
+) -> Iterator[ProcedureContext]:
     """This function logs telemetry for an activity scope. It returns the activity scope that provides additional APIs."""
-    tags = (tags or set())
     from _reusable import Node
     stack = inspect.stack(2)
     frame = stack[2]
-    parent = current_activity.get()
+    parent = current_procedure.get()
 
     correlation: Correlation | None = None
     if parent:
@@ -41,31 +39,27 @@ def log_activity(
     if correlation_id:
         correlation = Correlation(id=correlation_id, type="custom")
 
-    activity = ActivityContext(
-        parent=parent.value if parent else None,
-        func=frame.function,
-        name=name,
+    activity = ProcedureContext(
         frame=frame,
-        body=body,
+        parent=parent.value if parent else None,
+        name=name,
+        data=data,
         tags=tags,
         correlation=correlation,
         **kwargs
     )
-    # The UUID needs to be created here,
-    # because for some stupid pythonic reason creating a new Node isn't enough.
-    token = current_activity.set(Node(value=activity, parent=parent, id=activity.id))
+    token = current_procedure.set(Node(value=activity, parent=parent, id=activity.id))
     try:
-        activity.log_trace(code=enclosing_trace_codes[0], message=message, body={})
+        activity.log_trace(name=enclosing_trace_names[0], message=message)
         yield activity
     except Exception:
         exc_cls, exc, exc_tb = sys.exc_info()
         if exc is not None:
-            # activity.log_error(tags={tag.UNHANDLED})
-            activity.log_last(code=enclosing_trace_codes[2], tags={tag.UNHANDLED}, exc_info=True)
+            activity.log_last(name=enclosing_trace_names[2], tags={tag.UNHANDLED}, exc_info=True)
         raise
     finally:
-        activity.log_last(code=enclosing_trace_codes[1])
-        current_activity.reset(token)
+        activity.log_last(name=enclosing_trace_names[1])
+        current_procedure.reset(token)
 
 
 def log_begin(
@@ -75,12 +69,12 @@ def log_begin(
         tags: set[Any] | None = None,
         correlation_id: Any | None = None,
         **kwargs
-) -> ContextManager[ActivityContext]:
-    return log_activity(
-        enclosing_trace_codes=("begin", "end", "error"),
+) -> ContextManager[ProcedureContext]:
+    return log_procedure(
+        enclosing_trace_names=("begin", "end", "error"),
         name=name,
         message=message,
-        body=body,
+        data=body,
         tags=tags,
         correlation_id=correlation_id,
         **kwargs
@@ -94,12 +88,12 @@ def log_connect(
         tags: set[Any] | None = None,
         correlation_id: Any | None = None,
         **kwargs
-) -> ContextManager[ActivityContext]:
-    return log_activity(
-        enclosing_trace_codes=("connect", "disconnect", "error"),
+) -> ContextManager[ProcedureContext]:
+    return log_procedure(
+        enclosing_trace_names=("connect", "disconnect", "error"),
         name=name,
         message=message,
-        body=body,
+        data=body,
         tags=tags,
         correlation_id=correlation_id,
         **kwargs
@@ -113,12 +107,12 @@ def log_open(
         tags: set[Any] | None = None,
         correlation_id: Any | None = None,
         **kwargs
-) -> ContextManager[ActivityContext]:
-    return log_activity(
-        enclosing_trace_codes=("open", "close", "error"),
+) -> ContextManager[ProcedureContext]:
+    return log_procedure(
+        enclosing_trace_names=("open", "close", "error"),
         name=name,
         message=message,
-        body=body,
+        data=body,
         tags=tags,
         correlation_id=correlation_id,
         **kwargs
@@ -132,12 +126,12 @@ def log_transaction(
         tags: set[Any] | None = None,
         correlation_id: Any | None = None,
         **kwargs
-) -> ContextManager[ActivityContext]:
-    return log_activity(
-        enclosing_trace_codes=("begin", "commit", "rollback"),
+) -> ContextManager[ProcedureContext]:
+    return log_procedure(
+        enclosing_trace_names=("begin", "commit", "rollback"),
         name=name,
         message=message,
-        body=body,
+        data=body,
         tags=tags,
         correlation_id=correlation_id,
         **kwargs
@@ -166,8 +160,5 @@ def no_exc_info_if(exception_type: Type[BaseException] | Tuple[Type[BaseExceptio
     return not isinstance(exc, exception_type)
 
 
-def to_tag(value: str | Enum) -> str:
-    if isinstance(value, Enum):
-        value = str(value)
-
-    return value.replace("_", "-")
+def to_tag(value: Any) -> str:
+    return str(value).replace("_", "-")
