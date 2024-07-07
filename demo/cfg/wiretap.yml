@@ -12,7 +12,11 @@ formatters:
     (): wiretap.formatters.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
-    fmt: "{asctime}.{msecs:03.0f} {indent} {procedure} | {trace} | {elapsed:0.3f} | {message} | {data} | {tags}"
+    fmt: >-
+      {asctime}.{msecs:03.0f} {indent} {procedure}
+      | {procedure_data} | {procedure_tags}
+      | {trace} | {elapsed:0.3f} | {message}
+      | {trace_data} | {trace_tags}
   elastic:
     (): wiretap.formatters.JSONFormatter
     encoders:

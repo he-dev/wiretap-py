@@ -2,31 +2,14 @@ import logging
 import os
 import traceback
 from datetime import datetime, timezone
-from typing import Protocol, Any, Callable, Tuple
+from typing import Protocol, Any
 
-from _reusable import Node
-from wiretap import current_procedure
-from wiretap.data import WIRETAP_KEY, Entry, Procedure, Trace
+from wiretap.helpers import unpack
 
 
 class JSONProperty(Protocol):
     def emit(self, record: logging.LogRecord) -> dict[str, Any] | None:
         pass
-
-
-def unpack(record: logging.LogRecord) -> Tuple[Procedure | None, Trace | None]:
-    # Try to get an entry from the record.
-    entry: Entry | None = record.__dict__.get(WIRETAP_KEY, None)
-    if entry:
-        return entry.procedure, entry.trace
-
-    # Try to get the nearest procedure.
-    node: Node | None = current_procedure.get()
-    if node:
-        return node.value, None
-
-    # There is no procedure in scope.
-    return None, None
 
 
 class TimestampProperty(JSONProperty):

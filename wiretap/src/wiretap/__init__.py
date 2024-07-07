@@ -3,8 +3,6 @@ import inspect
 import sys
 from typing import Any, Iterator, Type, Tuple, ContextManager
 
-from . import formatters
-from . import json
 from . import tag
 from .context import current_procedure
 from .contexts import ProcedureContext
@@ -57,7 +55,6 @@ def log_begin(
         message: str | None = None,
         data: dict[str, Any] | None = None,
         tags: set[Any] | None = None,
-        correlation_id: Any | None = None,
         **kwargs
 ) -> ContextManager[ProcedureContext]:
     return log_procedure(
@@ -66,7 +63,6 @@ def log_begin(
         message=message,
         data=data,
         tags=tags,
-        correlation_id=correlation_id,
         **kwargs
     )
 
@@ -76,7 +72,6 @@ def log_connect(
         message: str | None = None,
         data: dict[str, Any] | None = None,
         tags: set[Any] | None = None,
-        correlation_id: Any | None = None,
         **kwargs
 ) -> ContextManager[ProcedureContext]:
     return log_procedure(
@@ -85,7 +80,6 @@ def log_connect(
         message=message,
         data=data,
         tags=tags,
-        correlation_id=correlation_id,
         **kwargs
     )
 
@@ -95,7 +89,6 @@ def log_open(
         message: str | None = None,
         data: dict[str, Any] | None = None,
         tags: set[Any] | None = None,
-        correlation_id: Any | None = None,
         **kwargs
 ) -> ContextManager[ProcedureContext]:
     return log_procedure(
@@ -104,7 +97,6 @@ def log_open(
         message=message,
         data=data,
         tags=tags,
-        correlation_id=correlation_id,
         **kwargs
     )
 
@@ -114,7 +106,6 @@ def log_transaction(
         message: str | None = None,
         data: dict[str, Any] | None = None,
         tags: set[Any] | None = None,
-        correlation_id: Any | None = None,
         **kwargs
 ) -> ContextManager[ProcedureContext]:
     return log_procedure(
@@ -123,7 +114,6 @@ def log_transaction(
         message=message,
         data=data,
         tags=tags,
-        correlation_id=correlation_id,
         **kwargs
     )
 
