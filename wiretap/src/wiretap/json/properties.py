@@ -1,19 +1,32 @@
-import functools
 import logging
 import os
 import traceback
 from datetime import datetime, timezone
-from enum import Enum
-from typing import Protocol, Any
+from typing import Protocol, Any, Callable, Tuple
 
-from _reusable import nth_or_default, Node
+from _reusable import Node
 from wiretap import current_procedure
-from wiretap.data import WIRETAP_KEY, Procedure, Entry
+from wiretap.data import WIRETAP_KEY, Entry, Procedure, Trace
 
 
 class JSONProperty(Protocol):
-    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
+    def emit(self, record: logging.LogRecord) -> dict[str, Any] | None:
         pass
+
+
+def unpack(record: logging.LogRecord) -> Tuple[Procedure | None, Trace | None]:
+    # Try to get an entry from the record.
+    entry: Entry | None = record.__dict__.get(WIRETAP_KEY, None)
+    if entry:
+        return entry.procedure, entry.trace
+
+    # Try to get the nearest procedure.
+    node: Node | None = current_procedure.get()
+    if node:
+        return node.value, None
+
+    # There is no procedure in scope.
+    return None, None
 
 
 class TimestampProperty(JSONProperty):
@@ -34,110 +47,65 @@ class TimestampProperty(JSONProperty):
 class ExecutionProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        if WIRETAP_KEY in record.__dict__:
-            entry: Entry = record.__dict__[WIRETAP_KEY]
-            procedure = entry.procedure
+        procedure, trace = unpack(record)
+        if procedure:
             return {
                 "execution": {
-                    "path": [x.name for x in procedure],
-                    "elapsed": [x.elapsed.current for x in procedure][-1],
+                    "id": procedure.execution.id,
+                    "path": procedure.execution.path,
+                    "elapsed": procedure.execution.elapsed,
                 }
             }
         else:
-            node: Node | None = current_procedure.get()
-            if node:
-                procedure = node.value
-                return {
-                    "execution": {
-                        "path": [x.name for x in procedure],
-                        "elapsed": [x.elapsed.current for x in procedure][-1],
-                    }
+            return {
+                "execution": {
+                    "id": None,
+                    "path": None,
+                    "elapsed": None,
                 }
-            else:
-                return {
-                    "execution": {
-                        "path": None,
-                        "elapsed": None,
-                    }
-                }
+            }
 
 
 class ProcedureProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        if WIRETAP_KEY in record.__dict__:
-            entry: Entry = record.__dict__[WIRETAP_KEY]
-            procedure = entry.procedure
+        procedure, trace = unpack(record)
+        if procedure:
             return {
                 "procedure": {
                     "id": procedure.id,
                     "name": procedure.name,
+                    "data": procedure.data,
+                    "tags": procedure.tags,
                     "elapsed": procedure.elapsed.current,
                     "depth": procedure.depth,
                     "times": procedure.times,
                 }
             }
         else:
-            node: Node | None = current_procedure.get()
-            if node:
-                procedure = node.value
-                return {
-                    "procedure": {
-                        "id": procedure.id,
-                        "name": procedure.name,
-                        "elapsed": procedure.elapsed.current,
-                        "depth": procedure.depth,
-                        "times": procedure.times,
-                    }
-                }
-            else:
-                return {
-                    "procedure": {
-                        "id": None,
-                        "name": record.funcName,
-                        "elapsed": None,
-                        "depth": None,
-                    }
-                }
-
-
-class CorrelationProperty(JSONProperty):
-
-    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        if WIRETAP_KEY in record.__dict__:
-            entry: Entry = record.__dict__[WIRETAP_KEY]
             return {
-                "correlation": {
-                    # "id": [a.id for a in entry.activity][-1]
-                    "id": entry.procedure.correlation.id,
-                    "type": entry.procedure.correlation.type,
+                "procedure": {
+                    "id": None,
+                    "name": record.funcName,
+                    "data": None,
+                    "tags": None,
+                    "elapsed": None,
+                    "depth": None,
                 }
             }
-        else:
-            node: Node | None = current_procedure.get()
-            if node:
-                return {
-                    "correlation": {
-                        # "id": [a.id for a in entry.activity][-1]
-                        "id": node.value.correlation.id,
-                        "type": node.value.correlation.type,
-                    }
-                }
-            else:
-                return {}
 
 
 class TraceProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        if WIRETAP_KEY in record.__dict__:
-            entry: Entry = record.__dict__[WIRETAP_KEY]
+        procedure, trace = unpack(record)
+        if trace:
             return {
                 "trace": {
-                    "name": entry.trace.name,
-                    "message": entry.trace.message,
-                    "data": entry.trace.data,
-                    "tags": sorted(entry.trace.tags),
+                    "name": trace.name,
+                    "message": trace.message,
+                    "data": trace.data,
+                    "tags": sorted(trace.tags),
                 }
             }
         else:
@@ -154,18 +122,16 @@ class TraceProperty(JSONProperty):
 class SourceProperty(JSONProperty):
 
     def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        if WIRETAP_KEY in record.__dict__:
-            entry: Entry = record.__dict__[WIRETAP_KEY]
-            if entry.procedure.trace_count == 1:
+        procedure, trace = unpack(record)
+        if procedure:
+            if procedure.trace_count == 1:
                 return {
                     "source": {
-                        "func": entry.procedure.frame.function,
-                        "file": entry.procedure.frame.filename,
-                        "line": entry.procedure.frame.lineno,
+                        "func": procedure.frame.function,
+                        "file": procedure.frame.filename,
+                        "line": procedure.frame.lineno,
                     }
                 }
-            else:
-                return {}
         else:
             return {
                 "source": {
@@ -183,8 +149,6 @@ class ExceptionProperty(JSONProperty):
             exc_cls, exc, exc_tb = record.exc_info
             # format_exception returns a list of lines. Join it a single sing or otherwise an array will be logged.
             return {"exception": "".join(traceback.format_exception(exc_cls, exc, exc_tb))}
-        else:
-            return {}
 
 
 class EnvironmentProperty(JSONProperty):

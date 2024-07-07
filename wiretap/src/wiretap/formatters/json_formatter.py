@@ -29,7 +29,7 @@ class JSONFormatter(logging.Formatter):
 
     def format(self, record):
         # Merges each new dictionary with the previous one.
-        entry = functools.reduce(lambda e, p: e | p.emit(record), self.properties, {})
+        entry = functools.reduce(lambda e, p: e | (p.emit(record) or {}), self.properties, {})
 
         return json.dumps(
             entry,

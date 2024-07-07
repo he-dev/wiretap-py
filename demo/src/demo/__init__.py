@@ -136,9 +136,11 @@ def logging_with_custom_correlation():
     with wiretap.log_procedure(correlation_id="this-is-custom-id") as t:
         pass
 
+
 def logging_multiple_times():
     with wiretap.log_procedure():
         pass
+
 
 if __name__ == "__main__":
     # asyncio.run(main())

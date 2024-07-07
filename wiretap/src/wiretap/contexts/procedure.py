@@ -10,7 +10,7 @@ from typing import Any, Optional, Iterator, Tuple
 
 from _reusable import Elapsed, map_to_str
 from wiretap.contexts.iteration import IterationContext
-from wiretap.data import Procedure, WIRETAP_KEY, Trace, Entry, Correlation
+from wiretap.data import Procedure, WIRETAP_KEY, Trace, Entry, Execution
 
 procedure_calls: ContextVar[dict[Tuple[str, ...], int]] = ContextVar("procedure_calls", default=defaultdict(lambda: 0))
 
@@ -29,7 +29,6 @@ class ProcedureContext(Procedure):
             name: str | None,
             data: dict[str, Any] | None,
             tags: set[Any] | None,
-            correlation: Correlation | None,
             **kwargs: Any
     ):
         self.parent = parent
@@ -40,7 +39,6 @@ class ProcedureContext(Procedure):
         self.tags: set[str] = (parent.tags if parent else map_to_str(tags)) | map_to_str(tags)
         self.elapsed = Elapsed()
         self.in_progress = True
-        self.correlation = correlation or Correlation(self.id, type="default")
         self.logger = logging.getLogger(name)
         self.depth: int = parent.depth + 1 if parent else 1
         self.trace_count: int = 0
@@ -49,6 +47,10 @@ class ProcedureContext(Procedure):
             calls = procedure_calls.get()
             calls[key] += 1
             self.times = calls[key]
+
+    @property
+    def execution(self) -> Execution:
+        return Execution(self)
 
     def __iter__(self) -> Iterator["ProcedureContext"]:
         current: Optional["ProcedureContext"] = self
@@ -83,8 +85,8 @@ class ProcedureContext(Procedure):
                     trace=Trace(
                         name=name,
                         message=message,
-                        data=self.data | (data or {}) | kwargs,
-                        tags=self.tags | map_to_str(tags),
+                        data=(data or {}) | kwargs,
+                        tags=map_to_str(tags),
                     )
                 )
             }
@@ -205,7 +207,7 @@ class ProcedureContext(Procedure):
         self.log_trace(
             name=name,
             message=message,
-            data=(data or {}) | self.data,
+            data=data,
             tags=tags,
             exc_info=exc_info,
             in_progress=False,
@@ -224,7 +226,7 @@ class ProcedureContext(Procedure):
         self.log_last(
             name="error",
             message=message,
-            data=(data or {}) | self.data,
+            data=data,
             tags=tags,
             exc_info=exc_info,
             **kwargs

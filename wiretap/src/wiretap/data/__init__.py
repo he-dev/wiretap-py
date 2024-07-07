@@ -16,19 +16,24 @@ class Procedure(Protocol):
     data: dict[str, Any] | None
     tags: set[str] | None
     elapsed: Elapsed
-    correlation: "Correlation"
     depth: int
     times: int
     trace_count: int
+
+    @property
+    def execution(self) -> "Execution":
+        pass
 
     def __iter__(self) -> Iterator["Procedure"]:
         pass
 
 
-@dataclasses.dataclass
-class Correlation:
-    id: Any
-    type: str = "default"
+class Execution:
+
+    def __init__(self, procedure: Procedure):
+        self.id: uuid.UUID = [x.id for x in procedure][-1]
+        self.path: list[str] = [x.name for x in procedure]
+        self.elapsed: float = [x.elapsed.current for x in procedure][-1]
 
 
 @dataclasses.dataclass

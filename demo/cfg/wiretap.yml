@@ -30,7 +30,6 @@ formatters:
       - (): wiretap.json.properties.EnvironmentProperty
         names:
           - app_id
-      - wiretap.json.properties.CorrelationProperty
 handlers:
   console:
     class: logging.StreamHandler

@@ -8,7 +8,6 @@ from . import json
 from . import tag
 from .context import current_procedure
 from .contexts import ProcedureContext
-from .data import Correlation
 
 
 def dict_config(config: dict):
@@ -23,7 +22,6 @@ def log_procedure(
         message: str | None = None,
         data: dict[str, Any] | None = None,
         tags: set[Any] | None = None,
-        correlation_id: Any | None = None,
         **kwargs
 ) -> Iterator[ProcedureContext]:
     """This function logs telemetry for an activity scope. It returns the activity scope that provides additional APIs."""
@@ -32,40 +30,32 @@ def log_procedure(
     frame = stack[2]
     parent = current_procedure.get()
 
-    correlation: Correlation | None = None
-    if parent:
-        correlation = parent.value.correlation
-
-    if correlation_id:
-        correlation = Correlation(id=correlation_id, type="custom")
-
-    activity = ProcedureContext(
+    procedure = ProcedureContext(
         frame=frame,
         parent=parent.value if parent else None,
         name=name,
         data=data,
         tags=tags,
-        correlation=correlation,
         **kwargs
     )
-    token = current_procedure.set(Node(value=activity, parent=parent, id=activity.id))
+    token = current_procedure.set(Node(value=procedure, parent=parent, id=procedure.id))
     try:
-        activity.log_trace(name=enclosing_trace_names[0], message=message)
-        yield activity
+        procedure.log_trace(name=enclosing_trace_names[0], message=message)
+        yield procedure
     except Exception:
         exc_cls, exc, exc_tb = sys.exc_info()
         if exc is not None:
-            activity.log_last(name=enclosing_trace_names[2], tags={tag.UNHANDLED}, exc_info=True)
+            procedure.log_last(name=enclosing_trace_names[2], tags={tag.UNHANDLED}, exc_info=True)
         raise
     finally:
-        activity.log_last(name=enclosing_trace_names[1])
+        procedure.log_last(name=enclosing_trace_names[1])
         current_procedure.reset(token)
 
 
 def log_begin(
         name: str | None = None,
         message: str | None = None,
-        body: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
         tags: set[Any] | None = None,
         correlation_id: Any | None = None,
         **kwargs
@@ -74,7 +64,7 @@ def log_begin(
         enclosing_trace_names=("begin", "end", "error"),
         name=name,
         message=message,
-        data=body,
+        data=data,
         tags=tags,
         correlation_id=correlation_id,
         **kwargs
@@ -84,7 +74,7 @@ def log_begin(
 def log_connect(
         name: str | None = None,
         message: str | None = None,
-        body: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
         tags: set[Any] | None = None,
         correlation_id: Any | None = None,
         **kwargs
@@ -93,7 +83,7 @@ def log_connect(
         enclosing_trace_names=("connect", "disconnect", "error"),
         name=name,
         message=message,
-        data=body,
+        data=data,
         tags=tags,
         correlation_id=correlation_id,
         **kwargs
@@ -103,7 +93,7 @@ def log_connect(
 def log_open(
         name: str | None = None,
         message: str | None = None,
-        body: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
         tags: set[Any] | None = None,
         correlation_id: Any | None = None,
         **kwargs
@@ -112,7 +102,7 @@ def log_open(
         enclosing_trace_names=("open", "close", "error"),
         name=name,
         message=message,
-        data=body,
+        data=data,
         tags=tags,
         correlation_id=correlation_id,
         **kwargs
@@ -122,7 +112,7 @@ def log_open(
 def log_transaction(
         name: str | None = None,
         message: str | None = None,
-        body: dict[str, Any] | None = None,
+        data: dict[str, Any] | None = None,
         tags: set[Any] | None = None,
         correlation_id: Any | None = None,
         **kwargs
@@ -131,7 +121,7 @@ def log_transaction(
         enclosing_trace_names=("begin", "commit", "rollback"),
         name=name,
         message=message,
-        data=body,
+        data=data,
         tags=tags,
         correlation_id=correlation_id,
         **kwargs
