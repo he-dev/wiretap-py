@@ -9,10 +9,12 @@ WIRETAP_KEY = "_wiretap"
 
 
 class Procedure(Protocol):
+    func: str
+    file: str
+    line: int
     parent: Optional["Procedure"]
     id: uuid.UUID
-    name: str | None
-    frame: inspect.FrameInfo
+    name: str
     data: dict[str, Any] | None
     tags: set[str] | None
     elapsed: Elapsed

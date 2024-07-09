@@ -110,11 +110,13 @@ class SourceProperty(JSONProperty):
             if procedure.trace_count == 1:
                 return {
                     "source": {
-                        "func": procedure.frame.function,
-                        "file": procedure.frame.filename,
-                        "line": procedure.frame.lineno,
+                        "func": procedure.func,
+                        "file": procedure.file,
+                        "line": procedure.line,
                     }
                 }
+            else:
+                return {}
         else:
             return {
                 "source": {
@@ -132,6 +134,8 @@ class ExceptionProperty(JSONProperty):
             exc_cls, exc, exc_tb = record.exc_info
             # format_exception returns a list of lines. Join it a single sing or otherwise an array will be logged.
             return {"exception": "".join(traceback.format_exception(exc_cls, exc, exc_tb))}
+        else:
+            return {}
 
 
 class EnvironmentProperty(JSONProperty):

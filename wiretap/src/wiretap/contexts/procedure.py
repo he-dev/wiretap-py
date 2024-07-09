@@ -24,19 +24,23 @@ class ProcedureContext(Procedure):
 
     def __init__(
             self,
-            frame: inspect.FrameInfo,
+            func: str,
+            file: str,
+            line: int,
             parent: Optional["ProcedureContext"],
-            name: str | None,
+            name: str,
             data: dict[str, Any] | None,
             tags: set[Any] | None,
             **kwargs: Any
     ):
         self.parent = parent
         self.id = uuid.uuid4()
-        self.name = name or frame.function
-        self.frame = frame
-        self.data = (parent.data if parent else {}) | (data or {}) | kwargs
+        self.name = name
+        self.data: dict[str, Any] = (parent.data if parent else {}) | (data or {}) | kwargs
         self.tags: set[str] = (parent.tags if parent else map_to_str(tags)) | map_to_str(tags)
+        self.func = func
+        self.file = file
+        self.line = line
         self.elapsed = Elapsed()
         self.in_progress = True
         self.logger = logging.getLogger(name)

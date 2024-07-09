@@ -29,9 +29,11 @@ def log_procedure(
     parent = current_procedure.get()
 
     procedure = ProcedureContext(
-        frame=frame,
+        func=frame.function,
+        file=frame.filename,
+        line=frame.lineno,
         parent=parent.value if parent else None,
-        name=name,
+        name=name or frame.function,
         data=data,
         tags=tags,
         **kwargs
