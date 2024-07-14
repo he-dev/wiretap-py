@@ -204,9 +204,9 @@ class ProcedureContext(Procedure):
             **kwargs
     ) -> None:
         """This function logs a regular end of an activity."""
-        exc_cls, exc, exc_tb = sys.exc_info()
-        if exc_cls:
-            data = (data or {}) | {"reason": exc_cls.__name__}
+        # exc_cls, exc, exc_tb = sys.exc_info()
+        # if exc_cls:
+        #    data = (data or {}) | {"reason": exc_cls.__name__}
 
         self.log_trace(
             name=name,

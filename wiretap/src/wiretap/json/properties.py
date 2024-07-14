@@ -133,7 +133,12 @@ class ExceptionProperty(JSONProperty):
         if record.exc_info:
             exc_cls, exc, exc_tb = record.exc_info
             # format_exception returns a list of lines. Join it a single sing or otherwise an array will be logged.
-            return {"exception": "".join(traceback.format_exception(exc_cls, exc, exc_tb))}
+            return {
+                "exception": {
+                    "name": exc_cls.__name__,
+                    "message": str(exc),
+                    "stack_trace": "".join(traceback.format_exception(exc_cls, exc, exc_tb))}
+            }
         else:
             return {}
 
