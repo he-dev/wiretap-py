@@ -135,7 +135,7 @@ class ExceptionProperty(JSONProperty):
             # format_exception returns a list of lines. Join it a single sing or otherwise an array will be logged.
             return {
                 "exception": {
-                    "name": exc_cls.__name__,
+                    "name": exc_cls.__name__,  # type: ignore
                     "message": str(exc),
                     "stack_trace": "".join(traceback.format_exception(exc_cls, exc, exc_tb))}
             }
