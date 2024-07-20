@@ -1,5 +1,6 @@
 import itertools
 from collections import deque
+from enum import Enum
 from importlib import import_module
 from typing import TypeVar, Optional, Iterable, Type, Any, Generator
 
@@ -63,3 +64,19 @@ class Welford:
     def std_dev(self) -> float:
         """Calculates the standard deviation of the dataset."""
         return self.var ** 0.5  # Standard deviation.
+
+
+class LowerEnum(Enum):
+    def __str__(self):
+        return self.name.lower()
+
+    def __repr__(self):
+        return str(self)
+
+
+class KebabEnum(Enum):
+    def __str__(self):
+        return self.name.lower().replace('_', '-').lower()
+
+    def __repr__(self):
+        return str(self)

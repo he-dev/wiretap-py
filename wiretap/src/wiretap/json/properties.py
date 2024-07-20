@@ -86,6 +86,7 @@ class TraceProperty(JSONProperty):
             return {
                 "trace": {
                     "name": trace.name,
+                    "level": record.levelname.lower(),
                     "message": trace.message,
                     "data": trace.data,
                     "tags": sorted(trace.tags),
@@ -95,6 +96,7 @@ class TraceProperty(JSONProperty):
             return {
                 "trace": {
                     "name": record.levelname.lower(),
+                    "level": record.levelname.lower(),
                     "message": record.msg,
                     "data": None,
                     "tags": ["plain"]

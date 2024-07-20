@@ -1,9 +1,11 @@
 import dataclasses
 import inspect
+import logging
 import uuid
+from enum import auto, IntEnum
 from typing import Protocol, Optional, Any, Iterator
 
-from _reusable import Elapsed
+from _reusable import Elapsed, KebabEnum
 
 WIRETAP_KEY = "_wiretap"
 
@@ -44,6 +46,21 @@ class Trace:
     message: str | None
     data: dict[str, Any]
     tags: set[str]
+
+
+class TraceLevel(IntEnum):
+    DEBUG = logging.DEBUG
+    INFO = logging.INFO
+    ERROR = logging.ERROR
+
+
+class TraceTag(KebabEnum):
+    AUTO = auto()
+    EVENT = auto()
+    PLAIN = auto()
+    LOOP = auto()
+    UNHANDLED = auto()
+    FEATURE = auto()
 
 
 @dataclasses.dataclass

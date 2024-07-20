@@ -3,9 +3,9 @@ import inspect
 import sys
 from typing import Any, Iterator, Type, Tuple, ContextManager
 
-from . import tag
 from .context import current_procedure
 from .contexts import ProcedureContext
+from .data import TraceLevel, TraceTag
 
 
 def dict_config(config: dict):
@@ -40,15 +40,15 @@ def log_procedure(
     )
     token = current_procedure.set(Node(value=procedure, parent=parent, id=procedure.id))
     try:
-        procedure.log_trace(name=enclosing_trace_names[0], message=message)
+        procedure.log_trace(name=enclosing_trace_names[0], message=message, tags={TraceTag.EVENT}, level=TraceLevel.DEBUG)
         yield procedure
     except Exception:
         exc_cls, exc, exc_tb = sys.exc_info()
         if exc is not None:
-            procedure.log_last(name=enclosing_trace_names[2], tags={tag.UNHANDLED}, exc_info=True)
+            procedure.log_last(name=enclosing_trace_names[2], tags={TraceTag.UNHANDLED}, exc_info=True, level=TraceLevel.ERROR)
         raise
     finally:
-        procedure.log_last(name=enclosing_trace_names[1])
+        procedure.log_last(name=enclosing_trace_names[1], level=TraceLevel.INFO)
         current_procedure.reset(token)
 
 
@@ -118,23 +118,6 @@ def log_transaction(
         tags=tags,
         **kwargs
     )
-
-
-# def log_resource(
-#         name: str,
-#         message: str | None = None,
-#         note: dict[str, Any] | None = None,
-#         tags: set[str] | None = None,
-#         **kwargs
-# ) -> Callable[[], None]:
-#     """This function logs telemetry for a resource. It returns a function that logs the end of its usage when called."""
-#     scope = log_activity(name, message, note, tags, **kwargs)
-#     scope.__enter__()
-#
-#     def dispose():
-#         scope.__exit__(None, None, None)
-#
-#     return dispose
 
 
 def no_exc_info_if(exception_type: Type[BaseException] | Tuple[Type[BaseException], ...]) -> bool:

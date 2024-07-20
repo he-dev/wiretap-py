@@ -1,5 +1,0 @@
-AUTO = "auto"
-PLAIN = "plain"
-CUSTOM = "custom"
-UNHANDLED = "unhandled"
-VIRTUAL = "virtual"

@@ -13,10 +13,11 @@ formatters:
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
-      {asctime}.{msecs:03.0f} {indent} {procedure}
-      | {procedure_data} | {procedure_tags}
-      | {trace} | {elapsed:0.3f} | {message}
-      | {trace_data} | {trace_tags}
+      {asctime}.{msecs:03.0f} {indent}
+      {procedure}: {trace} | {elapsed:0.3f} sec
+      | {procedure_data}, {trace_data}
+      | {procedure_tags}, {trace_tags}
+      | {message}
   elastic:
     (): wiretap.formatters.JSONFormatter
     encoders:
@@ -64,5 +65,6 @@ loggers:
     handlers: [ "console", "elastic_file" ]
     # handlers: [ "console" ]
     level: "DEBUG"
+    # level: "INFO"
   PIL:
     level: "WARNING"

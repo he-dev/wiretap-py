@@ -10,14 +10,14 @@ from typing import Any, Optional, Iterator, Tuple
 
 from _reusable import Elapsed, map_to_str
 from wiretap.contexts.iteration import IterationContext
-from wiretap.data import Procedure, WIRETAP_KEY, Trace, Entry, Execution
+from wiretap.data import Procedure, WIRETAP_KEY, Trace, Entry, Execution, TraceLevel, TraceTag
 
 procedure_calls: ContextVar[dict[Tuple[str, ...], int]] = ContextVar("procedure_calls", default=defaultdict(lambda: 0))
 
 
 class ProcedureContext(Procedure):
     """
-    This class represents an activity for which telemetry is collected.
+    This class represents a procedure for which telemetry is collected.
     """
 
     lock = threading.Lock()
@@ -70,8 +70,10 @@ class ProcedureContext(Procedure):
             tags: set[Any] | None = None,
             exc_info: bool = False,
             in_progress: bool = True,
+            level: TraceLevel = TraceLevel.DEBUG,
             **kwargs
     ) -> None:
+        """This function logs a single trace."""
         if not self.in_progress:
             if in_progress:
                 raise Exception(f"The current '{self.name}' activity is no longer in progress.")
@@ -80,7 +82,7 @@ class ProcedureContext(Procedure):
 
         self.trace_count += 1
         self.logger.log(
-            level=logging.INFO,
+            level=level,
             msg=message,
             exc_info=exc_info,
             extra={
@@ -102,10 +104,10 @@ class ProcedureContext(Procedure):
             self,
             message: str | None = None,
             data: dict | None = None,
-            tags: set[str] | None = None,
+            tags: set[Any] | None = None,
             **kwargs
     ) -> None:
-        """This function logs any state."""
+        """This function logs snapshots."""
 
         if not data and not kwargs:
             raise ValueError("Snapshot trace requires 'data'.")
@@ -116,6 +118,7 @@ class ProcedureContext(Procedure):
             data=data,
             tags=tags,
             in_progress=True,
+            level=TraceLevel.DEBUG,
             **kwargs
         )
 
@@ -123,13 +126,13 @@ class ProcedureContext(Procedure):
             self,
             message: str | None = None,
             data: dict | None = None,
-            tags: set[str] | None = None,
+            tags: set[Any] | None = None,
             **kwargs
     ) -> None:
-        """This function logs any state."""
+        """This function logs metrics."""
 
         if not data and not kwargs:
-            raise ValueError("Metric trace requires 'body'.")
+            raise ValueError("Metric trace requires 'data'.")
 
         self.log_trace(
             name="metric",
@@ -137,6 +140,7 @@ class ProcedureContext(Procedure):
             data=data,
             tags=tags,
             in_progress=True,
+            level=TraceLevel.INFO,
             **kwargs
         )
 
@@ -144,16 +148,17 @@ class ProcedureContext(Procedure):
             self,
             message: str | None = None,
             data: dict | None = None,
-            tags: set[str] | None = None,
+            tags: set[Any] | None = None,
             **kwargs
     ) -> None:
-        """This function logs conditional branches."""
+        """This function logs some additional information."""
         self.log_trace(
             name="info",
             message=message,
             data=data,
             tags=tags,
             in_progress=True,
+            level=TraceLevel.INFO,
             **kwargs
         )
 
@@ -161,7 +166,7 @@ class ProcedureContext(Procedure):
             self,
             message: str | None = None,
             data: dict | None = None,
-            tags: set[str] | None = None,
+            tags: set[Any] | None = None,
             **kwargs
     ) -> None:
         """This function logs conditional branches."""
@@ -169,8 +174,9 @@ class ProcedureContext(Procedure):
             name="branch",
             message=message,
             data=data,
-            tags=tags,
+            tags=(tags or set()) | {TraceTag.EVENT},
             in_progress=True,
+            level=TraceLevel.DEBUG,
             **kwargs
         )
 
@@ -178,7 +184,7 @@ class ProcedureContext(Procedure):
     def log_loop(
             self,
             message: str | None = None,
-            tags: set[str] | None = None,
+            tags: set[Any] | None = None,
             counter_name: str | None = None,
             **kwargs,
     ) -> Iterator[IterationContext]:
@@ -190,7 +196,7 @@ class ProcedureContext(Procedure):
             self.log_metric(
                 message=message,
                 data=loop.dump(),
-                tags=(tags or set()) | {"loop"},
+                tags=(tags or set()) | {TraceTag.LOOP},
                 **kwargs
             )
 
@@ -199,22 +205,20 @@ class ProcedureContext(Procedure):
             name: str,
             message: str | None = None,
             data: dict | None = None,
-            tags: set[str] | None = None,
+            tags: set[Any] | None = None,
             exc_info: bool = False,
+            level: TraceLevel = TraceLevel.INFO,
             **kwargs
     ) -> None:
-        """This function logs a regular end of an activity."""
-        # exc_cls, exc, exc_tb = sys.exc_info()
-        # if exc_cls:
-        #    data = (data or {}) | {"reason": exc_cls.__name__}
-
+        """This function logs a regular end of the procedure."""
         self.log_trace(
             name=name,
             message=message,
             data=data,
-            tags=tags,
+            tags=(tags or set()) | {TraceTag.EVENT},
             exc_info=exc_info,
             in_progress=False,
+            level=level,
             **kwargs
         )
 
@@ -226,12 +230,13 @@ class ProcedureContext(Procedure):
             exc_info: bool = True,
             **kwargs
     ) -> None:
-        """This function logs an error in an activity."""
+        """This function logs an error in the procedure."""
         self.log_last(
             name="error",
             message=message,
             data=data,
-            tags=tags,
+            tags=(tags or set()) | {TraceTag.EVENT},
             exc_info=exc_info,
+            level=TraceLevel.ERROR,
             **kwargs
         )
