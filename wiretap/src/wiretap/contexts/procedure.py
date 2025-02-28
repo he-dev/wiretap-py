@@ -207,7 +207,7 @@ class ProcedureContext(Procedure):
             data: dict | None = None,
             tags: set[Any] | None = None,
             exc_info: bool = False,
-            level: TraceLevel = TraceLevel.INFO,
+            level: TraceLevel = TraceLevel.DEBUG,
             **kwargs
     ) -> None:
         """This function logs a regular end of the procedure."""

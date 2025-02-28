@@ -1,4 +1,4 @@
-from .encoders import JSONMultiEncoder
+from .encoders import JSONEncoderCache, JSONEncoderDefaultFactory
 
 
 

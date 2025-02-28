@@ -1,74 +1,94 @@
-import functools
-import json
-import pathlib
-import uuid
-from datetime import datetime
-from enum import Enum
-from typing import Type
+from json import JSONEncoder
+from typing import Type, Any, Callable, Protocol, runtime_checkable, cast
 
-from _reusable import resolve_class
+import cachetools
 
 
-class JSONMultiEncoder(json.JSONEncoder):
-
-    def __init__(self, **kwargs):
-        encoders = kwargs.pop('encoders', [])  # The default encoder doesn't support this name.
-        super().__init__(**kwargs)
-        temp = [resolve_class(e)() for e in encoders]  # Create encoders.
-        # Map encoders to a dictionary for faster lookup.
-        self.encoders = functools.reduce(lambda d, e: d | {t: e for t in e.types}, temp, {})
-
-    def default(self, obj):
-        if isinstance(obj, Enum):
-            return str(obj)
-
-        # Use an encoder that can handle the type of obj or the default one.
-        encoder: json.JSONEncoder = self.encoders.get(type(obj), super(JSONMultiEncoder, self))
-        return encoder.default(obj)
+@runtime_checkable
+class JSONEncoderPro(Protocol):
+    # This protocol extends the JSONEncoder
+    # by allowing to check whether it supports the type being serialized.
+    def supports(self, obj_type: Type) -> bool: ...
 
 
-class DateTimeEncoder(json.JSONEncoder):
-    types: set[Type] = {datetime}
+class JSONEncoderCache:
+    # This class caches the encoder search results so that the loop doesn't run on every log.
 
-    def default(self, obj):
+    @classmethod
+    @cachetools.cached(cache={}, key=lambda c, e, t: t)
+    def get_encoder_for(cls, encoders: list[JSONEncoder], obj_type: Type) -> JSONEncoder:
+        # print(f"Searching encoder for {obj_type}") # Debugging message to see how often the search is used.
+
+        # Find an encoder that can handle the obj_type or use the default one otherwise.
+        for encoder in encoders:
+            if isinstance(encoder, JSONEncoderPro):
+                if encoder.supports(obj_type):
+                    return cast(JSONEncoder, encoder)
+        return JSONEncoder()
+
+
+class JSONEncoderDefaultFactory:
+    # This class creates a custom default-func that uses multiple encoders.
+
+    @staticmethod
+    def create_func(encoders: list[JSONEncoder]) -> Callable[[Any], Any | None]:
+        def _default(obj: Any) -> Any | None:
+            return JSONEncoderCache.get_encoder_for(encoders, type(obj)).default(obj)
+
+        return _default
+
+
+class DateTimeEncoder(JSONEncoder, JSONEncoderPro):
+    def supports(self, obj_type: Type) -> bool:
+        from datetime import datetime
+        return issubclass(obj_type, datetime)
+
+    def default(self, obj) -> Any | None:
         return obj.isoformat()
 
 
-class FloatEncoder(json.JSONEncoder):
-    types: set[Type] = {float}
-
+class FloatEncoder(JSONEncoder, JSONEncoderPro):
     def __init__(self, precision: int = 3):
         super().__init__()
         self.precision = precision
 
-    def default(self, obj):
-        print(obj)
-        return super().default(round(obj, self.precision))
+    def supports(self, obj_type: Type) -> bool:
+        return issubclass(obj_type, float)
+
+    def default(self, obj) -> Any | None:
+        return JSONEncoder().default(round(obj, self.precision))
 
 
-class UUIDEncoder(json.JSONEncoder):
-    types: set[Type] = {uuid.UUID}
+class UUIDEncoder(JSONEncoder, JSONEncoderPro):
+    def supports(self, obj_type: Type) -> bool:
+        import uuid
+        return issubclass(obj_type, uuid.UUID)
 
-    def default(self, obj):
-        return obj.__str__()
-
-
-class PathEncoder(json.JSONEncoder):
-    types: set[Type] = {pathlib.Path}
-
-    def default(self, obj):
-        return obj.as_posix()
-
-
-class EnumEncoder(json.JSONEncoder):
-    types: set[Type] = {Enum}
-
-    def default(self, obj):
+    def default(self, obj) -> Any | None:
         return str(obj)
 
 
-class SetEncoder(json.JSONEncoder):
-    types: set[Type] = {set}
+class PathEncoder(JSONEncoder, JSONEncoderPro):
+    def supports(self, obj_type: Type) -> bool:
+        import pathlib
+        return issubclass(obj_type, pathlib.Path)
 
-    def default(self, obj):
+    def default(self, obj) -> Any | None:
+        return obj.as_posix()
+
+
+class EnumEncoder(JSONEncoder, JSONEncoderPro):
+    def supports(self, obj_type: Type) -> bool:
+        from enum import Enum
+        return issubclass(obj_type, Enum)
+
+    def default(self, obj) -> Any | None:
+        return str(obj)
+
+
+class SetEncoder(JSONEncoder, JSONEncoderPro):
+    def supports(self, obj_type: Type) -> bool:
+        return issubclass(obj_type, set)
+
+    def default(self, obj) -> Any | None:
         return list(obj)

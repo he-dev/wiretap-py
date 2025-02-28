@@ -4,6 +4,7 @@ import logging
 import logging.config
 import logging.handlers
 import os
+import pathlib
 import random
 import time
 from enum import Enum
@@ -142,6 +143,11 @@ def logging_multiple_times():
         pass
 
 
+def logging_path():
+    with wiretap.log_procedure(path=pathlib.Path("c:/temp/test.log")):
+        pass
+
+
 if __name__ == "__main__":
     # asyncio.run(main())
     # main_proc()
@@ -167,3 +173,4 @@ if __name__ == "__main__":
     logging_exception_without_stack()
     logging_with_custom_correlation()
     logging_multiple_times()
+    logging_path()

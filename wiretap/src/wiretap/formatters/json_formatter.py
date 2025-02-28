@@ -4,14 +4,14 @@ import logging
 from typing import Any, Tuple
 
 from _reusable import resolve_class
-from wiretap.json import JSONMultiEncoder
+from wiretap.json import JSONEncoderDefaultFactory
 
 
 class JSONFormatter(logging.Formatter):
 
     def __init__(self, encoders: list[str], properties: list[str]) -> None:
         super().__init__()
-        self.encoders = encoders
+        self.encoders = [resolve_class(e)() for e in encoders]
 
         def parse(item: Any) -> Tuple[str, dict[str, Any]]:
             """Parses JSONProperty into type name and parameters."""
@@ -35,6 +35,7 @@ class JSONFormatter(logging.Formatter):
             entry,
             sort_keys=False,
             allow_nan=False,
-            cls=JSONMultiEncoder,
-            encoders=self.encoders
+            # cls=JSONMultiEncoder,
+            # encoders=self.encoders
+            default=JSONEncoderDefaultFactory.create_func(self.encoders)
         )
