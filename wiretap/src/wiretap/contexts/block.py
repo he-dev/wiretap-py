@@ -1,21 +1,21 @@
 import contextlib
 import inspect
 import logging
-import sys
 import threading
 import uuid
+from inspect import FrameInfo
 from collections import defaultdict
 from contextvars import ContextVar
 from typing import Any, Optional, Iterator, Tuple
 
 from _reusable import Elapsed, map_to_str
 from wiretap.contexts.iteration import IterationContext
-from wiretap.data import Procedure, WIRETAP_KEY, Trace, Entry, Execution, TraceLevel, TraceTag
+from wiretap.data import Block, Trace, TraceLevel, TraceTag, BLOCK_KEY, TRACE_KEY
 
 procedure_calls: ContextVar[dict[Tuple[str, ...], int]] = ContextVar("procedure_calls", default=defaultdict(lambda: 0))
 
 
-class ProcedureContext(Procedure):
+class BlockContext(Block):
     """
     This class represents a procedure for which telemetry is collected.
     """
@@ -24,40 +24,32 @@ class ProcedureContext(Procedure):
 
     def __init__(
             self,
-            func: str,
-            file: str,
-            line: int,
-            parent: Optional["ProcedureContext"],
+            frame: FrameInfo,
+            parent: Optional["BlockContext"],
             name: str,
-            data: dict[str, Any] | None,
-            tags: set[Any] | None,
-            **kwargs: Any
+            tags: set[Any] | None
     ):
         self.parent = parent
         self.id = uuid.uuid4()
         self.name = name
-        self.data: dict[str, Any] = (parent.data if parent else {}) | (data or {}) | kwargs
+        # self.state: dict[str, Any] = (parent.state if parent else {}) | (state or {}) | kwargs
         self.tags: set[str] = (parent.tags if parent else map_to_str(tags)) | map_to_str(tags)
-        self.func = func
-        self.file = file
-        self.line = line
+        self.frame = frame
         self.elapsed = Elapsed()
         self.in_progress = True
         self.logger = logging.getLogger(name)
         self.depth: int = parent.depth + 1 if parent else 1
         self.trace_count: int = 0
-        with ProcedureContext.lock:
+        self.traces: list[Trace] = []
+
+        with BlockContext.lock:
             key = tuple((p.name for p in self))
             calls = procedure_calls.get()
             calls[key] += 1
             self.times = calls[key]
 
-    @property
-    def execution(self) -> Execution:
-        return Execution(self)
-
-    def __iter__(self) -> Iterator["ProcedureContext"]:
-        current: Optional["ProcedureContext"] = self
+    def __iter__(self) -> Iterator["BlockContext"]:
+        current: Optional["BlockContext"] = self
         while current:
             yield current
             current = current.parent
@@ -66,7 +58,7 @@ class ProcedureContext(Procedure):
             self,
             name: str | None = None,
             message: str | None = None,
-            data: dict | None = None,
+            state: dict | None = None,
             tags: set[Any] | None = None,
             exc_info: bool = False,
             in_progress: bool = True,
@@ -80,102 +72,62 @@ class ProcedureContext(Procedure):
             else:
                 return
 
-        self.trace_count += 1
+        with BlockContext.lock:
+            self.trace_count += 1
+
         self.logger.log(
             level=level,
             msg=message,
             exc_info=exc_info,
             extra={
-                WIRETAP_KEY: Entry(
-                    procedure=self,
-                    trace=Trace(
-                        name=name,
-                        message=message,
-                        data=(data or {}) | kwargs,
-                        tags=map_to_str(tags),
-                    )
+                BLOCK_KEY: self,
+                TRACE_KEY: Trace(
+                    name=name,
+                    message=message,
+                    state=(state or {}) | kwargs,
+                    tags=map_to_str(tags),
                 )
             }
         )
         if not in_progress:
             self.in_progress = False
 
-    def log_snapshot(
-            self,
-            message: str | None = None,
-            data: dict | None = None,
-            tags: set[Any] | None = None,
-            **kwargs
-    ) -> None:
-        """This function logs snapshots."""
-
-        if not data and not kwargs:
-            raise ValueError("Snapshot trace requires 'data'.")
-
-        self.log_trace(
-            name="snapshot",
-            message=message,
-            data=data,
-            tags=tags,
-            in_progress=True,
-            level=TraceLevel.DEBUG,
-            **kwargs
-        )
-
-    def log_metric(
-            self,
-            message: str | None = None,
-            data: dict | None = None,
-            tags: set[Any] | None = None,
-            **kwargs
-    ) -> None:
-        """This function logs metrics."""
-
-        if not data and not kwargs:
-            raise ValueError("Metric trace requires 'data'.")
-
-        self.log_trace(
-            name="metric",
-            message=message,
-            data=data,
-            tags=tags,
-            in_progress=True,
-            level=TraceLevel.INFO,
-            **kwargs
-        )
-
     def log_info(
             self,
+            name: str = "info",
             message: str | None = None,
-            data: dict | None = None,
+            state: dict | None = None,
             tags: set[Any] | None = None,
+            in_progress: bool = True,
             **kwargs
     ) -> None:
         """This function logs some additional information."""
         self.log_trace(
-            name="info",
+            name,
             message=message,
-            data=data,
+            state=state,
             tags=tags,
-            in_progress=True,
+            in_progress=in_progress,
             level=TraceLevel.INFO,
             **kwargs
         )
 
-    def log_branch(
+    def log_debug(
             self,
+            name: str = "debug",
             message: str | None = None,
-            data: dict | None = None,
+            state: dict | None = None,
             tags: set[Any] | None = None,
+            in_progress: bool = True,
             **kwargs
     ) -> None:
-        """This function logs conditional branches."""
+        """This function logs some additional information."""
         self.log_trace(
-            name="branch",
+            name=name,
             message=message,
-            data=data,
-            tags=(tags or set()) | {TraceTag.EVENT},
-            in_progress=True,
+            state=state,
+            tags=tags,
+            in_progress=in_progress,
             level=TraceLevel.DEBUG,
             **kwargs
         )
@@ -200,43 +152,31 @@ class ProcedureContext(Procedure):
                 **kwargs
             )
 
-    def log_last(
-            self,
-            name: str,
-            message: str | None = None,
-            data: dict | None = None,
-            tags: set[Any] | None = None,
-            exc_info: bool = False,
-            level: TraceLevel = TraceLevel.DEBUG,
-            **kwargs
-    ) -> None:
-        """This function logs a regular end of the procedure."""
-        self.log_trace(
-            name=name,
-            message=message,
-            data=data,
-            tags=(tags or set()) | {TraceTag.EVENT},
-            exc_info=exc_info,
-            in_progress=False,
-            level=level,
-            **kwargs
-        )
-
     def log_error(
             self,
             message: str | None = None,
-            data: dict | None = None,
-            tags: set[str] | None = None,
-            exc_info: bool = True,
+            state: dict | None = None,
+            tags: set[Any] | None = None,
             **kwargs
     ) -> None:
         """This function logs an error in the procedure."""
-        self.log_last(
+        self.log_trace(
             name="error",
             message=message,
-            data=data,
+            state=state,
             tags=(tags or set()) | {TraceTag.EVENT},
-            exc_info=exc_info,
             level=TraceLevel.ERROR,
+            in_progress=False,
             **kwargs
+        )
+
+    def log_exception(
+            self
+    ) -> None:
+        """This function logs an error in the procedure."""
+        self.log_trace(
+            name="exception",
+            exc_info=True,
+            level=TraceLevel.EXCEPTION,
+            in_progress=False
         )

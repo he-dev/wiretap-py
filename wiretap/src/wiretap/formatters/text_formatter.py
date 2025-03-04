@@ -1,6 +1,6 @@
 import logging
 
-from wiretap.helpers import unpack
+from wiretap.helpers import get_block, get_trace
 
 DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {type} | {elapsed:0.1f} | {message} | {extra} | {tags}"
 
@@ -8,34 +8,31 @@ DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {type} | {elapse
 class TextFormatter(logging.Formatter):
     indent: str = "."
 
-    def format(self, record):
-        procedure, trace = unpack(record)
+    def format(self, record: logging.LogRecord):
+        block = get_block(record)
 
-        if procedure:
-            record.procedure = procedure.name
-            record.procedure_data = procedure.data
-            record.procedure_tags = sorted(procedure.tags)
-            record.elapsed = procedure.elapsed.current
-            record.indent = self.indent * procedure.depth
+        if block:
+            record.block = block.name
+            record.elapsed = block.elapsed.current
+            record.indent = self.indent * block.depth
 
+            trace = get_trace(record)
             if trace:
                 record.trace = trace.name
                 record.message = trace.message
-                record.trace_data = trace.data
-                record.trace_tags = sorted(trace.tags)
+                record.trace_state = trace.state
+                record.trace_tags = sorted(trace.tags | block.tags)
             else:
-                record.trace = record.funcName
+                record.trace = record.levelname.lower()
                 record.message = record.msg
-                record.trace_data = None
+                record.trace_state = None
                 record.trace_tags = None
 
         else:
-            record.procedure = record.funcName
-            record.procedure_data = None
-            record.procedure_tags = None
+            record.block = record.funcName
             record.elapsed = 0
             record.trace = None
-            record.trace_data = None
+            record.trace_state = None
             record.trace_tags = None
             record.message = record.msg
             record.indent = self.indent

@@ -15,14 +15,14 @@ import wiretap
 
 # @wiretap.telemetry()
 async def bar(value: int):
-    scope.other.trace_info(details=dict(name=f"sync-{value}")).log_trace()
+    # scope.other.trace_info(details=dict(name=f"sync-{value}")).log_trace()
     await asyncio.sleep(2.0)
     # foo(0)
 
 
 # @wiretap.telemetry()
 async def baz(value: int):
-    scope.other.trace_info(details=dict(name=f"sync-{value}")).log_trace()
+    # scope.other.trace_info(details=dict(name=f"sync-{value}")).log_trace()
     await asyncio.sleep(3.0)
 
 
@@ -71,39 +71,43 @@ def logging_without_scope():
 
 
 def logging_with_defaults():
-    with wiretap.log_begin(tags={"baz", "bar"}, foo="bar") as t:
+    with wiretap.info_block(tags={"baz", "bar"}) as t:
         t.log_info(message="This is an ordinary info.")
-        t.log_branch(tags={"test_branch"})
-        t.log_metric(tags={"test_metric"}, value=1)
-        t.log_snapshot(tags={"test_snapshot"}, foo="bar")
         t.log_trace(name="test", message="This is a custom trace.")
         logging.info("This is a plain info.")
 
 
 def logging_nested_activities():
-    with wiretap.log_begin(name="first", tags={"foo"}, foo="bar") as foo:
-        foo.log_info("This is the first activity.")
-        with wiretap.log_connect(name="second", tags={"bar"}, bar="baz") as bar:
-            bar.log_info("This is the second activity.")
-            with wiretap.log_open(name="third", tags={"baz"}) as baz:
-                baz.log_info("This is the third activity.")
-            with wiretap.log_transaction(name="other", baz="qux") as qux:
-                qux.log_info("This is a transaction.")
+    with wiretap.log_begin(name="first", tags={"foo"}) as foo:
+        foo.log_info(message="This is the first activity.")
+        with wiretap.log_begin(name="second", tags={"bar"}) as bar:
+            bar.log_info(message="This is the second activity.")
+            with wiretap.log_begin(name="third", tags={"baz"}) as baz:
+                baz.log_info(message="This is the third activity.")
+            with wiretap.log_begin(name="other") as qux:
+                qux.log_info(message="This is a transaction.")
+
+
+def log_with_none_block():
+    with wiretap.info_block(tags={"foo"}) as b:
+        b.log_info(message="This is the info block.")
+        with wiretap.none_block(name="nope", tags={"bar"}) as n:
+            n.log_info(message="This is the none block.")
 
 
 def logging_empty_loop():
-    with wiretap.log_procedure() as t, t.log_loop(tags={"test_loop_0"}) as iteration:
+    with wiretap.log_begin() as t, t.log_loop(tags={"test_loop_0"}) as iteration:
         pass
 
 
 def logging_single_loop():
-    with wiretap.log_procedure() as t, t.log_loop(tags={"test_loop_1"}) as iteration:
+    with wiretap.log_begin() as t, t.log_loop(tags={"test_loop_1"}) as iteration:
         with iteration():
             pass
 
 
 def logging_multiple_loops():
-    with wiretap.log_procedure() as t, t.log_loop(tags={"test_loop_n"}, counter_name="email_count") as iteration:
+    with wiretap.log_scope() as t, t.log_loop(tags={"test_loop_n"}, counter_name="email_count") as iteration:
         for i in range(5):
             with iteration():
                 time.sleep(random.randint(1, 100) / 1000)  # waits for a random time between 1 and 100 milliseconds
@@ -111,10 +115,10 @@ def logging_multiple_loops():
 
 def logging_exception_with_stack():
     def always_fails():
-        with wiretap.log_procedure() as t:
+        with wiretap.log_scope() as t:
             raise TestException("Uses the message!", other="Has some custom value!")
 
-    with wiretap.log_procedure() as t:
+    with wiretap.log_scope() as t:
         try:
             always_fails()
         except:
@@ -123,10 +127,10 @@ def logging_exception_with_stack():
 
 def logging_exception_without_stack():
     def always_fails():
-        with wiretap.log_procedure() as t:
+        with wiretap.log_scope() as t:
             raise TestException("Uses the message!", other="Has some custom value!")
 
-    with wiretap.log_procedure() as t:
+    with wiretap.log_scope() as t:
         try:
             always_fails()
         except:
@@ -134,17 +138,17 @@ def logging_exception_without_stack():
 
 
 def logging_with_custom_correlation():
-    with wiretap.log_procedure(correlation_id="this-is-custom-id") as t:
+    with wiretap.log_scope(correlation_id="this-is-custom-id") as t:
         pass
 
 
 def logging_multiple_times():
-    with wiretap.log_procedure():
+    with wiretap.log_scope():
         pass
 
 
 def logging_path():
-    with wiretap.log_procedure(path=pathlib.Path("c:/temp/test.log")):
+    with wiretap.log_scope(path=pathlib.Path("c:/temp/test.log")):
         pass
 
 
@@ -164,6 +168,7 @@ if __name__ == "__main__":
     logging_without_scope()
     logging_with_defaults()
     logging_nested_activities()
+    log_with_none_block()
     logging_empty_loop()
     logging_single_loop()
     logging_multiple_loops()

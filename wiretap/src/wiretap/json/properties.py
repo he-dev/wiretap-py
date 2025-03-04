@@ -4,11 +4,11 @@ import traceback
 from datetime import datetime, timezone
 from typing import Protocol, Any
 
-from wiretap.helpers import unpack
+from wiretap.helpers import get_block, get_trace
 
 
 class JSONProperty(Protocol):
-    def emit(self, record: logging.LogRecord) -> dict[str, Any] | None:
+    def emit(self, entry: dict[str, Any], record: logging.LogRecord) -> dict[str, Any]:
         pass
 
 
@@ -21,128 +21,76 @@ class TimestampProperty(JSONProperty):
             case "local" | "lt":
                 self.tz = datetime.now(timezone.utc).astimezone().tzinfo
 
-    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        return {
+    def emit(self, entry: dict[str, Any], record: logging.LogRecord) -> dict[str, Any]:
+        return entry | {
             "timestamp": datetime.fromtimestamp(record.created, tz=self.tz)
         }
 
 
-class ExecutionProperty(JSONProperty):
+class BlockProperty(JSONProperty):
+    from wiretap.data import FeedPath
 
-    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        procedure, trace = unpack(record)
-        if procedure:
-            return {
-                "execution": {
-                    "id": procedure.execution.id,
-                    "path": procedure.execution.path,
-                    "elapsed": procedure.execution.elapsed,
-                }
+    def emit(self, entry: dict[str, Any], record: logging.LogRecord) -> dict[str, Any]:
+        block = get_block(record)
+        if block:
+            entry["block"] = {
+                "id": self.__class__.FeedPath(block, lambda x: x.id),
+                "name": self.__class__.FeedPath(block, lambda x: x.name),
+                "elapsed": block.elapsed.current,
+                "depth": block.depth,
             }
         else:
-            return {
-                "execution": {
-                    "id": None,
-                    "path": None,
-                    "elapsed": None,
-                }
+            entry["block"] = {
+                "id": None,
+                "name": record.funcName,
+                "elapsed": None,
+                "depth": None,
             }
 
-
-class ProcedureProperty(JSONProperty):
-
-    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        procedure, trace = unpack(record)
-        if procedure:
-            return {
-                "procedure": {
-                    "id": procedure.id,
-                    "name": procedure.name,
-                    "data": procedure.data,
-                    "tags": procedure.tags,
-                    "elapsed": procedure.elapsed.current,
-                    "depth": procedure.depth,
-                    "times": procedure.times,
-                }
-            }
-        else:
-            return {
-                "procedure": {
-                    "id": None,
-                    "name": record.funcName,
-                    "data": None,
-                    "tags": None,
-                    "elapsed": None,
-                    "depth": None,
-                }
-            }
+        return entry
 
 
 class TraceProperty(JSONProperty):
 
-    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        procedure, trace = unpack(record)
+    def emit(self, entry: dict[str, Any], record: logging.LogRecord) -> dict[str, Any]:
+        trace = get_trace(record)
         if trace:
-            return {
-                "trace": {
-                    "name": trace.name,
-                    "level": record.levelname.lower(),
-                    "message": trace.message,
-                    "data": trace.data,
-                    "tags": sorted(trace.tags),
-                }
+            entry["trace"] = {
+                "name": trace.name,
+                "level": record.levelname.lower(),
+                "message": trace.message,
+                "state": trace.state,
+                "tags": sorted(trace.tags),
             }
         else:
-            return {
-                "trace": {
-                    "name": record.levelname.lower(),
-                    "level": record.levelname.lower(),
-                    "message": record.msg,
-                    "data": None,
-                    "tags": ["plain"]
-                }
-            }
-
-
-class SourceProperty(JSONProperty):
-
-    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        procedure, trace = unpack(record)
-        if procedure:
-            if procedure.trace_count == 1:
-                return {
-                    "source": {
-                        "func": procedure.func,
-                        "file": procedure.file,
-                        "line": procedure.line,
-                    }
-                }
-            else:
-                return {}
-        else:
-            return {
-                "source": {
+            entry["trace"] = {
+                "name": record.levelname.lower(),
+                "level": record.levelname.lower(),
+                "message": record.msg,
+                "state": {
                     "func": record.funcName,
                     "file": record.filename,
                     "line": record.lineno
-                }
+                },
+                "tags": ["plain"]
             }
+
+        return entry
 
 
 class ExceptionProperty(JSONProperty):
 
-    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
+    def emit(self, entry: dict[str, Any], record: logging.LogRecord) -> dict[str, Any]:
         if record.exc_info:
             exc_cls, exc, exc_tb = record.exc_info
             # format_exception returns a list of lines. Join it a single sing or otherwise an array will be logged.
-            return {
-                "exception": {
-                    "name": exc_cls.__name__,  # type: ignore
-                    "message": str(exc),
-                    "stack_trace": "".join(traceback.format_exception(exc_cls, exc, exc_tb))}
+            entry["message"] = str(exc)
+            entry["trace"] = entry["trace"]["state"] | {
+                "exception": exc_cls.__name__,  # type: ignore
+                "stack_trace": "".join(traceback.format_exception(exc_cls, exc, exc_tb))
             }
-        else:
-            return {}
+
+        return entry
 
 
 class EnvironmentProperty(JSONProperty):
@@ -150,5 +98,11 @@ class EnvironmentProperty(JSONProperty):
     def __init__(self, names: list[str]):
         self.names = names
 
-    def emit(self, record: logging.LogRecord) -> dict[str, Any]:
-        return {"environment": {k: os.environ.get(k) for k in self.names}}
+    def emit(self, entry: dict[str, Any], record: logging.LogRecord) -> dict[str, Any] | None:
+        feed = get_block(record)
+        trace = get_trace(record)
+        # Log this only for the very first feed.
+        if feed and not feed.parent and trace and trace.name == "begin":
+            return entry | {"environment": {k: os.environ.get(k) for k in self.names}}
+
+        return entry

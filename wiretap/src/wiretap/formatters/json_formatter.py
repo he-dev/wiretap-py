@@ -27,9 +27,11 @@ class JSONFormatter(logging.Formatter):
 
         self.properties = [resolve_class(class_name)(**params) for class_name, params in [parse(p) for p in properties]]
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord):
+
         # Merges each new dictionary with the previous one.
-        entry = functools.reduce(lambda e, p: e | (p.emit(record) or {}), self.properties, {})
+        # entry = functools.reduce(lambda e, p: e | (p.emit(record) or {}), self.properties, {})
+        entry = functools.reduce(lambda e, p: p.emit(e, record), self.properties, {})
 
         return json.dumps(
             entry,

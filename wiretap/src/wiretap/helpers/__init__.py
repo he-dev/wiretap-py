@@ -1,21 +1,14 @@
 import logging
-from typing import Tuple
 
-from _reusable import Node
-from .. import current_procedure
-from ..data import Procedure, WIRETAP_KEY, Trace, Entry
+from .. import current_block
+from ..data import Block, Trace, BLOCK_KEY, TRACE_KEY
 
 
-def unpack(record: logging.LogRecord) -> Tuple[Procedure | None, Trace | None]:
-    # Try to get an entry from the record.
-    entry: Entry | None = record.__dict__.get(WIRETAP_KEY, None)
-    if entry:
-        return entry.procedure, entry.trace
+def get_block(record: logging.LogRecord) -> Block | None:
+    # Try to get the feed from the record first otherwise the closest one.
+    return record.__dict__.get(BLOCK_KEY, None) or getattr(current_block.get(), "value", None)
 
-    # Try to get the nearest procedure.
-    node: Node | None = current_procedure.get()
-    if node:
-        return node.value, None
 
-    # There is no procedure in scope.
-    return None, None
+def get_trace(record: logging.LogRecord) -> Trace | None:
+    # Try to get the feed from the record first otherwise the closest one.
+    return record.__dict__.get(TRACE_KEY, None)

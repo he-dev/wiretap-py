@@ -1,6 +1,6 @@
 from contextvars import ContextVar
 
 from _reusable import Node
-from .contexts import ProcedureContext
+from .contexts import BlockContext
 
-current_procedure: ContextVar[Node[ProcedureContext] | None] = ContextVar("current_procedure", default=None)
+current_block: ContextVar[Node[BlockContext] | None] = ContextVar("current_block", default=None)

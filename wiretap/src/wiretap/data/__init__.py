@@ -3,48 +3,42 @@ import inspect
 import logging
 import uuid
 from enum import auto, IntEnum
-from typing import Protocol, Optional, Any, Iterator
+from typing import Protocol, Optional, Any, Iterator, Callable, runtime_checkable
 
 from _reusable import Elapsed, KebabEnum
 
-WIRETAP_KEY = "_wiretap"
+BLOCK_KEY = "_feed"
+TRACE_KEY = "_trace"
 
 
-class Procedure(Protocol):
-    func: str
-    file: str
-    line: int
-    parent: Optional["Procedure"]
+class Block(Protocol):
+    frame: inspect.FrameInfo
+    parent: Optional["Block"]
     id: uuid.UUID
     name: str
-    data: dict[str, Any] | None
     tags: set[str] | None
     elapsed: Elapsed
     depth: int
-    times: int
     trace_count: int
 
-    @property
-    def execution(self) -> "Execution":
-        pass
-
-    def __iter__(self) -> Iterator["Procedure"]:
+    def __iter__(self) -> Iterator["Block"]:
         pass
 
 
-class Execution:
+class FeedPath:
 
-    def __init__(self, procedure: Procedure):
-        self.id: uuid.UUID = [x.id for x in procedure][-1]
-        self.path: list[str] = [x.name for x in procedure]
-        self.elapsed: float = [x.elapsed.current for x in procedure][-1]
+    def __init__(self, block: Block, selector: Callable[[Block], Any]):
+        self.names: list[str] = [str(selector(x)) for x in block][::-1]
+
+    def __str__(self) -> str:
+        return "/".join(self.names)
 
 
 @dataclasses.dataclass
 class Trace:
     name: str | None
     message: str | None
-    data: dict[str, Any]
+    state: dict[str, Any]
     tags: set[str]
 
 
@@ -52,6 +46,7 @@ class TraceLevel(IntEnum):
     DEBUG = logging.DEBUG
     INFO = logging.INFO
     ERROR = logging.ERROR
+    EXCEPTION = logging.CRITICAL
 
 
 class TraceTag(KebabEnum):
@@ -63,7 +58,16 @@ class TraceTag(KebabEnum):
     FEATURE = auto()
 
 
-@dataclasses.dataclass
-class Entry:
-    procedure: Procedure
-    trace: Trace
+class LogTrace(Protocol):
+    def __call__(
+            self,
+            name: str | None = None,
+            message: str | None = None,
+            state: dict | None = None,
+            tags: set[Any] | None = None,
+            exc_info: bool = False,
+            in_progress: bool = True,
+            level: TraceLevel = TraceLevel.DEBUG,
+            **kwargs: Any
+    ) -> None:
+        ...
