@@ -41,11 +41,9 @@ class LoggerScope(LoggerItem["LoggerScope"]):
         self.tags: set[str] = (parent.tags if parent else map_to_str(tags)) | map_to_str(tags)
         self.frame = frame
         self.elapsed = Elapsed()
-        self.in_progress = True
+        self.can_log = True
         self.logger = logging.getLogger(name)
         self.depth: int = parent.depth + 1 if parent else 1
-        self.trace_count: int = 0
-        self.traces: list[LoggerTrace] = []
 
         with LoggerScope.lock:
             key = tuple((p.name for p in self))
@@ -66,19 +64,20 @@ class LoggerScope(LoggerItem["LoggerScope"]):
             state: dict | None = None,
             tags: set[Any] | None = None,
             exc_info: bool = False,
-            in_progress: bool = True,
+            is_final: bool = False,
             level: int = logging.DEBUG,
             **kwargs
     ) -> None:
         """This function logs a single trace."""
-        if not self.in_progress:
-            if in_progress:
-                raise Exception(f"The current '{self.name}' activity is no longer in progress.")
-            else:
-                return
 
-        with LoggerScope.lock:
-            self.trace_count += 1
+        # Can no longer log.
+        if not self.can_log:
+            # Ignore logs from other final logs.
+            if is_final:
+                return
+            # Logging non-final logs is otherwise illegal.
+            else:
+                raise Exception(f"The current scope '{self.name}' can no longer log.")
 
         self.logger.log(
             level=level,
@@ -94,8 +93,9 @@ class LoggerScope(LoggerItem["LoggerScope"]):
                 )
             }
         )
-        if not in_progress:
-            self.in_progress = False
+        
+        if is_final:
+            self.can_log = False
 
     def log_info(
             self,
@@ -103,7 +103,7 @@ class LoggerScope(LoggerItem["LoggerScope"]):
             message: str | None = None,
             state: dict | None = None,
             tags: set[Any] | None = None,
-            in_progress: bool = True,
+            is_final: bool = False,
             **kwargs
     ) -> None:
         """This function logs some additional information."""
@@ -112,7 +112,7 @@ class LoggerScope(LoggerItem["LoggerScope"]):
             message=message,
             state=state,
             tags=tags,
-            in_progress=in_progress,
+            is_final=is_final,
             level=logging.INFO,
             **kwargs
         )
@@ -123,7 +123,7 @@ class LoggerScope(LoggerItem["LoggerScope"]):
             message: str | None = None,
             state: dict | None = None,
             tags: set[Any] | None = None,
-            in_progress: bool = True,
+            is_final: bool = False,
             **kwargs
     ) -> None:
         """This function logs some additional information."""
@@ -132,7 +132,7 @@ class LoggerScope(LoggerItem["LoggerScope"]):
             message=message,
             state=state,
             tags=tags,
-            in_progress=in_progress,
+            is_final=is_final,
             level=logging.DEBUG,
             **kwargs
         )
@@ -151,7 +151,7 @@ class LoggerScope(LoggerItem["LoggerScope"]):
             state=state,
             tags=(tags or set()) | {TraceTag.EVENT},
             level=logging.ERROR,
-            in_progress=False,
+            is_final=True,
             **kwargs
         )
 
@@ -165,7 +165,7 @@ class LoggerScope(LoggerItem["LoggerScope"]):
             tags=tags,
             exc_info=True,
             level=logging.CRITICAL,
-            in_progress=False
+            is_final=True
         )
 
     @classmethod
@@ -188,9 +188,6 @@ class LoggerScope(LoggerItem["LoggerScope"]):
     @classmethod
     def peek(cls) -> Optional["LoggerScope"]:
         return cls.current_scope.get()
-
-
-current_scope: ContextVar[LoggerScope | None] = ContextVar("current_scope", default=None)
 
 
 def logger_scope(record: logging.LogRecord) -> LoggerScope | None:

@@ -4,7 +4,7 @@ import sys
 from typing import Any, Iterator, Type, Tuple, ContextManager
 
 from .data import TraceTag, LogTrace
-from .scopes import LoggerScope, current_scope
+from .scopes import LoggerScope
 from .scopes.iteration_scope import IterationScope
 
 
@@ -26,7 +26,8 @@ def _log_begin(
     stack = inspect.stack(2)
     frame = stack[2]
 
-    with LoggerScope.push(kwargs.pop("id", None), name, tags, frame) as scope:
+    custom_id = kwargs.pop("id", None)  # The caller can override the default id.
+    with LoggerScope.push(custom_id, name, tags, frame) as scope:
         try:
             log_trace(
                 self=scope,
@@ -46,7 +47,7 @@ def _log_begin(
                 scope.log_exception(tags={TraceTag.AUTO})
             raise
         finally:
-            log_trace(self=scope, name="end",tags={TraceTag.AUTO}, in_progress=False)
+            log_trace(self=scope, name="end", tags={TraceTag.AUTO}, is_final=True)
 
 
 def info_scope(

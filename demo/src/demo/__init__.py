@@ -137,8 +137,8 @@ def logging_exception_without_stack():
     with wiretap.info_scope() as t:
         try:
             always_fails()
-        except:
-            t.log_error(exc_info=wiretap.no_exc_info_if(TestException))
+        except Exception as e:
+            t.log_error(message=str(e))
 
 
 def logging_with_custom_correlation():

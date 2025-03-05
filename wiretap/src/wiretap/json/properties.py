@@ -2,11 +2,12 @@ import logging
 import os
 import traceback
 from datetime import datetime, timezone
-from typing import Protocol, Any
+from typing import Protocol, Any, runtime_checkable
 
 from wiretap.scopes import logger_scope, logger_trace
 
 
+@runtime_checkable
 class JSONProperty(Protocol):
     def emit(self, entry: dict[str, Any], record: logging.LogRecord) -> dict[str, Any]:
         pass

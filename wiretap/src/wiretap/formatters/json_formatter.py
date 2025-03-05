@@ -3,13 +3,18 @@ import json
 import logging
 from typing import Any, Tuple
 
-from _reusable import resolve_class
+from _reusable import resolve_class, parse_type
 from wiretap.json import JSONEncoderDefaultFactory
+from wiretap.json.properties import JSONProperty
 
 
 class JSONFormatter(logging.Formatter):
 
-    def __init__(self, encoders: list[str], properties: list[str]) -> None:
+    def __init__(
+            self,
+            encoders: list[str | dict],
+            properties: list[str | dict]
+    ) -> None:
         super().__init__()
         self.encoders = [resolve_class(e)() for e in encoders]
 
@@ -20,12 +25,13 @@ class JSONFormatter(logging.Formatter):
 
             if isinstance(item, dict):
                 if "()" not in item:
-                    raise KeyError(f"Constructor key '()' missing in: {item}")
+                    raise KeyError(f"Constructor key '()' missing for '{item}.")
                 return item["()"], {k: v for k, v in item.items() if k != "()"}
 
             raise TypeError(f"Cannot parse JSONProperty due to an unexpected type '{type(item)}'. Only [str | dict] are supported. Value: {item}")
 
-        self.properties = [resolve_class(class_name)(**params) for class_name, params in [parse(p) for p in properties]]
+        # self.properties = [resolve_class(class_name)(**params) for class_name, params in [parse(p) for p in properties]]
+        self.properties = [parse_type(p, JSONProperty) for p in properties]
 
     def format(self, record: logging.LogRecord):
 

@@ -20,7 +20,7 @@ formatters:
   elastic:
     (): wiretap.formatters.JSONFormatter
     encoders:
-      - wiretap.json.encoders.FeedPathEncoder
+      - wiretap.json.encoders.LoggerPathEncoder
       - wiretap.json.encoders.DateTimeEncoder
       - wiretap.json.encoders.UUIDEncoder
       - wiretap.json.encoders.SetEncoder
