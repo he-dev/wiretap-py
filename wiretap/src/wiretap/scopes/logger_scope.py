@@ -6,32 +6,37 @@ import uuid
 from inspect import FrameInfo
 from collections import defaultdict
 from contextvars import ContextVar
-from typing import Any, Optional, Iterator, Tuple
+from typing import Any, Optional, Iterator, Tuple, Union
 
 from _reusable import Elapsed, map_to_str
-from wiretap.contexts.iteration import IterationContext
-from wiretap.data import Block, Trace, TraceLevel, TraceTag, BLOCK_KEY, TRACE_KEY
+from wiretap.data import LoggerItem, LoggerTrace, TraceTag
 
 procedure_calls: ContextVar[dict[Tuple[str, ...], int]] = ContextVar("procedure_calls", default=defaultdict(lambda: 0))
 
+SCOPE_KEY = "_scope"
+TRACE_KEY = "_trace"
 
-class BlockContext(Block):
+
+class LoggerScope(LoggerItem["LoggerScope"]):
     """
     This class represents a procedure for which telemetry is collected.
     """
+
+    current_scope: ContextVar[Optional["LoggerScope"]] = ContextVar("current_scope", default=None)
 
     lock = threading.Lock()
 
     def __init__(
             self,
-            frame: FrameInfo,
-            parent: Optional["BlockContext"],
+            id: Any | None,
             name: str,
-            tags: set[Any] | None
+            tags: set[Any] | None,
+            frame: FrameInfo,
+            parent: Optional["LoggerScope"]
     ):
         self.parent = parent
-        self.id = uuid.uuid4()
-        self.name = name
+        self.id = id or uuid.uuid4()
+        self.name = name or frame.function
         # self.state: dict[str, Any] = (parent.state if parent else {}) | (state or {}) | kwargs
         self.tags: set[str] = (parent.tags if parent else map_to_str(tags)) | map_to_str(tags)
         self.frame = frame
@@ -40,16 +45,16 @@ class BlockContext(Block):
         self.logger = logging.getLogger(name)
         self.depth: int = parent.depth + 1 if parent else 1
         self.trace_count: int = 0
-        self.traces: list[Trace] = []
+        self.traces: list[LoggerTrace] = []
 
-        with BlockContext.lock:
+        with LoggerScope.lock:
             key = tuple((p.name for p in self))
             calls = procedure_calls.get()
             calls[key] += 1
             self.times = calls[key]
 
-    def __iter__(self) -> Iterator["BlockContext"]:
-        current: Optional["BlockContext"] = self
+    def __iter__(self) -> Iterator["LoggerScope"]:
+        current: Optional["LoggerScope"] = self
         while current:
             yield current
             current = current.parent
@@ -62,7 +67,7 @@ class BlockContext(Block):
             tags: set[Any] | None = None,
             exc_info: bool = False,
             in_progress: bool = True,
-            level: TraceLevel = TraceLevel.DEBUG,
+            level: int = logging.DEBUG,
             **kwargs
     ) -> None:
         """This function logs a single trace."""
@@ -72,7 +77,7 @@ class BlockContext(Block):
             else:
                 return
 
-        with BlockContext.lock:
+        with LoggerScope.lock:
             self.trace_count += 1
 
         self.logger.log(
@@ -80,8 +85,8 @@ class BlockContext(Block):
             msg=message,
             exc_info=exc_info,
             extra={
-                BLOCK_KEY: self,
-                TRACE_KEY: Trace(
+                SCOPE_KEY: self,
+                TRACE_KEY: LoggerTrace(
                     name=name,
                     message=message,
                     state=(state or {}) | kwargs,
@@ -108,7 +113,7 @@ class BlockContext(Block):
             state=state,
             tags=tags,
             in_progress=in_progress,
-            level=TraceLevel.INFO,
+            level=logging.INFO,
             **kwargs
         )
 
@@ -128,29 +133,9 @@ class BlockContext(Block):
             state=state,
             tags=tags,
             in_progress=in_progress,
-            level=TraceLevel.DEBUG,
+            level=logging.DEBUG,
             **kwargs
         )
-
-    @contextlib.contextmanager
-    def log_loop(
-            self,
-            message: str | None = None,
-            tags: set[Any] | None = None,
-            counter_name: str | None = None,
-            **kwargs,
-    ) -> Iterator[IterationContext]:
-        """This function initializes a new scope for loop telemetry."""
-        loop = IterationContext(counter_name)
-        try:
-            yield loop
-        finally:
-            self.log_metric(
-                message=message,
-                data=loop.dump(),
-                tags=(tags or set()) | {TraceTag.LOOP},
-                **kwargs
-            )
 
     def log_error(
             self,
@@ -165,18 +150,54 @@ class BlockContext(Block):
             message=message,
             state=state,
             tags=(tags or set()) | {TraceTag.EVENT},
-            level=TraceLevel.ERROR,
+            level=logging.ERROR,
             in_progress=False,
             **kwargs
         )
 
     def log_exception(
-            self
+            self,
+            tags: set[Any] | None = None,
     ) -> None:
         """This function logs an error in the procedure."""
         self.log_trace(
             name="exception",
+            tags=tags,
             exc_info=True,
-            level=TraceLevel.EXCEPTION,
+            level=logging.CRITICAL,
             in_progress=False
         )
+
+    @classmethod
+    @contextlib.contextmanager
+    def push(
+            cls,
+            id: Any | None,
+            name: str,
+            tags: set[Any] | None,
+            frame: FrameInfo
+    ) -> Iterator["LoggerScope"]:
+        parent = cls.peek()
+        scope = cls(id=id, name=name, tags=tags, frame=frame, parent=parent)
+        token = cls.current_scope.set(scope)
+        try:
+            yield scope
+        finally:
+            cls.current_scope.reset(token)
+
+    @classmethod
+    def peek(cls) -> Optional["LoggerScope"]:
+        return cls.current_scope.get()
+
+
+current_scope: ContextVar[LoggerScope | None] = ContextVar("current_scope", default=None)
+
+
+def logger_scope(record: logging.LogRecord) -> LoggerScope | None:
+    # Try to get the feed from the record first otherwise the closest one.
+    return record.__dict__.get(SCOPE_KEY, None) or LoggerScope.peek()
+
+
+def logger_trace(record: logging.LogRecord) -> LoggerTrace | None:
+    # Try to get the feed from the record first otherwise the closest one.
+    return record.__dict__.get(TRACE_KEY, None)

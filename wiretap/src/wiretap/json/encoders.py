@@ -96,8 +96,8 @@ class SetEncoder(JSONEncoder, JSONEncoderPro):
 
 class FeedPathEncoder(JSONEncoder, JSONEncoderPro):
     def supports(self, obj_type: Type) -> bool:
-        from wiretap.data import FeedPath
-        return issubclass(obj_type, FeedPath)
+        from wiretap.data import LoggerPath
+        return issubclass(obj_type, LoggerPath)
 
     def default(self, obj) -> Any | None:
         return str(obj)

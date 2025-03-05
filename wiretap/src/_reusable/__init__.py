@@ -5,7 +5,7 @@ from importlib import import_module
 from typing import TypeVar, Optional, Iterable, Type, Any, Generator
 
 from .elapsed import Elapsed
-from .node import Node
+from .welford import Welford
 
 T = TypeVar('T')
 
@@ -32,38 +32,6 @@ def fast_reverse(iterable: Iterable[T]) -> Generator[T, None, None]:
     stack = deque(iterable, maxlen=None)
     while stack:
         yield stack.pop()
-
-
-class Welford:
-    """
-    Welford's algorithm is an efficient method for computing the mean and standard deviation
-    of a dataset in a single pass. It is particularly useful for large datasets or streaming data
-    because it avoids the need to store all data points in memory.
-    """
-
-    def __init__(self) -> None:
-        self.n: int = 0  # Number of data points.
-        self.mean: float = 0.0  # Mean of the data points.
-        self.M2: float = 0.0  # Sum of squares of differences from the mean.
-
-    def update(self, x: float) -> None:
-        self.n += 1
-        delta: float = x - self.mean
-        self.mean += delta / self.n
-        delta2: float = x - self.mean
-        self.M2 += delta * delta2
-
-    @property
-    def var(self) -> float:
-        """Calculates the variance of the dataset."""
-        if self.n < 2:
-            return float('nan')  # Not enough data to calculate variance.
-        return self.M2 / (self.n - 1)  # Sample variance.
-
-    @property
-    def std_dev(self) -> float:
-        """Calculates the standard deviation of the dataset."""
-        return self.var ** 0.5  # Standard deviation.
 
 
 class LowerEnum(Enum):

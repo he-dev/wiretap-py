@@ -4,7 +4,7 @@ import traceback
 from datetime import datetime, timezone
 from typing import Protocol, Any
 
-from wiretap.helpers import get_block, get_trace
+from wiretap.scopes import logger_scope, logger_trace
 
 
 class JSONProperty(Protocol):
@@ -27,20 +27,20 @@ class TimestampProperty(JSONProperty):
         }
 
 
-class BlockProperty(JSONProperty):
-    from wiretap.data import FeedPath
+class ScopeProperty(JSONProperty):
+    from wiretap.data import LoggerPath
 
     def emit(self, entry: dict[str, Any], record: logging.LogRecord) -> dict[str, Any]:
-        block = get_block(record)
-        if block:
-            entry["block"] = {
-                "id": self.__class__.FeedPath(block, lambda x: x.id),
-                "name": self.__class__.FeedPath(block, lambda x: x.name),
-                "elapsed": block.elapsed.current,
-                "depth": block.depth,
+        scope = logger_scope(record)
+        if scope:
+            entry["scope"] = {
+                "id": self.__class__.LoggerPath(scope, lambda x: x.id),
+                "name": self.__class__.LoggerPath(scope, lambda x: x.name),
+                "elapsed": scope.elapsed.current,
+                "depth": scope.depth,
             }
         else:
-            entry["block"] = {
+            entry["scope"] = {
                 "id": None,
                 "name": record.funcName,
                 "elapsed": None,
@@ -53,7 +53,7 @@ class BlockProperty(JSONProperty):
 class TraceProperty(JSONProperty):
 
     def emit(self, entry: dict[str, Any], record: logging.LogRecord) -> dict[str, Any]:
-        trace = get_trace(record)
+        trace = logger_trace(record)
         if trace:
             entry["trace"] = {
                 "name": trace.name,
@@ -99,10 +99,10 @@ class EnvironmentProperty(JSONProperty):
         self.names = names
 
     def emit(self, entry: dict[str, Any], record: logging.LogRecord) -> dict[str, Any] | None:
-        feed = get_block(record)
-        trace = get_trace(record)
+        scope = logger_scope(record)
+        trace = logger_trace(record)
         # Log this only for the very first feed.
-        if feed and not feed.parent and trace and trace.name == "begin":
+        if scope and not scope.parent and trace and trace.name == "begin":
             return entry | {"environment": {k: os.environ.get(k) for k in self.names}}
 
         return entry

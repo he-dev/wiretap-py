@@ -2,32 +2,37 @@ import dataclasses
 import inspect
 import logging
 import uuid
-from enum import auto, IntEnum
-from typing import Protocol, Optional, Any, Iterator, Callable, runtime_checkable
+from enum import auto
+from typing import Protocol, Optional, Any, Iterator, Callable, TypeVar
 
 from _reusable import Elapsed, KebabEnum
 
-BLOCK_KEY = "_feed"
-TRACE_KEY = "_trace"
+_T = TypeVar("_T", bound="LoggerNode")
 
 
-class Block(Protocol):
+class LoggerNode(Protocol[_T]):
+    parent: Optional[_T]
+    depth: int
+
+    def __iter__(self) -> Iterator[_T]:
+        ...
+
+
+class LoggerData(Protocol):
     frame: inspect.FrameInfo
-    parent: Optional["Block"]
     id: uuid.UUID
     name: str
     tags: set[str] | None
     elapsed: Elapsed
-    depth: int
-    trace_count: int
-
-    def __iter__(self) -> Iterator["Block"]:
-        pass
 
 
-class FeedPath:
+class LoggerItem(LoggerNode[_T], LoggerData, Protocol[_T]):
+    ...
 
-    def __init__(self, block: Block, selector: Callable[[Block], Any]):
+
+class LoggerPath:
+
+    def __init__(self, block: LoggerItem, selector: Callable[[LoggerItem], Any]):
         self.names: list[str] = [str(selector(x)) for x in block][::-1]
 
     def __str__(self) -> str:
@@ -35,18 +40,11 @@ class FeedPath:
 
 
 @dataclasses.dataclass
-class Trace:
+class LoggerTrace:
     name: str | None
     message: str | None
     state: dict[str, Any]
     tags: set[str]
-
-
-class TraceLevel(IntEnum):
-    DEBUG = logging.DEBUG
-    INFO = logging.INFO
-    ERROR = logging.ERROR
-    EXCEPTION = logging.CRITICAL
 
 
 class TraceTag(KebabEnum):
@@ -67,7 +65,7 @@ class LogTrace(Protocol):
             tags: set[Any] | None = None,
             exc_info: bool = False,
             in_progress: bool = True,
-            level: TraceLevel = TraceLevel.DEBUG,
+            level: int = logging.DEBUG,
             **kwargs: Any
     ) -> None:
         ...

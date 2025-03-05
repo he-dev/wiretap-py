@@ -1,13 +1,11 @@
 import contextlib
 import inspect
 import sys
-from typing import Any, Iterator, Type, Tuple, ContextManager, Callable
+from typing import Any, Iterator, Type, Tuple, ContextManager
 
-from .context import current_block
-from .contexts import BlockContext
-from .contexts.iteration import IterationContext
-from .data import TraceLevel, TraceTag, LogTrace, Block
-from _reusable import Node
+from .data import TraceTag, LogTrace
+from .scopes import LoggerScope, current_scope
+from .scopes.iteration_scope import IterationScope
 
 
 def dict_config(config: dict):
@@ -16,117 +14,92 @@ def dict_config(config: dict):
 
 
 @contextlib.contextmanager
-def log_begin(
-        name: str | None = None,
-        message: str | None = None,
-        tags: set[Any] | None = None
-) -> Iterator[BlockContext]:
+def _log_begin(
+        name: str | None,
+        message: str | None,
+        tags: set[Any] | None,
+        log_trace: LogTrace,
+        **kwargs
+) -> Iterator[LoggerScope]:
     """This function logs telemetry for an activity scope. It returns the activity scope that provides additional APIs."""
+
     stack = inspect.stack(2)
     frame = stack[2]
-    parent = current_block.get()
 
-    scope = BlockContext(
-        frame=frame,
-        parent=parent.value if parent else None,
-        name=name or frame.function,
-        tags=tags,
-    )
-    token = current_block.set(Node(value=scope, parent=parent, id=scope.id))
-    try:
-        scope.log_info(
-            name="begin",
-            message=message,
-            state={
-                "func": frame.function,
-                "file": frame.filename,
-                "line": frame.lineno
-            },
-            tags=tags or {}
-        )
-        yield scope
-    except Exception:
-        exc_cls, exc, exc_tb = sys.exc_info()
-        if exc is not None:
-            scope.log_exception()
-        raise
-    finally:
-        scope.log_info(name="end", in_progress=False)
-        current_block.reset(token)
+    with LoggerScope.push(kwargs.pop("id", None), name, tags, frame) as scope:
+        try:
+            log_trace(
+                self=scope,
+                name="begin",
+                message=message,
+                state={
+                    "func": scope.frame.function,
+                    "file": scope.frame.filename,
+                    "line": scope.frame.lineno
+                },
+                tags={TraceTag.AUTO}
+            )
+            yield scope
+        except Exception:
+            exc_cls, exc, exc_tb = sys.exc_info()
+            if exc is not None:
+                scope.log_exception(tags={TraceTag.AUTO})
+            raise
+        finally:
+            log_trace(self=scope, name="end",tags={TraceTag.AUTO}, in_progress=False)
 
 
-@contextlib.contextmanager
-def _log_begin(
-        message: str | None,
-        block: BlockContext,
-        log_trace: LogTrace
-) -> Iterator[BlockContext]:
-    """This function logs telemetry for an activity scope. It returns the activity scope that provides additional APIs."""
-
-    token = current_block.set(Node(value=block, parent=block.parent, id=block.id))
-    try:
-        log_trace(
-            name="begin",
-            message=message,
-            state={
-                "func": block.frame.function,
-                "file": block.frame.filename,
-                "line": block.frame.lineno
-            },
-            tags=set()
-        )
-        yield block
-    except Exception:
-        exc_cls, exc, exc_tb = sys.exc_info()
-        if exc is not None:
-            block.log_exception()
-        raise
-    finally:
-        log_trace(name="end", in_progress=False)
-        current_block.reset(token)
-
-
-def info_block(
+def info_scope(
         name: str | None = None,
         message: str | None = None,
-        tags: set[Any] | None = None
-) -> ContextManager[BlockContext]:
-    stack = inspect.stack(2)
-    frame = stack[1]
-    parent = current_block.get()
-
-    block = BlockContext(
-        frame=frame,
-        parent=parent.value if parent else None,
-        name=name or frame.function,
-        tags=tags,
-    )
-
-    return _log_begin(message, block, block.log_info)
+        tags: set[Any] | None = None,
+        **kwargs
+) -> ContextManager[LoggerScope]:
+    return _log_begin(name, message, tags, LoggerScope.log_info, **kwargs)
 
 
-def debug_block(
+def debug_scope(
         name: str | None = None,
         message: str | None = None,
-        tags: set[Any] | None = None
-) -> ContextManager[BlockContext]:
-    pass
+        tags: set[Any] | None = None,
+        **kwargs
+) -> ContextManager[LoggerScope]:
+    return _log_begin(name, message, tags, LoggerScope.log_debug, **kwargs)
 
 
 @contextlib.contextmanager
 def info_loop(
-        counter_name: str | None = None,
+        name: str | None = "loop",
         message: str | None = None,
         tags: set[Any] | None = None,
         **kwargs
-) -> Iterator[IterationContext]:
-    loop = IterationContext(counter_name)
+) -> Iterator[IterationScope]:
+    loop = IterationScope()
     try:
         yield loop
     finally:
-        block: BlockContext = current_block.get().value
-        block.log_info(
-            name="loop",
+        LoggerScope.peek().log_info(
+            name=name,
+            message=message,
+            state=loop.dump(),
+            tags=(tags or set()) | {TraceTag.LOOP, TraceTag.AUTO},
+            **kwargs
+        )
+
+
+@contextlib.contextmanager
+def debug_loop(
+        name: str | None = "loop",
+        message: str | None = None,
+        tags: set[Any] | None = None,
+        **kwargs
+) -> Iterator[IterationScope]:
+    loop = IterationScope()
+    try:
+        yield loop
+    finally:
+        LoggerScope.peek().log_debug(
+            name=name,
             message=message,
             state=loop.dump(),
             tags=(tags or set()) | {TraceTag.LOOP},
@@ -134,32 +107,15 @@ def info_loop(
         )
 
 
-def closest() -> BlockContext:
-    # todo: wrap it in a new scope but don't log any traces
-    return current_block.get().value
-
-
 @contextlib.contextmanager
 def none_block(
         name: str | None = None,
         tags: set[Any] | None = None
-) -> Iterator[BlockContext]:
+) -> Iterator[LoggerScope]:
     stack = inspect.stack(2)
     frame = stack[2]
-    parent = current_block.get()
-
-    block = BlockContext(
-        frame=frame,
-        parent=parent.value if parent else None,
-        name=name or frame.function,
-        tags=tags,
-    )
-
-    token = current_block.set(Node(value=block, parent=block.parent, id=block.id))
-    try:
-        yield block
-    finally:
-        current_block.reset(token)
+    with LoggerScope.push(None, name, tags, frame) as scope:
+        yield scope
 
 
 def no_exc_info_if(exception_type: Type[BaseException] | Tuple[Type[BaseException], ...]) -> bool:
