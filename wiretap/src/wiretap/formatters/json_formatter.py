@@ -1,49 +1,55 @@
 import functools
 import json
 import logging
-from typing import Any, Tuple
+from json import JSONEncoder
 
-from _reusable import resolve_class, parse_type
+from tools.type_factory import parse_type
+from wiretap.json import encoders as enc, middleware as mid
 from wiretap.json import JSONEncoderDefaultFactory
-from wiretap.json.properties import JSONProperty
+from wiretap.json.middleware import JSONMiddleware
+
+DEFAULT_ENCODERS = [
+    enc.DateTimeEncoder(),
+    enc.ChainPathEncoder(),
+    enc.PathEncoder(),
+    enc.UUIDEncoder(),
+    enc.EnumEncoder(),
+]
+
+DEFAULT_MIDDLEWARE = [
+    mid.TimestampMiddleware(),
+    mid.ScopeMiddleware(),
+    mid.TraceMiddleware(),
+    mid.ExceptionMiddleware()
+]
 
 
 class JSONFormatter(logging.Formatter):
 
     def __init__(
             self,
-            encoders: list[str | dict],
-            properties: list[str | dict]
+            encoders: list[str | dict] | None = None,
+            middleware: list[str | dict] | None = None
     ) -> None:
         super().__init__()
-        self.encoders = [resolve_class(e)() for e in encoders]
 
-        def parse(item: Any) -> Tuple[str, dict[str, Any]]:
-            """Parses JSONProperty into type name and parameters."""
-            if isinstance(item, str):
-                return item, {}
+        self.encoders = DEFAULT_ENCODERS
+        self.middleware = DEFAULT_MIDDLEWARE
 
-            if isinstance(item, dict):
-                if "()" not in item:
-                    raise KeyError(f"Constructor key '()' missing for '{item}.")
-                return item["()"], {k: v for k, v in item.items() if k != "()"}
+        if encoders is not None:
+            self.encoders = [parse_type(e, JSONEncoder) for e in encoders]
 
-            raise TypeError(f"Cannot parse JSONProperty due to an unexpected type '{type(item)}'. Only [str | dict] are supported. Value: {item}")
-
-        # self.properties = [resolve_class(class_name)(**params) for class_name, params in [parse(p) for p in properties]]
-        self.properties = [parse_type(p, JSONProperty) for p in properties]
+        if middleware is not None:
+            self.middleware = [parse_type(p, JSONMiddleware) for p in middleware]
 
     def format(self, record: logging.LogRecord):
-
         # Merges each new dictionary with the previous one.
         # entry = functools.reduce(lambda e, p: e | (p.emit(record) or {}), self.properties, {})
-        entry = functools.reduce(lambda e, p: p.emit(e, record), self.properties, {})
+        entry = functools.reduce(lambda e, p: p.emit(record, e), self.middleware, {})
 
         return json.dumps(
             entry,
             sort_keys=False,
             allow_nan=False,
-            # cls=JSONMultiEncoder,
-            # encoders=self.encoders
             default=JSONEncoderDefaultFactory.create_func(self.encoders)
         )

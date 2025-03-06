@@ -67,18 +67,18 @@ class TestEnum(Enum):
         return self.name
 
 
-def logging_without_scope():
+def log_without_scope():
     logging.info("There is no scope here!")
 
 
-def logging_with_defaults():
+def log_with_defaults():
     with wiretap.info_scope(tags={"baz", "bar"}) as t:
         t.log_info(message="This is an ordinary info.")
         t.log_trace(name="test", message="This is a custom trace.")
         logging.info("This is a plain info.")
 
 
-def logging_nested_activities():
+def log_nested_activities():
     with wiretap.info_scope(name="first", tags={"foo"}) as foo:
         foo.log_info(message="This is the first activity.")
         with wiretap.info_scope(name="second", tags={"bar"}) as bar:
@@ -97,18 +97,18 @@ def log_with_none_block():
             n.log_info(message="This is the none block.")
 
 
-def logging_empty_loop():
+def log_empty_loop():
     with wiretap.info_scope() as t, info_loop(tags={"test_loop_0"}):
         pass
 
 
-def logging_single_loop():
+def log_single_loop():
     with wiretap.info_scope(), info_loop(tags={"test_loop_1"}) as iteration:
         with iteration():
             pass
 
 
-def logging_multiple_loops():
+def log_multiple_loops():
     with wiretap.info_scope(), info_loop(name="find_email", tags={"custom_tag"}) as iteration:
         for i in range(5):
             with iteration() as abort:
@@ -117,7 +117,7 @@ def logging_multiple_loops():
                     abort()
 
 
-def logging_exception_with_stack():
+def log_exception_with_stack():
     def always_fails():
         with wiretap.info_scope():
             raise TestException("Uses the message!", other="Has some custom value!")
@@ -129,7 +129,7 @@ def logging_exception_with_stack():
             pass
 
 
-def logging_exception_without_stack():
+def log_exception_without_stack():
     def always_fails():
         with wiretap.info_scope():
             raise TestException("Uses the message!", other="Has some custom value!")
@@ -141,19 +141,24 @@ def logging_exception_without_stack():
             t.log_error(message=str(e))
 
 
-def logging_with_custom_correlation():
+def log_with_custom_correlation():
     with wiretap.info_scope(id="this-is-custom-id"):
         pass
 
 
-def logging_multiple_times():
+def log_multiple_times():
     with wiretap.info_scope():
         pass
 
 
-def logging_path():
+def log_path():
     with wiretap.info_scope() as s:
         s.log_info(path=pathlib.Path("c:/temp/test.log"))
+
+
+def log_debug():
+    with wiretap.debug_scope() as s:
+        s.log_info(message="Scope visible only in debug mode.")
 
 
 if __name__ == "__main__":
@@ -161,6 +166,7 @@ if __name__ == "__main__":
     # main_proc()
 
     os.environ["app_id"] = "demo-app"
+    app_root = pathlib.Path(__file__).resolve().parent
 
     with open(r"..\..\cfg\wiretap.yml", "r") as file:
         config = yaml.safe_load(file)
@@ -169,17 +175,19 @@ if __name__ == "__main__":
 
     # can_everything()
 
-    logging_without_scope()
-    logging_with_defaults()
-    logging_nested_activities()
-    log_with_none_block()
-    logging_empty_loop()
-    logging_single_loop()
-    logging_multiple_loops()
-    logging_multiple_times()
-    logging_multiple_times()
-    logging_exception_with_stack()
-    logging_exception_without_stack()
-    logging_with_custom_correlation()
-    logging_multiple_times()
-    logging_path()
+    with wiretap.info_scope(name="demo") as scope:
+        log_without_scope()
+        log_with_defaults()
+        log_nested_activities()
+        log_with_none_block()
+        log_empty_loop()
+        log_single_loop()
+        log_multiple_loops()
+        log_multiple_times()
+        log_multiple_times()
+        log_exception_with_stack()
+        log_exception_without_stack()
+        log_with_custom_correlation()
+        log_multiple_times()
+        log_path()
+        log_debug()

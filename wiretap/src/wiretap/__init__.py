@@ -1,11 +1,13 @@
 import contextlib
 import inspect
+import logging
 import sys
-from typing import Any, Iterator, Type, Tuple, ContextManager
+from typing import Any, Iterator, Type, Tuple, ContextManager, cast, ClassVar, Callable, Protocol
 
-from .data import TraceTag, LogTrace
-from .scopes import LoggerScope
+from .data import TraceTag
+from .scopes.telemetry_scope import TelemetryScope
 from .scopes.iteration_scope import IterationScope
+from .telemetry import Telemetry
 
 
 def dict_config(config: dict):
@@ -18,36 +20,43 @@ def _log_begin(
         name: str | None,
         message: str | None,
         tags: set[Any] | None,
-        log_trace: LogTrace,
+        level: int,
         **kwargs
-) -> Iterator[LoggerScope]:
+) -> Iterator[Telemetry]:
     """This function logs telemetry for an activity scope. It returns the activity scope that provides additional APIs."""
 
     stack = inspect.stack(2)
     frame = stack[2]
 
     custom_id = kwargs.pop("id", None)  # The caller can override the default id.
-    with LoggerScope.push(custom_id, name, tags, frame) as scope:
+    with TelemetryScope.push(custom_id, name, tags, frame) as scope:
+        telemetry = Telemetry(scope)
         try:
-            log_trace(
-                self=scope,
+            telemetry.log_trace(
                 name="begin",
                 message=message,
                 state={
                     "func": scope.frame.function,
                     "file": scope.frame.filename,
                     "line": scope.frame.lineno
-                },
-                tags={TraceTag.AUTO}
+                } if scope.logger.isEnabledFor(logging.DEBUG) else {},
+                tags={TraceTag.AUTO},
+                level=level,
+                is_final=False
             )
-            yield scope
+            yield telemetry
         except Exception:
-            exc_cls, exc, exc_tb = sys.exc_info()
-            if exc is not None:
-                scope.log_exception(tags={TraceTag.AUTO})
+            # exc_cls, exc, exc_tb = sys.exc_info()
+            # if exc is not None:
+            telemetry.log_exception(tags={TraceTag.AUTO})
             raise
         finally:
-            log_trace(self=scope, name="end", tags={TraceTag.AUTO}, is_final=True)
+            telemetry.log_trace(
+                name="end",
+                tags={TraceTag.AUTO},
+                level=level,
+                is_final=True
+            )
 
 
 def info_scope(
@@ -55,8 +64,8 @@ def info_scope(
         message: str | None = None,
         tags: set[Any] | None = None,
         **kwargs
-) -> ContextManager[LoggerScope]:
-    return _log_begin(name, message, tags, LoggerScope.log_info, **kwargs)
+) -> ContextManager[Telemetry]:
+    return _log_begin(name, message, tags, logging.INFO, **kwargs)
 
 
 def debug_scope(
@@ -64,13 +73,13 @@ def debug_scope(
         message: str | None = None,
         tags: set[Any] | None = None,
         **kwargs
-) -> ContextManager[LoggerScope]:
-    return _log_begin(name, message, tags, LoggerScope.log_debug, **kwargs)
+) -> ContextManager[Telemetry]:
+    return _log_begin(name, message, tags, logging.DEBUG, **kwargs)
 
 
 @contextlib.contextmanager
 def info_loop(
-        name: str | None = "loop",
+        name: str = "loop",
         message: str | None = None,
         tags: set[Any] | None = None,
         **kwargs
@@ -79,7 +88,7 @@ def info_loop(
     try:
         yield loop
     finally:
-        LoggerScope.peek().log_info(
+        Telemetry().log_info(
             name=name,
             message=message,
             state=loop.dump(),
@@ -90,7 +99,7 @@ def info_loop(
 
 @contextlib.contextmanager
 def debug_loop(
-        name: str | None = "loop",
+        name: str = "loop",
         message: str | None = None,
         tags: set[Any] | None = None,
         **kwargs
@@ -99,7 +108,7 @@ def debug_loop(
     try:
         yield loop
     finally:
-        LoggerScope.peek().log_debug(
+        Telemetry().log_debug(
             name=name,
             message=message,
             state=loop.dump(),
@@ -110,13 +119,13 @@ def debug_loop(
 
 @contextlib.contextmanager
 def none_block(
-        name: str | None = None,
+        name: str = "none",
         tags: set[Any] | None = None
-) -> Iterator[LoggerScope]:
+) -> Iterator[Telemetry]:
     stack = inspect.stack(2)
     frame = stack[2]
-    with LoggerScope.push(None, name, tags, frame) as scope:
-        yield scope
+    with TelemetryScope.push(None, name, tags, frame) as scope:
+        yield Telemetry(scope)
 
 
 def no_exc_info_if(exception_type: Type[BaseException] | Tuple[Type[BaseException], ...]) -> bool:

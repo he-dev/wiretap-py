@@ -1,27 +1,33 @@
 import logging
 
-from wiretap.scopes import logger_scope, logger_trace
+from wiretap import TraceTag
+from wiretap.scopes.telemetry_scope import TelemetryItem
 
-DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {activity} | {type} | {elapsed:0.1f} | {message} | {extra} | {tags}"
+DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {scope}: {trace} | {elapsed:0.3f} sec | {message} | {trace_state}, {trace_tags}"
 
 
 class TextFormatter(logging.Formatter):
     indent: str = "."
 
     def format(self, record: logging.LogRecord):
-        scope = logger_scope(record)
+        telemetry = TelemetryItem.from_record_or_scope(record)
 
-        if scope:
+        if telemetry and (scope := telemetry.scope):
             record.scope = scope.name
             record.elapsed = scope.elapsed.current
             record.indent = self.indent * scope.depth
 
-            trace = logger_trace(record)
-            if trace:
+            if trace := telemetry.trace:
+                trace_count = {
+                    "trace_count": {
+                        "own": telemetry.scope.trace_count_own + 1,  # The last one hasn't been counted yet.
+                        "all": telemetry.scope.trace_count_all,
+                    }
+                } if trace.is_final else {}
                 record.trace = trace.name
                 record.message = trace.message
-                record.trace_state = trace.state
-                record.trace_tags = sorted(trace.tags | scope.tags)
+                record.trace_state = trace.state | trace_count
+                record.trace_tags = (trace.tags | scope.tags)()
             else:
                 record.trace = record.levelname.lower()
                 record.message = record.msg
@@ -31,9 +37,9 @@ class TextFormatter(logging.Formatter):
         else:
             record.scope = record.funcName
             record.elapsed = 0
-            record.trace = None
+            record.trace = str(None).lower()
             record.trace_state = None
-            record.trace_tags = None
+            record.trace_tags = {TraceTag.PLAIN}
             record.message = record.msg
             record.indent = self.indent
 

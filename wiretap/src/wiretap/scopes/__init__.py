@@ -1,1 +1,1 @@
-from .logger_scope import LoggerScope, logger_scope, logger_trace
+from .telemetry_scope import TelemetryScope, TelemetryTrace, TelemetryItem

@@ -3,6 +3,9 @@ from typing import Type, Any, Callable, Protocol, runtime_checkable, cast
 
 import cachetools
 
+from tools.chain_path import ChainPath
+from wiretap.data import TagSet
+
 
 @runtime_checkable
 class JSONEncoderPro(Protocol):
@@ -94,10 +97,17 @@ class SetEncoder(JSONEncoder, JSONEncoderPro):
         return list(obj)
 
 
-class LoggerPathEncoder(JSONEncoder, JSONEncoderPro):
+class ChainPathEncoder(JSONEncoder, JSONEncoderPro):
     def supports(self, obj_type: Type) -> bool:
-        from wiretap.data import LoggerPath
-        return issubclass(obj_type, LoggerPath)
+        return issubclass(obj_type, ChainPath)
 
     def default(self, obj) -> Any | None:
         return str(obj)
+
+
+class TagSetEncoder(JSONEncoder, JSONEncoderPro):
+    def supports(self, obj_type: Type) -> bool:
+        return issubclass(obj_type, TagSet)
+
+    def default(self, obj) -> Any | None:
+        return obj()

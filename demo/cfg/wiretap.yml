@@ -20,31 +20,32 @@ formatters:
   elastic:
     (): wiretap.formatters.JSONFormatter
     encoders:
-      - wiretap.json.encoders.LoggerPathEncoder
+      - wiretap.json.encoders.ChainPathEncoder
       - wiretap.json.encoders.DateTimeEncoder
       - wiretap.json.encoders.UUIDEncoder
       - wiretap.json.encoders.SetEncoder
       - wiretap.json.encoders.PathEncoder
-    properties:
-      - wiretap.json.properties.TimestampProperty
-      - wiretap.json.properties.ScopeProperty
-      - wiretap.json.properties.TraceProperty
-      - wiretap.json.properties.ExceptionProperty
-      - (): wiretap.json.properties.EnvironmentProperty
-        names:
-          - app_id
+      - wiretap.json.encoders.TagSetEncoder
+    middleware:
+      - wiretap.json.middleware.TimestampMiddleware
+      - wiretap.json.middleware.ScopeMiddleware
+      - wiretap.json.middleware.TraceMiddleware
+      - wiretap.json.middleware.ExceptionMiddleware
+#      - (): wiretap.json.properties.EnvironmentProperty
+#        names:
+#          - app_id
 handlers:
   console:
     class: logging.StreamHandler
     formatter: wiretap
-    level: DEBUG
+    level: INFO
   file:
     class: "logging.handlers.TimedRotatingFileHandler"
     when: "d"
     interval: 1
     filename: "c:\\temp\\wiretap.log"
     formatter: wiretap
-    level: "DEBUG"
+    level: INFO
   elastic_file:
     class: "logging.FileHandler"
     filename: "c:\\temp\\elastic.log"
@@ -62,7 +63,7 @@ loggers:
     #handlers: [ "console", "file", "elastic_file" ]
     handlers: [ "console", "elastic_file" ]
     # handlers: [ "console" ]
-    level: "DEBUG"
-    # level: "INFO"
+    #level: "DEBUG"
+    level: "INFO"
   PIL:
     level: "WARNING"
