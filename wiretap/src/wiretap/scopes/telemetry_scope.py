@@ -4,7 +4,7 @@ import logging
 import uuid
 from contextvars import ContextVar
 from inspect import FrameInfo
-from typing import Optional, Any, Iterator, Tuple
+from typing import Optional, Any, Iterator
 
 from tools import Elapsed
 from wiretap.data import TagSet
@@ -31,6 +31,7 @@ class TelemetryScope:
         self.frame = frame
         self.depth = 1
         self.parent = parent
+        self.can_log = True
 
         if parent:
             self.tags |= parent.tags
@@ -45,32 +46,141 @@ class TelemetryScope:
         # Counts traces logged by this scope and its children.
         self.trace_count_all: int = 0
 
+    def __iter__(self) -> Iterator["TelemetryScope"]:
+        current: Optional["TelemetryScope"] = self
+        while current:
+            yield current
+            current = current.parent
+
     @property
     def is_debug(self) -> bool:
         return self.logger.isEnabledFor(logging.DEBUG)
 
     def log_trace(
             self,
-            level: int,
-            msg: str | None,
-            exc_info: bool,
-            extra: "TelemetryItem",
+            event: str,
+            message: str | None = None,
+            dump: dict | None = None,
+            tags: set[Any] | None = None,
+            level: int = logging.DEBUG,
+            exc_info: bool = False,
+            is_final: bool = False,
+            **kwargs
     ) -> None:
+        """This function logs a single trace."""
+
+        # Can no longer log.
+        if not self.can_log:
+            # Ignore logs from other final logs.
+            if is_final:
+                return
+            # Logging non-final logs is otherwise illegal.
+            else:
+                raise Exception(f"The current scope '{self.name}' can no longer log.")
+
         self.logger.log(
             level=level,
-            msg=msg,
+            msg=message,
             exc_info=exc_info,
-            extra=extra.to_extra()
+            extra=TelemetryItem(
+                scope=self,
+                trace=TelemetryTrace(
+                    event=event,
+                    message=message,
+                    dump=(dump or {}) | kwargs,
+                    tags=TagSet(tags),
+                    is_final=is_final,
+                )
+            ).to_extra()
         )
+
+        # Increment counters if logged.
         if self.logger.isEnabledFor(level):
             self.trace_count_own += 1
             self.trace_count_all += 1
 
-    def __iter__(self) -> Iterator["TelemetryScope"]:
-        current: Optional["TelemetryScope"] = self
-        while current:
-            yield current
-            current = current.parent
+        self.can_log = not is_final
+
+    def log_basic(
+            self,
+            event: str = "info",
+            message: str | None = None,
+            dump: dict | None = None,
+            tags: set[Any] | None = None,
+            is_final: bool = False,
+            **kwargs
+    ) -> None:
+        """
+        Logs info trace at the info level.
+        """
+        self.log_trace(
+            event=event,
+            message=message,
+            dump=dump,
+            tags=tags,
+            level=logging.INFO,
+            is_final=is_final,
+            **kwargs
+        )
+
+    def log_debug(
+            self,
+            event: str = "info",
+            message: str | None = None,
+            dump: dict | None = None,
+            tags: set[Any] | None = None,
+            is_final: bool = False,
+            **kwargs
+    ) -> None:
+        """
+        Logs info trace at the debug level.
+        """
+        self.log_trace(
+            event=event,
+            message=message,
+            dump=dump,
+            tags=tags,
+            level=logging.DEBUG,
+            is_final=is_final,
+            **kwargs
+        )
+
+    def log_error(
+            self,
+            message: str | None = None,
+            dump: dict | None = None,
+            tags: set[Any] | None = None,
+            is_final: bool = True,
+            **kwargs
+    ) -> None:
+        """This function logs an error in the procedure."""
+        self.log_trace(
+            event="error",
+            message=message,
+            dump=dump,
+            tags=(tags or set()),
+            level=logging.ERROR,
+            is_final=is_final,
+            **kwargs
+        )
+
+    def log_exception(
+            self,
+            dump: dict | None = None,
+            tags: set[Any] | None = None,
+            is_final: bool = True,
+            **kwargs
+    ) -> None:
+        """This function logs an error in the procedure."""
+        self.log_trace(
+            event="exception",
+            tags=tags,
+            dump=dump,
+            level=logging.CRITICAL,
+            exc_info=True,
+            is_final=is_final,
+            **kwargs
+        )
 
     @classmethod
     @contextlib.contextmanager
@@ -123,7 +233,9 @@ class TelemetryTrace:
 
 @dataclasses.dataclass
 class TelemetryItem:
-    """This takes care of the extra data that is added to the log record."""
+    """
+    This class takes care of the extra data that is added to the log record.
+    """
 
     KEY = "_telemetry"
 

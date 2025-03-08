@@ -2,12 +2,11 @@ import contextlib
 import inspect
 import logging
 import sys
-from typing import Any, Iterator, Type, Tuple, ContextManager
+from typing import Any, Iterator, Type, Tuple
 
 from .data import TraceTag
 from .scopes.iteration_scope import IterationScope
 from .scopes.telemetry_scope import TelemetryScope
-from .telemetry import Telemetry
 
 
 def dict_config(config: dict):
@@ -22,7 +21,7 @@ def begin_scope(
         dump: dict[str, Any] | None = None,
         tags: set[Any] | None = None,
         **kwargs
-) -> Iterator[Telemetry]:
+) -> Iterator[TelemetryScope]:
     """
     This function logs telemetry for an activity scope.
     It returns the activity scope that provides additional APIs.
@@ -47,14 +46,13 @@ def begin_scope(
     start_level = logging.INFO if (dump or tags) else logging.DEBUG
 
     with TelemetryScope.push(custom_id, name, tags, frame) as scope:
-        telemetry = Telemetry(scope)
 
         # Add some extra info when at debug level.
         tags = tags | ({TraceTag.AUTO} if scope.is_debug else set())
 
         try:
 
-            telemetry.log_trace(
+            scope.log_trace(
                 event="start",
                 message=message,
                 dump=dump | (source if scope.is_debug else {}),
@@ -63,11 +61,11 @@ def begin_scope(
                 is_final=False
             )
 
-            yield telemetry
+            yield scope
         except Exception:
             # exc_cls, exc, exc_tb = sys.exc_info()
             # if exc is not None:
-            telemetry.log_exception(tags=tags, is_final=True)
+            scope.log_exception(tags=tags, is_final=True)
             raise
         finally:
             # Add some extra info when at debug level.
@@ -78,7 +76,7 @@ def begin_scope(
                         "all": scope.trace_count_all + 1,
                     }
                 }
-            telemetry.log_trace(
+            scope.log_trace(
                 event="end",
                 dump=dump,
                 tags=tags,
@@ -88,7 +86,7 @@ def begin_scope(
 
 
 @contextlib.contextmanager
-def loop_scope(
+def begin_loop(
         name: str = "loop",
         message: str | None = None,
         tags: set[Any] | None = None,
@@ -101,7 +99,7 @@ def loop_scope(
     try:
         yield scope
     finally:
-        Telemetry().log_basic(
+        TelemetryScope.peek().log_basic(
             event=name,
             message=message,
             dump=scope.dump(),
@@ -114,14 +112,14 @@ def loop_scope(
 def none_scope(
         name: str = "none",
         tags: set[Any] | None = None
-) -> Iterator[Telemetry]:
+) -> Iterator[TelemetryScope]:
     """
     Initializes a new none-scope for telemetry that doesn't log the two begin/clean traces.
     """
     stack = inspect.stack(2)
     frame = stack[2]
     with TelemetryScope.push(None, name, tags, frame) as scope:
-        yield Telemetry(scope)
+        yield scope
 
 
 def no_exc_info_if(exception_type: Type[BaseException] | Tuple[Type[BaseException], ...]) -> bool:

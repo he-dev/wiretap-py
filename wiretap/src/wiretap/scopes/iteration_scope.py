@@ -30,6 +30,10 @@ class IterationScope:
 
     @contextlib.contextmanager
     def __call__(self, item_id: str | None = None) -> Iterator[IterationIncomplete]:
+        """
+        Initializes a context manager that measures the time taken for a single iteration.
+        """
+
         elapsed = Elapsed()
         incomplete = IterationIncomplete()
 

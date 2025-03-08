@@ -11,7 +11,7 @@ from enum import Enum
 
 import yaml
 import wiretap
-from wiretap import loop_scope
+from wiretap import begin_scope, begin_loop
 
 
 # @wiretap.telemetry()
@@ -99,18 +99,18 @@ def log_with_none_block():
 
 
 def log_empty_loop():
-    with wiretap.begin_scope() as t, loop_scope(tags={"test_loop_0"}):
+    with begin_scope() as t, begin_loop(tags={"test_loop_0"}):
         pass
 
 
 def log_single_loop():
-    with wiretap.begin_scope(), loop_scope(tags={"test_loop_1"}) as iteration:
+    with begin_scope(), begin_loop(tags={"test_loop_1"}) as iteration:
         with iteration():
             pass
 
 
 def log_multiple_loops():
-    with wiretap.begin_scope(), loop_scope(name="find_email", tags={"custom_tag"}) as iteration:
+    with wiretap.begin_scope(), begin_loop(name="find_email", tags={"custom_tag"}) as iteration:
         for i in range(5):
             with iteration() as incomplete:
                 time.sleep(random.randint(1, 100) / 1000)  # waits for a random time between 1 and 100 milliseconds
