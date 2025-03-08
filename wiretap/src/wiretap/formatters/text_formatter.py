@@ -18,15 +18,9 @@ class TextFormatter(logging.Formatter):
             record.indent = self.indent * scope.depth
 
             if trace := telemetry.trace:
-                trace_count = {
-                    "trace_count": {
-                        "own": telemetry.scope.trace_count_own + 1,  # The last one hasn't been counted yet.
-                        "all": telemetry.scope.trace_count_all,
-                    }
-                } if trace.is_final else {}
-                record.trace = trace.name
+                record.trace = trace.event
                 record.message = trace.message
-                record.trace_state = trace.state | trace_count
+                record.trace_state = trace.dump
                 record.trace_tags = (trace.tags | scope.tags)()
             else:
                 record.trace = record.levelname.lower()

@@ -5,7 +5,11 @@ from tools.elapsed import Elapsed
 from tools.welford import Welford
 
 
-class IterationAbort:
+class IterationIncomplete:
+    """
+    This class is used to signal that an iteration was incomplete.
+    """
+
     def __init__(self):
         self._value = False
 
@@ -17,19 +21,21 @@ class IterationAbort:
 
 
 class IterationScope:
-
+    """
+    This class is used to measure the time taken for each iteration.
+    """
     def __init__(self):
         self.smooth_loops = Welford()
         self.except_loops = Welford()
 
     @contextlib.contextmanager
-    def __call__(self, item_id: str | None = None) -> Iterator[IterationAbort]:
+    def __call__(self, item_id: str | None = None) -> Iterator[IterationIncomplete]:
         elapsed = Elapsed()
-        abort = IterationAbort()
+        incomplete = IterationIncomplete()
 
-        yield abort
+        yield incomplete
 
-        if abort:
+        if incomplete:
             self.except_loops.update(float(elapsed))
         else:
             self.smooth_loops.update(float(elapsed))

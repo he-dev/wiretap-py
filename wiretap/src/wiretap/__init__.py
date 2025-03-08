@@ -2,11 +2,11 @@ import contextlib
 import inspect
 import logging
 import sys
-from typing import Any, Iterator, Type, Tuple, ContextManager, cast, ClassVar, Callable, Protocol
+from typing import Any, Iterator, Type, Tuple, ContextManager
 
 from .data import TraceTag
-from .scopes.telemetry_scope import TelemetryScope
 from .scopes.iteration_scope import IterationScope
+from .scopes.telemetry_scope import TelemetryScope
 from .telemetry import Telemetry
 
 
@@ -16,112 +16,108 @@ def dict_config(config: dict):
 
 
 @contextlib.contextmanager
-def _log_begin(
-        name: str | None,
-        message: str | None,
-        tags: set[Any] | None,
-        level: int,
+def begin_scope(
+        name: str | None = None,
+        message: str | None = None,
+        dump: dict[str, Any] | None = None,
+        tags: set[Any] | None = None,
         **kwargs
 ) -> Iterator[Telemetry]:
-    """This function logs telemetry for an activity scope. It returns the activity scope that provides additional APIs."""
+    """
+    This function logs telemetry for an activity scope.
+    It returns the activity scope that provides additional APIs.
+    """
 
     stack = inspect.stack(2)
     frame = stack[2]
+    source = {
+        "source": {
+            "func": frame.function,
+            "file": frame.filename,
+            "line": frame.lineno
+        }
+    }
 
     custom_id = kwargs.pop("id", None)  # The caller can override the default id.
+
+    dump = (dump or {}) | kwargs
+    tags = (tags or set())
+
+    # Keep it at debug level when there is nothing to log.
+    start_level = logging.INFO if (dump or tags) else logging.DEBUG
+
     with TelemetryScope.push(custom_id, name, tags, frame) as scope:
         telemetry = Telemetry(scope)
+
+        # Add some extra info when at debug level.
+        tags = tags | ({TraceTag.AUTO} if scope.is_debug else set())
+
         try:
+
             telemetry.log_trace(
-                name="begin",
+                event="start",
                 message=message,
-                state={
-                    "func": scope.frame.function,
-                    "file": scope.frame.filename,
-                    "line": scope.frame.lineno
-                } if scope.logger.isEnabledFor(logging.DEBUG) else {},
-                tags={TraceTag.AUTO},
-                level=level,
+                dump=dump | (source if scope.is_debug else {}),
+                tags=tags,
+                level=start_level,
                 is_final=False
             )
+
             yield telemetry
         except Exception:
             # exc_cls, exc, exc_tb = sys.exc_info()
             # if exc is not None:
-            telemetry.log_exception(tags={TraceTag.AUTO})
+            telemetry.log_exception(tags=tags, is_final=True)
             raise
         finally:
+            # Add some extra info when at debug level.
+            if scope.is_debug:
+                dump |= {
+                    "trace_count": {
+                        "own": scope.trace_count_own + 1,  # The last one hasn't been counted yet.
+                        "all": scope.trace_count_all + 1,
+                    }
+                }
             telemetry.log_trace(
-                name="end",
-                tags={TraceTag.AUTO},
-                level=level,
+                event="end",
+                dump=dump,
+                tags=tags,
+                level=logging.INFO,
                 is_final=True
             )
 
 
-def info_scope(
-        name: str | None = None,
-        message: str | None = None,
-        tags: set[Any] | None = None,
-        **kwargs
-) -> ContextManager[Telemetry]:
-    return _log_begin(name, message, tags, logging.INFO, **kwargs)
-
-
-def debug_scope(
-        name: str | None = None,
-        message: str | None = None,
-        tags: set[Any] | None = None,
-        **kwargs
-) -> ContextManager[Telemetry]:
-    return _log_begin(name, message, tags, logging.DEBUG, **kwargs)
-
-
 @contextlib.contextmanager
-def info_loop(
+def loop_scope(
         name: str = "loop",
         message: str | None = None,
         tags: set[Any] | None = None,
         **kwargs
 ) -> Iterator[IterationScope]:
-    loop = IterationScope()
+    """
+    Initializes a new info-loop for telemetry and logs its details.
+    """
+    scope = IterationScope()
     try:
-        yield loop
+        yield scope
     finally:
-        Telemetry().log_info(
-            name=name,
+        Telemetry().log_basic(
+            event=name,
             message=message,
-            state=loop.dump(),
+            dump=scope.dump(),
             tags=(tags or set()) | {TraceTag.LOOP, TraceTag.AUTO},
             **kwargs
         )
 
 
 @contextlib.contextmanager
-def debug_loop(
-        name: str = "loop",
-        message: str | None = None,
-        tags: set[Any] | None = None,
-        **kwargs
-) -> Iterator[IterationScope]:
-    loop = IterationScope()
-    try:
-        yield loop
-    finally:
-        Telemetry().log_debug(
-            name=name,
-            message=message,
-            state=loop.dump(),
-            tags=(tags or set()) | {TraceTag.LOOP},
-            **kwargs
-        )
-
-
-@contextlib.contextmanager
-def none_block(
+def none_scope(
         name: str = "none",
         tags: set[Any] | None = None
 ) -> Iterator[Telemetry]:
+    """
+    Initializes a new none-scope for telemetry that doesn't log the two begin/clean traces.
+    """
     stack = inspect.stack(2)
     frame = stack[2]
     with TelemetryScope.push(None, name, tags, frame) as scope:

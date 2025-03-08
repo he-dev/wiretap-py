@@ -57,27 +57,27 @@ class ScopeMiddleware(JSONMiddleware):
 class TraceMiddleware(JSONMiddleware):
 
     def emit(self, record: logging.LogRecord, entry: dict[str, Any]) -> dict[str, Any]:
-        telemetry = TelemetryItem.from_record_or_scope(record)
-        if telemetry and (trace := telemetry.trace):
-            trace_count = {
-                "trace_count": {
-                    "own": telemetry.scope.trace_count_own + 1,  # The last one hasn't been counted yet.
-                    "all": telemetry.scope.trace_count_all,
-                }
-            } if trace.is_final else {}
+        scope, trace = TelemetryItem.from_record_or_scope(record).properties
+        if scope and trace:
             entry["trace"] = {
-                "name": trace.name,
-                "level": record.levelname.lower(),
+                "event": trace.event,
+                "level": {
+                    "name": record.levelname.lower(),
+                    "value": record.levelno
+                },
                 "message": trace.message,
-                "state": trace.state | trace_count,
+                "dump": trace.dump,
                 "tags": trace.tags,
             }
         else:
             entry["trace"] = {
-                "name": record.levelname.lower(),
-                "level": record.levelname.lower(),
+                "event": record.levelname.lower(),
+                "level": {
+                    "name": record.levelname.lower(),
+                    "value": record.levelno
+                },
                 "message": record.msg,
-                "state": {
+                "dump": {
                     "func": record.funcName,
                     "file": record.filename,
                     "line": record.lineno
@@ -95,8 +95,9 @@ class ExceptionMiddleware(JSONMiddleware):
             exc_cls, exc, exc_tb = record.exc_info
             # format_exception returns a list of lines. Join it a single sing or otherwise an array will be logged.
             entry["message"] = str(exc)
-            entry["trace"] = entry["trace"]["state"] | {
-                "exception": exc_cls.__name__,  # type: ignore
+            # entry["trace"]["event"] = exc_cls.__name__
+            entry["trace"]["dump"] |= {
+                "type": exc_cls.__name__,  # type: ignore
                 "stack_trace": "".join(traceback.format_exception(exc_cls, exc, exc_tb))
             }
 

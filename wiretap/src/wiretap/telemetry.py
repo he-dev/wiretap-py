@@ -20,9 +20,9 @@ class Telemetry:
 
     def log_trace(
             self,
-            name: str,
+            event: str,
             message: str | None = None,
-            state: dict | None = None,
+            dump: dict | None = None,
             tags: set[Any] | None = None,
             level: int = logging.DEBUG,
             exc_info: bool = False,
@@ -47,9 +47,9 @@ class Telemetry:
             extra=TelemetryItem(
                 scope=self.scope,
                 trace=TelemetryTrace(
-                    name=name,
+                    event=event,
                     message=message,
-                    state=(state or {}) | kwargs,
+                    dump=(dump or {}) | kwargs,
                     tags=TagSet(tags),
                     is_final=is_final,
                 )
@@ -59,20 +59,22 @@ class Telemetry:
         if is_final:
             self.can_log = False
 
-    def log_info(
+    def log_basic(
             self,
-            name: str = "info",
+            event: str = "info",
             message: str | None = None,
-            state: dict | None = None,
+            dump: dict | None = None,
             tags: set[Any] | None = None,
             is_final: bool = False,
             **kwargs
     ) -> None:
-        """This function logs some additional information."""
+        """
+        Logs info trace at the info level.
+        """
         self.log_trace(
-            name,
+            event=event,
             message=message,
-            state=state,
+            dump=dump,
             tags=tags,
             level=logging.INFO,
             is_final=is_final,
@@ -81,18 +83,20 @@ class Telemetry:
 
     def log_debug(
             self,
-            name: str = "debug",
+            event: str = "info",
             message: str | None = None,
-            state: dict | None = None,
+            dump: dict | None = None,
             tags: set[Any] | None = None,
             is_final: bool = False,
             **kwargs
     ) -> None:
-        """This function logs some additional information."""
+        """
+        Logs info trace at the debug level.
+        """
         self.log_trace(
-            name=name,
+            event=event,
             message=message,
-            state=state,
+            dump=dump,
             tags=tags,
             level=logging.DEBUG,
             is_final=is_final,
@@ -102,31 +106,36 @@ class Telemetry:
     def log_error(
             self,
             message: str | None = None,
-            state: dict | None = None,
+            dump: dict | None = None,
             tags: set[Any] | None = None,
+            is_final: bool = True,
             **kwargs
     ) -> None:
         """This function logs an error in the procedure."""
         self.log_trace(
-            name="error",
+            event="error",
             message=message,
-            state=state,
+            dump=dump,
             tags=(tags or set()),
             level=logging.ERROR,
-            is_final=True, **kwargs
+            is_final=is_final,
+            **kwargs
         )
 
     def log_exception(
             self,
-            state: dict | None = None,
+            dump: dict | None = None,
             tags: set[Any] | None = None,
+            is_final: bool = True,
+            **kwargs
     ) -> None:
         """This function logs an error in the procedure."""
         self.log_trace(
-            name="exception",
+            event="exception",
             tags=tags,
-            state=state,
+            dump=dump,
             level=logging.CRITICAL,
             exc_info=True,
-            is_final=True
+            is_final=is_final,
+            **kwargs
         )
