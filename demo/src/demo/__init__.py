@@ -93,9 +93,9 @@ def log_nested_activities():
 def log_with_none_block():
     with wiretap.begin_scope(tags={"foo"}) as b:
         b.log_basic(message="This is the info block.")
-        with wiretap.none_scope(name="nope", tags={"bar"}) as n:
-            n.log_basic(message="This is the none block.")
-            n.log_basic(message="This is the none block.")
+        with wiretap.begin_scope(name="nope", tags={"bar"}, lite=True) as n:
+            n.log_basic(message="This is the lite scope.")
+            n.log_debug(message="This is the lite scope.")
 
 
 def log_empty_loop():

@@ -14,7 +14,7 @@ formatters:
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       {asctime}.{msecs:03.0f} {indent}
-      {scope}: {trace} ({levelname}) | {elapsed:0.3f} sec
+      {scope}: {trace} | {levelname} | {elapsed:0.3f} sec
       | {message}
       | {trace_state}, {trace_tags}
   elastic:

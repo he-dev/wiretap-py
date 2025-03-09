@@ -43,8 +43,7 @@ class JSONFormatter(logging.Formatter):
             self.middleware = [parse_type(p, JSONMiddleware) for p in middleware]
 
     def format(self, record: logging.LogRecord):
-        # Merges each new dictionary with the previous one.
-        # entry = functools.reduce(lambda e, p: e | (p.emit(record) or {}), self.properties, {})
+        # Call each middleware and let them create the entry.
         entry = functools.reduce(lambda e, p: p.emit(record, e), self.middleware, {})
 
         return json.dumps(
