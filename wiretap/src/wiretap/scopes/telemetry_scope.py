@@ -58,11 +58,11 @@ class TelemetryScope:
 
     def log_trace(
             self,
-            event: str,
+            name: str = "scrap",
             message: str | None = None,
             dump: dict | None = None,
             tags: set[Any] | None = None,
-            level: int = logging.DEBUG,
+            level: int = logging.INFO,
             exc_info: bool = False,
             is_final: bool = False,
             **kwargs
@@ -85,7 +85,7 @@ class TelemetryScope:
             extra=TelemetryItem(
                 scope=self,
                 trace=TelemetryTrace(
-                    event=event,
+                    name=name,
                     message=message,
                     dump=(dump or {}) | kwargs,
                     tags=TagSet(tags),
@@ -101,31 +101,9 @@ class TelemetryScope:
 
         self.can_log = not is_final
 
-    def log_basic(
-            self,
-            event: str = "info",
-            message: str | None = None,
-            dump: dict | None = None,
-            tags: set[Any] | None = None,
-            is_final: bool = False,
-            **kwargs
-    ) -> None:
-        """
-        Logs info trace at the info level.
-        """
-        self.log_trace(
-            event=event,
-            message=message,
-            dump=dump,
-            tags=tags,
-            level=logging.INFO,
-            is_final=is_final,
-            **kwargs
-        )
-
     def log_debug(
             self,
-            event: str = "info",
+            event: str = "scrap",
             message: str | None = None,
             dump: dict | None = None,
             tags: set[Any] | None = None,
@@ -136,7 +114,7 @@ class TelemetryScope:
         Logs info trace at the debug level.
         """
         self.log_trace(
-            event=event,
+            name=event,
             message=message,
             dump=dump,
             tags=tags,
@@ -154,29 +132,15 @@ class TelemetryScope:
             **kwargs
     ) -> None:
         """This function logs an error in the procedure."""
+
+        # todo: use exception name as event if available
+
         self.log_trace(
-            event="error",
+            name="error",
             message=message,
             dump=dump,
             tags=(tags or set()),
             level=logging.ERROR,
-            is_final=is_final,
-            **kwargs
-        )
-
-    def log_exception(
-            self,
-            dump: dict | None = None,
-            tags: set[Any] | None = None,
-            is_final: bool = True,
-            **kwargs
-    ) -> None:
-        """This function logs an error in the procedure."""
-        self.log_trace(
-            event="exception",
-            tags=tags,
-            dump=dump,
-            level=logging.CRITICAL,
             exc_info=True,
             is_final=is_final,
             **kwargs
@@ -224,7 +188,7 @@ class TelemetryScope:
 
 @dataclasses.dataclass
 class TelemetryTrace:
-    event: str | None
+    name: str | None
     message: str | None
     dump: dict[str, Any]
     tags: TagSet

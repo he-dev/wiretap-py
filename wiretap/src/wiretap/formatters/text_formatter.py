@@ -18,7 +18,7 @@ class TextFormatter(logging.Formatter):
             record.indent = self.indent * scope.depth
 
             if trace := telemetry.trace:
-                record.trace = trace.event
+                record.trace = trace.name
                 record.message = trace.message
                 record.trace_state = trace.dump
                 record.trace_tags = (trace.tags | scope.tags)()

@@ -73,28 +73,28 @@ def log_without_scope():
 
 def log_with_defaults():
     with wiretap.begin_scope(dump={"args": "none"}, tags={"baz", "bar"}) as t:
-        t.log_basic(message="This is an info event.")
+        t.log_trace(message="This is an info event.")
         t.log_debug(message="This is a debug event.")
-        t.log_trace(event="test", message="This is a custom trace.")
+        t.log_trace(name="test", message="This is a custom trace.")
         logging.info("This is a plain info.")
 
 
 def log_nested_activities():
     with wiretap.begin_scope(name="first", tags={"foo"}) as foo:
-        foo.log_basic(message="This is the first activity.")
+        foo.log_trace(message="This is the first activity.")
         with wiretap.begin_scope(name="second", tags={"bar"}) as bar:
-            bar.log_basic(message="This is the second activity.")
+            bar.log_trace(message="This is the second activity.")
             with wiretap.begin_scope(name="third", tags={"baz"}) as baz:
-                baz.log_basic(message="This is the third activity.")
+                baz.log_trace(message="This is the third activity.")
             with wiretap.begin_scope(name="other") as qux:
-                qux.log_basic(message="This is a transaction.")
+                qux.log_trace(message="This is a transaction.")
 
 
 def log_with_none_block():
     with wiretap.begin_scope(tags={"foo"}) as b:
-        b.log_basic(message="This is the info block.")
-        with wiretap.begin_scope(name="nope", tags={"bar"}, lite=True) as n:
-            n.log_basic(message="This is the lite scope.")
+        b.log_trace(message="This is the info block.")
+        with wiretap.begin_scope(name="nope", tags={"bar"}, debug=True) as n:
+            n.log_trace(message="This is the lite scope.")
             n.log_debug(message="This is the lite scope.")
 
 
@@ -154,12 +154,17 @@ def log_multiple_times():
 
 def log_path():
     with wiretap.begin_scope() as s:
-        s.log_basic(path=pathlib.Path("c:/temp/test.log"))
+        s.log_trace(path=pathlib.Path("c:/temp/test.log"))
 
 
 def log_debug():
-    with wiretap.begin_scope() as s:
+    with wiretap.begin_scope(debug=True) as s:
         s.log_debug(message="Scope visible only in debug mode.")
+
+
+def log_error():
+    with wiretap.begin_scope() as s:
+        s.log_error(message="This is an error message.")
 
 
 if __name__ == "__main__":
@@ -192,3 +197,4 @@ if __name__ == "__main__":
         log_multiple_times()
         log_path()
         log_debug()
+        log_error()

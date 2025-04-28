@@ -19,12 +19,14 @@ def begin_scope(
         message: str | None = None,
         dump: dict[str, Any] | None = None,
         tags: set[Any] | None = None,
-        lite: bool = False,
+        debug: bool = False,
         **kwargs
 ) -> Iterator[TelemetryScope]:
     """
     Initializes a new telemetry scope and logs its start, exception, and end.
     This can be disabled by setting the 'lite' parameter to True.
+
+    :param debug: If True, the scope will log its start, exception, or end traces at the debug level.
     """
 
     stack = inspect.stack(2)
@@ -43,7 +45,7 @@ def begin_scope(
     tags = (tags or set())
 
     # Keep it at debug level when there is nothing to log.
-    start_level = logging.INFO if (dump or tags) else logging.DEBUG
+    scope_level = logging.DEBUG if debug else logging.INFO
 
     with TelemetryScope.push(custom_id, name, tags, frame) as scope:
 
@@ -51,23 +53,20 @@ def begin_scope(
         tags = tags | ({TraceTag.AUTO} if scope.is_debug else set())
 
         try:
-
-            if not lite:
-                scope.log_trace(
-                    event="start",
-                    message=message,
-                    dump=dump | (source if scope.is_debug else {}),
-                    tags=tags,
-                    level=start_level,
-                    is_final=False
-                )
+            scope.log_trace(
+                name="start",
+                message=message,
+                dump=dump | (source if scope.is_debug else {}),
+                tags=tags,
+                level=scope_level,
+                is_final=False
+            )
 
             yield scope
         except Exception:
             # exc_cls, exc, exc_tb = sys.exc_info()
             # if exc is not None:
-            if not lite:
-                scope.log_exception(tags=tags, is_final=True)
+            scope.log_error(tags=tags, is_final=True)
             raise
         finally:
             # Add some extra info when at debug level.
@@ -79,14 +78,13 @@ def begin_scope(
                     }
                 }
 
-            if not lite:
-                scope.log_trace(
-                    event="end",
-                    dump=dump,
-                    tags=tags,
-                    level=logging.INFO,
-                    is_final=True
-                )
+            scope.log_trace(
+                name="end",
+                dump=dump,
+                tags=tags,
+                level=scope_level,
+                is_final=True
+            )
 
 
 @contextlib.contextmanager
@@ -104,8 +102,8 @@ def begin_loop(
         try:
             yield iteration
         finally:
-            telemetry.log_basic(
-                event=name,
+            telemetry.log_trace(
+                name=name,
                 message=message,
                 dump=iteration.dump(),
                 tags=(tags or set()) | ({TraceTag.LOOP, TraceTag.AUTO} if telemetry.is_debug else set()),

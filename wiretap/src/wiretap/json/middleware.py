@@ -60,7 +60,7 @@ class TraceMiddleware(JSONMiddleware):
         scope, trace = TelemetryItem.from_record_or_scope(record).properties
         if scope and trace:
             entry["trace"] = {
-                "event": trace.event,
+                "name": trace.name,
                 "level": {
                     "name": record.levelname.lower(),
                     "value": record.levelno
@@ -71,7 +71,7 @@ class TraceMiddleware(JSONMiddleware):
             }
         else:
             entry["trace"] = {
-                "event": record.levelname.lower(),
+                "name": record.levelname.lower(),
                 "level": {
                     "name": record.levelname.lower(),
                     "value": record.levelno
@@ -91,7 +91,7 @@ class TraceMiddleware(JSONMiddleware):
 class ExceptionMiddleware(JSONMiddleware):
 
     def emit(self, record: logging.LogRecord, entry: dict[str, Any]) -> dict[str, Any]:
-        if record.exc_info:
+        if record.exc_info and all(record.exc_info):
             exc_cls, exc, exc_tb = record.exc_info
             # format_exception returns a list of lines. Join it a single sing or otherwise an array will be logged.
             entry["message"] = str(exc)
