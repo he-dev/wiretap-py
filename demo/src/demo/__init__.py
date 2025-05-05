@@ -99,23 +99,28 @@ def log_with_none_block():
 
 
 def log_empty_loop():
-    with begin_scope() as t, begin_loop(tags={"test_loop_0"}):
+    with begin_scope() as t, begin_loop(name="empty_loop", tags={"test_loop_0"}):
         pass
 
 
 def log_single_loop():
-    with begin_scope(), begin_loop(tags={"test_loop_1"}) as iteration:
-        with iteration():
+    with begin_scope(), begin_loop(name="one_iteration", tags={"test_loop_1"}) as loop:
+        with loop.begin_iteration():
             pass
 
 
 def log_multiple_loops():
-    with wiretap.begin_scope(), begin_loop(name="find_email", tags={"custom_tag"}) as iteration:
+    with begin_scope(), begin_loop(name="find_email", tags={"loop_wide_tag"}) as loop:
         for i in range(5):
-            with iteration() as incomplete:
-                time.sleep(random.randint(1, 100) / 1000)  # waits for a random time between 1 and 100 milliseconds
-                if i == 2:
-                    incomplete()
+            # noinspection PyBroadException
+            try:
+                with loop.begin_iteration(email_id=f"foo-{i}", tags={i}) as iteration:
+                    iteration.log_trace(message=f"This is the {iteration.index}-th iteration.")
+                    time.sleep(random.randint(1, 100) / 1000)  # waits for a random time between 1 and 100 milliseconds
+                    if i == 2:
+                        raise ValueError("This interation has failed!")
+            except Exception:
+                pass
 
 
 def log_exception_with_stack():

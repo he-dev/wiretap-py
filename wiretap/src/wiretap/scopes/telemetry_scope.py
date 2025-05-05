@@ -21,12 +21,14 @@ class TelemetryScope:
             self,
             id: Any | None,
             name: str | None,
+            dump: dict[str, Any] | None,
             tags: set[Any] | None,
             frame: FrameInfo,
             parent: Optional["TelemetryScope"]
     ):
         self.id = id or uuid.uuid4()
         self.name = name or frame.function
+        self.dump = dump or {}
         self.tags = tags or set()
         self.frame = frame
         self.depth = 1
@@ -87,7 +89,7 @@ class TelemetryScope:
                 trace=TelemetryTrace(
                     name=name,
                     message=message,
-                    dump=(dump or {}) | kwargs,
+                    dump=(dump or {}) | kwargs | self.dump,
                     tags=TagSet(tags),
                     is_final=is_final,
                 )
@@ -152,6 +154,7 @@ class TelemetryScope:
             cls,
             id: Any | None,
             name: str | None,
+            dump: dict[str, Any] | None,
             tags: set[Any] | None,
             frame: FrameInfo
     ) -> Iterator["TelemetryScope"]:
@@ -172,7 +175,7 @@ class TelemetryScope:
             raise ValueError("FrameInfo must not be None.")
 
         parent = cls.peek()
-        scope = cls(id=id, name=name, tags=tags, frame=frame, parent=parent)
+        scope = cls(id=id, name=name, dump=dump, tags=tags, frame=frame, parent=parent)
         token = cls.current_scope.set(scope)
         try:
             yield scope
