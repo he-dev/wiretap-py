@@ -63,7 +63,7 @@ loggers:
     #handlers: [ "console", "file", "elastic_file" ]
     handlers: [ "console", "elastic_file" ]
     # handlers: [ "console" ]
-    #level: "DEBUG"
-    level: "INFO"
+    level: "DEBUG"
+    #level: "INFO"
   PIL:
     level: "WARNING"

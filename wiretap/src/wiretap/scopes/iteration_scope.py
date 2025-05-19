@@ -3,8 +3,12 @@ import inspect
 from typing import Any, Iterator
 
 from tools.elapsed import Elapsed
-from tools.welford import Welford
-from wiretap import TelemetryScope
+
+from wiretap import TelemetryScope, LoopStats
+
+
+class IterationScope(TelemetryScope):
+    index: int
 
 
 class LoopScope:
@@ -14,15 +18,15 @@ class LoopScope:
 
     def __init__(
             self,
-            name: str | None = None,
-            dump: dict[str, Any] | None = None,
-            tags: set[Any] | None = None,
+            name: str | None,
+            dump: dict[str, Any] | None,
+            tags: set[Any] | None,
+            stats: LoopStats
     ):
         self._name = name
         self._dump = dump or {}
         self._tags = tags or set()
-        self.smooth_loops = Welford()
-        self.except_loops = Welford()
+        self._stats = stats
 
     @contextlib.contextmanager
     def begin_iteration(
@@ -30,7 +34,7 @@ class LoopScope:
             dump: dict[str, Any] | None = None,
             tags: set[Any] | None = None,
             **kwargs
-    ) -> Iterator[TelemetryScope]:
+    ) -> Iterator[IterationScope]:
         """
         Initializes a context manager that measures the time taken for a single iteration.
 
@@ -42,25 +46,24 @@ class LoopScope:
         stack = inspect.stack(2)
         frame = stack[2]
 
-        index = (self.smooth_loops.n + self.except_loops.n)
+        index = self._stats.count
         dump = dump or {}
         dump |= kwargs
         dump |= {"index": index}
 
         tags = self._tags | (tags or set()) | self._tags
         custom_id = kwargs.pop("id", None)  # The caller can override the default id.
-        with TelemetryScope.push(custom_id, self._name, dump, tags, frame) as scope:
+        with IterationScope.push(custom_id, self._name, dump, tags, frame) as scope:
             scope.index = index
             elapsed = Elapsed()
             try:
                 yield scope
-                self.smooth_loops.update(float(elapsed))
+                self._stats.collect(float(elapsed), smooth=True)
             except Exception:
-                self.except_loops.update(float(elapsed))
+                self._stats.collect(float(elapsed), smooth=False)
                 raise
+            finally:
+                del scope.index
 
-    def dump(self, precision: int = 3) -> dict[str, Any] | None:
-        return {
-            "smooth": self.smooth_loops.dump(precision),
-            "except": self.except_loops.dump(precision) if self.except_loops.n > 0 else None,
-        }
+    def dump(self) -> dict[str, Any] | None:
+        return {"stats": self._stats.dump()}

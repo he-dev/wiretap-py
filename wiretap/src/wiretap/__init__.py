@@ -1,11 +1,13 @@
 import contextlib
 import inspect
 import logging
-from typing import Any, Iterator
+from typing import Any, Iterator, Callable
 
-from .data import TraceTag
+from .data import TraceTag, LoopStats
 from .scopes.telemetry_scope import TelemetryScope
 from .scopes.iteration_scope import LoopScope
+from .stats.basic import BasicStats
+from .stats.welford import WelfordStats
 
 
 def dict_config(config: dict):
@@ -99,6 +101,7 @@ def begin_loop(
         message: str | None = None,
         dump: dict[str, Any] | None = None,
         tags: set[Any] | None = None,
+        stats: Callable[[], LoopStats] = lambda: WelfordStats(),
         **kwargs
 ) -> Iterator[LoopScope]:
     """
@@ -108,25 +111,32 @@ def begin_loop(
     :param message: The message to log when the loop starts.
     :param dump: A dictionary of extra data to log that is attached to each trace.
     :param tags: A set of tags to associate with the loop that is attached to each trace.
+    :param stats: Factory function that creates a new stats object.
     :param kwargs: Additional keyword arguments to be passed to each trace.
     """
+
+    stack = inspect.stack(2)
+    frame = stack[2]
 
     dump = (dump or {}) | kwargs
     tags = (tags or set()) | {TraceTag.LOOP}
 
+    custom_id = kwargs.pop("id", None)
+
     if not TelemetryScope.peek():
         raise Exception("Cannot create a loop scope outside of a telemetry scope.")
 
-    with begin_scope(name=name, message=message, dump=dump, tags=tags, debug=True, **kwargs) as scope:
-        loop = LoopScope(name=name, dump=dump, tags=tags)
+    with TelemetryScope.push(custom_id, name, dump, tags, frame) as scope:
+        loop = LoopScope(name=name, dump=dump, tags=tags, stats=stats())
         try:
+            scope.log_trace(
+                name="start",
+                message=message,
+                level=logging.INFO if message else logging.DEBUG,
+            )
             yield loop
         finally:
             scope.log_trace(
                 name="end",
-                message=message,
-                dump=loop.dump(),
-                # tags=(tags or set()) | ({TraceTag.LOOP, TraceTag.AUTO}),
-                is_final=True,
-                **kwargs
+                dump=loop.dump()
             )

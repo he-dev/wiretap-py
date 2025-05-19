@@ -1,5 +1,5 @@
 from enum import auto
-from typing import Any
+from typing import Any, Protocol
 
 from tools import KebabEnum
 
@@ -19,3 +19,13 @@ class TagSet:
 
     def __call__(self):
         return sorted(set(str(x) for x in self.tags))
+
+
+class LoopStats(Protocol):
+
+    @property
+    def count(self) -> int: ...
+
+    def collect(self, elapsed: float, smooth: bool) -> None: ...
+
+    def dump(self) -> dict[str, Any]: ...

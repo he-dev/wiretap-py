@@ -110,14 +110,14 @@ def log_single_loop():
 
 
 def log_multiple_loops():
-    with begin_scope(), begin_loop(name="find_email", tags={"loop_wide_tag"}) as loop:
+    with begin_scope(), begin_loop(name="find_email", message="This is a test loop!", tags={"loop_wide_tag"}) as loop:
         for i in range(5):
             # noinspection PyBroadException
             try:
                 with loop.begin_iteration(email_id=f"foo-{i}", tags={i}) as iteration:
                     iteration.log_trace(message=f"This is the {iteration.index}-th iteration.")
                     time.sleep(random.randint(1, 100) / 1000)  # waits for a random time between 1 and 100 milliseconds
-                    if i == 2:
+                    if i in [2, 4]:
                         raise ValueError("This interation has failed!")
             except Exception:
                 pass

@@ -5,7 +5,6 @@ from importlib import import_module
 from typing import TypeVar, Optional, Iterable, Type, Any, Generator
 
 from .elapsed import Elapsed
-from .welford import Welford
 
 T = TypeVar('T')
 
