@@ -3,7 +3,7 @@ import inspect
 import logging
 from typing import Any, Iterator, Callable
 
-from .data import TraceTag, LoopStats
+from .util import TraceTag, LoopStats
 from .scopes.telemetry_scope import TelemetryScope
 from .scopes.iteration_scope import LoopScope
 from .stats.basic import BasicStats
@@ -36,7 +36,7 @@ def begin_scope(
     :param debug: If True, the scope will log its start, exception, or end traces at the debug level.
 
     """
-
+    
     stack = inspect.stack(2)
     frame = stack[2]
     source = {

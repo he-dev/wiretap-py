@@ -1,7 +1,7 @@
 import math
 from typing import Any
 
-from wiretap.data import LoopStats
+from wiretap.util import LoopStats
 
 
 class WelfordStats(LoopStats):

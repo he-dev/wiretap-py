@@ -32,6 +32,8 @@ class LowerEnum(Enum):
 
 
 class KebabEnum(Enum):
+    """ Converts a snake_case string to a kebab-case string. """
+
     def __str__(self):
         return self.name.lower().replace('_', '-').lower()
 

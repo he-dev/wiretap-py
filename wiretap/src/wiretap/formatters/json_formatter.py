@@ -3,7 +3,7 @@ import json
 import logging
 from json import JSONEncoder
 
-from tools.type_factory import parse_type
+from util.type_factory import parse_type
 from wiretap.json import encoders as enc, middleware as mid
 from wiretap.json import JSONEncoderDefaultFactory
 from wiretap.json.middleware import JSONMiddleware

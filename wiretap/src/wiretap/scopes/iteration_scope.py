@@ -2,7 +2,7 @@ import contextlib
 import inspect
 from typing import Any, Iterator
 
-from tools.elapsed import Elapsed
+from util.elapsed import Elapsed
 
 from wiretap import TelemetryScope, LoopStats
 

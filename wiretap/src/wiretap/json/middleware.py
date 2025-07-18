@@ -3,7 +3,7 @@ import traceback
 from datetime import datetime, timezone
 from typing import Protocol, Any, runtime_checkable
 
-from tools.chain_path import ChainPath
+from util.chain_path import ChainPath
 from wiretap.scopes import TelemetryItem
 
 
