@@ -1,142 +1,97 @@
 import contextlib
 import inspect
 import logging
-from typing import Any, Iterator, Callable
+import sys
+from typing import Any, Iterator, Callable, Optional
 
-from .util import TraceTag, LoopStats
-from .scopes.telemetry_scope import TelemetryScope
-from .scopes.iteration_scope import LoopScope
+from .scopes.activity_scope import ActivityScope
+from .stats import LoopStats
 from .stats.basic import BasicStats
 from .stats.welford import WelfordStats
 
 
 def dict_config(config: dict):
     import logging.config
+    logging.addLevelName(5, "TRACE")
     logging.config.dictConfig(config)
 
 
 @contextlib.contextmanager
 def begin_scope(
         name: str | None = None,
-        message: str | None = None,
-        dump: dict[str, Any] | None = None,
-        tags: set[Any] | None = None,
-        debug: bool = False,
+        state: dict[str, Any] | None = None,
+        trace_id: Any | None = None,
+        span_id: Any | None = None,
         **kwargs
-) -> Iterator[TelemetryScope]:
+) -> Iterator[ActivityScope]:
     """
     Initializes a new telemetry scope and logs its start, exception, and end.
     This can be disabled by setting the 'lite' parameter to True.
 
     :param name: The name of the scope. If None, the name will be derived from the calling frame. Usually the function name.
-    :param message: The message to log when the scope starts.
-    :param dump: A dictionary of extra data to log that is attached to each trace.
-    :param tags: A set of tags to associate with the loop that is attached to each trace.
+    :param state: A dictionary of extra data to log that is attached to each trace.
     :param kwargs: Additional keyword arguments to be passed to each trace.
-    :param debug: If True, the scope will log its start, exception, or end traces at the debug level.
 
     """
-    
+
     stack = inspect.stack(2)
     frame = stack[2]
-    source = {
-        "source": {
-            "func": frame.function,
-            "file": frame.filename,
-            "line": frame.lineno
-        }
-    }
 
-    custom_id = kwargs.pop("id", None)  # The caller can override the default id.
-
-    dump = (dump or {}) | kwargs
-    tags = (tags or set())
-
-    # Keep it at debug level when there is nothing to log.
-    scope_level = logging.DEBUG if debug else logging.INFO
-
-    with TelemetryScope.push(custom_id, name, dump, tags, frame) as scope:
-
-        # Add some extra info when at debug level.
-        tags = tags | ({TraceTag.AUTO} if scope.is_debug else set())
-
-        try:
-            scope.log_trace(
-                name="start",
-                message=message,
-                dump=(source if scope.is_debug else {}),
-                tags=tags,
-                level=scope_level,
-                is_final=False
-            )
-
-            yield scope
-        except Exception:
-            # exc_cls, exc, exc_tb = sys.exc_info()
-            # if exc is not None:
-            scope.log_error(tags=tags, is_final=True)
-            raise
-        finally:
-            # Add some extra info when at debug level.
-            # if scope.is_debug:
-            #     dump |= {
-            #         "trace_count": {
-            #             "own": scope.trace_count_own + 1, # The last one hasn't been counted yet.
-            #             "all": scope.trace_count_all + 1,
-            #         }
-            #     }
-
-            scope.log_trace(
-                name="end",
-                # dump=dump,
-                tags=tags,
-                level=scope_level,
-                is_final=True
-            )
+    with ActivityScope.push(name, trace_id=trace_id, span_id=span_id, state=state, frame=frame, **kwargs) as activity:
+        yield activity
 
 
 @contextlib.contextmanager
-def begin_loop(
-        name: str,
-        message: str | None = None,
-        dump: dict[str, Any] | None = None,
-        tags: set[Any] | None = None,
-        stats: Callable[[], LoopStats] = lambda: WelfordStats(),
-        **kwargs
-) -> Iterator[LoopScope]:
-    """
-    Initializes a new info-loop for telemetry and logs its details.
+def log_scope():
+    activity = ActivityScope.peek()
+    try:
+        activity.log_event(message=f"{activity} starts.", event="start")
+        yield
+        activity.log_event(message=f"{activity} complete.", event="success")
+    except Exception:
+        activity.log_event(message=f"{activity} failed.", event="failure", level=logging.ERROR)
+        raise
 
-    :param name: The name of the loop.
-    :param message: The message to log when the loop starts.
-    :param dump: A dictionary of extra data to log that is attached to each trace.
-    :param tags: A set of tags to associate with the loop that is attached to each trace.
-    :param stats: Factory function that creates a new stats object.
-    :param kwargs: Additional keyword arguments to be passed to each trace.
-    """
 
-    stack = inspect.stack(2)
-    frame = stack[2]
+def log_core(message: str, state: Optional[dict] = None, **kwargs) -> ActivityScope:
+    return ActivityScope.peek().log_event(message=message, level=logging.INFO, state=state, frame_offset=2, role="core", **kwargs)
 
-    dump = (dump or {}) | kwargs
-    tags = (tags or set()) | {TraceTag.LOOP}
 
-    custom_id = kwargs.pop("id", None)
+def log_util(message: str, state: Optional[dict] = None, **kwargs) -> ActivityScope:
+    return ActivityScope.peek().log_event(message=message, level=logging.DEBUG, state=state, frame_offset=2, role="util", **kwargs)
 
-    if not TelemetryScope.peek():
-        raise Exception("Cannot create a loop scope outside of a telemetry scope.")
 
-    with TelemetryScope.push(custom_id, name, dump, tags, frame) as scope:
-        loop = LoopScope(name=name, dump=dump, tags=tags, stats=stats())
-        try:
-            scope.log_trace(
-                name="start",
-                message=message,
-                level=logging.INFO if message else logging.DEBUG,
-            )
-            yield loop
-        finally:
-            scope.log_trace(
-                name="end",
-                dump=loop.dump()
-            )
+def log_meta(message: str, state: Optional[dict] = None, **kwargs) -> ActivityScope:
+    return ActivityScope.peek().log_event(message=message, level=5, state=state, frame_offset=2, role="meta", **kwargs)
+
+
+def log_warning(message: str, state: Optional[dict] = None, **kwargs) -> ActivityScope:
+    return ActivityScope.peek().log_event(message=message, level=logging.WARNING, state=state, frame_offset=2, **kwargs)
+
+
+def log_error(message: str, state: Optional[dict] = None, **kwargs) -> ActivityScope:
+    return ActivityScope.peek().log_event(message=message, level=logging.ERROR, state=state, frame_offset=2, **kwargs)
+
+
+def add_next(stats_cls: type[LoopStats] = BasicStats) -> None:
+    if scope := ActivityScope.peek():
+        if parent := scope.parent:
+            loop = parent.local.get("loop", None)
+            if not loop:
+                loop = stats_cls()
+                scope.parent.local["loop"] = loop
+            loop.collect(scope.elapsed.current, smooth=sys.exc_info()[0] is None)
+        else:
+            raise Exception("Cannot add next trace outside of a loop scope.")
+    else:
+        raise Exception("Cannot add next trace outside of a telemetry scope.")
+
+
+def log_loop(message: str, state: Optional[dict] = None, **kwargs):
+    if scope := ActivityScope.peek():
+        if loop := scope.local.pop("loop", None):
+            return ActivityScope.peek().log_event(message=message, level=logging.INFO, state=state, frame_offset=2, loop=loop, role="core", **kwargs)
+        else:
+            raise Exception("Cannot add next trace outside of a loop scope.")
+    else:
+        raise Exception("Cannot log_loop outside of a telemetry scope.")

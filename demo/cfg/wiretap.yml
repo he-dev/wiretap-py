@@ -13,10 +13,9 @@ formatters:
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
-      {asctime}.{msecs:03.0f} {indent}
-      {scope}: {trace} | {levelname} | {elapsed:0.3f} sec
-      | {message}
-      | {trace_state}, {trace_tags}
+      [{asctime}.{msecs:03.0f} {levelname:7s}]
+      {scope}: "{message}"
+      properties={context} source={source} activity={activity}
   elastic:
     (): wiretap.formatters.JSONFormatter
     encoders:
@@ -25,32 +24,34 @@ formatters:
       - wiretap.json.encoders.UUIDEncoder
       - wiretap.json.encoders.SetEncoder
       - wiretap.json.encoders.PathEncoder
-      - wiretap.json.encoders.TagSetEncoder
-    middleware:
-      - wiretap.json.middleware.TimestampMiddleware
-      - wiretap.json.middleware.ScopeMiddleware
-      - wiretap.json.middleware.TraceMiddleware
-      - wiretap.json.middleware.ExceptionMiddleware
-#      - (): wiretap.json.properties.EnvironmentProperty
-#        names:
-#          - app_id
+      - wiretap.json.encoders.LoopStatsEncoder
+    properties:
+      - wiretap.json.modifiers.AddTimestamp
+      - wiretap.json.modifiers.AddMessage
+      - wiretap.json.modifiers.AddProperties
+      - wiretap.json.modifiers.AddActivity
+      - wiretap.json.modifiers.AddSource
+      - wiretap.json.modifiers.AddException
+      - (): wiretap.json.modifiers.AddEnvironmentVariables
+        names:
+          - app_id
 handlers:
   console:
     class: logging.StreamHandler
     formatter: wiretap
-    level: DEBUG
+    #level: INFO
   file:
     class: "logging.handlers.TimedRotatingFileHandler"
     when: "d"
     interval: 1
     filename: "c:\\temp\\wiretap.log"
     formatter: wiretap
-    level: INFO
+    #level: TRACE
   elastic_file:
     class: "logging.FileHandler"
     filename: "c:\\temp\\elastic.log"
     formatter: elastic
-    level: DEBUG
+    #level: DEBUG
   #sqlserver:
   #  class: "wiretap_sqlserver.SqlServerHandler"
   #  #connection_string: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost,1433;DATABASE=automation;UID=sa;PWD=;"
@@ -63,7 +64,7 @@ loggers:
     #handlers: [ "console", "file", "elastic_file" ]
     handlers: [ "console", "elastic_file" ]
     # handlers: [ "console" ]
-    level: "DEBUG"
+    level: "TRACE"
     #level: "INFO"
   PIL:
     level: "WARNING"

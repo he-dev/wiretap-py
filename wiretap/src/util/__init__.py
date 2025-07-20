@@ -1,4 +1,5 @@
 import itertools
+import pathlib
 from collections import deque
 from enum import Enum
 from importlib import import_module
@@ -41,4 +42,13 @@ class KebabEnum(Enum):
         return str(self)
 
 
+def trim_path(path: str) -> str:
+    # core: Get rid of the unimportant part.
+    path = pathlib.Path(path)
+    try:
+        cut_index = path.parts.index("src")
+        return pathlib.Path(*path.parts[cut_index:]).as_posix()
+    except ValueError:
+        # core: 'path' is apparently a single name, so return the original one.
+        return path.as_posix()
 

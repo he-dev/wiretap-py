@@ -1,1 +1,1 @@
-from .telemetry_scope import TelemetryScope, TelemetryTrace, TelemetryItem
+from .activity_scope import ActivityScope

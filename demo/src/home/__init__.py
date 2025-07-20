@@ -10,8 +10,10 @@ import time
 from enum import Enum
 
 import yaml
+from mypyc.ir.ops import Return
+
 import wiretap
-from wiretap import begin_scope, begin_loop
+from wiretap import * # begin_scope, begin_loop, log_core, log_loop, add_next, log_util
 
 
 # @wiretap.telemetry()
@@ -72,30 +74,35 @@ def log_without_scope():
 
 
 def log_with_defaults():
-    with wiretap.begin_scope(dump={"args": "none"}, tags={"baz", "bar"}) as t:
-        t.log_trace(message="This is an info event.")
-        t.log_debug(message="This is a debug event.")
-        t.log_trace(name="test", message="This is a custom trace.")
+    with wiretap.begin_scope(state={"foo": "bar"}):
+        wiretap.log_core("This is a core event.")
+        wiretap.log_util("This is a util event.")
+        wiretap.log_meta("This is a meta event.")
         logging.info("This is a plain info.")
 
 
+def log_with_scope():
+    with wiretap.begin_scope(state={"foo": "bar"}), wiretap.log_scope():
+        wiretap.log_core("This is a core event.")
+
+
 def log_nested_activities():
-    with wiretap.begin_scope(name="first", tags={"foo"}) as foo:
-        foo.log_trace(message="This is the first activity.")
-        with wiretap.begin_scope(name="second", tags={"bar"}) as bar:
-            bar.log_trace(message="This is the second activity.")
-            with wiretap.begin_scope(name="third", tags={"baz"}) as baz:
-                baz.log_trace(message="This is the third activity.")
-            with wiretap.begin_scope(name="other") as qux:
-                qux.log_trace(message="This is a transaction.")
+    with wiretap.begin_scope(name="first", state={"foo": "foo"}):
+        wiretap.log_core("This is the first activity.")
+        with wiretap.begin_scope(name="second", state={"bar": "bar"}):
+            wiretap.log_core("This is the second activity.")
+            with wiretap.begin_scope(name="third", state={"baz": "baz"}):
+                wiretap.log_core("This is the third activity.")
+            with wiretap.begin_scope(name="other"):
+                wiretap.log_core("This is a transaction.")
 
 
 def log_with_none_block():
-    with wiretap.begin_scope(tags={"foo"}) as b:
-        b.log_trace(message="This is the info block.")
-        with wiretap.begin_scope(name="nope", tags={"bar"}, debug=True) as n:
-            n.log_trace(message="This is the lite scope.")
-            n.log_debug(message="This is the lite scope.")
+    with wiretap.begin_scope(tags={"foo"}):
+        wiretap.log_core("This is the info block.")
+        with wiretap.begin_scope(name="nope", tags={"bar"}):
+            wiretap.log_core("This is the lite scope.")
+            wiretap.log_util("This is the lite scope.")
 
 
 def log_empty_loop():
@@ -109,13 +116,22 @@ def log_single_loop():
             pass
 
 
+def log_single_loop_new():
+    with begin_scope():
+        for i in [1, 2, 3]:
+            with begin_scope(index=i):
+                add_next()
+                log_util("This item is complete.")
+        log_loop("Processed all items.")
+
+
 def log_multiple_loops():
     with begin_scope(), begin_loop(name="find_email", message="This is a test loop!", tags={"loop_wide_tag"}) as loop:
         for i in range(5):
             # noinspection PyBroadException
             try:
                 with loop.begin_iteration(email_id=f"foo-{i}", tags={i}) as iteration:
-                    iteration.log_trace(message=f"This is the {iteration.index}-th iteration.")
+                    iteration.log_event(message=f"This is the {iteration.index}-th iteration.")
                     time.sleep(random.randint(1, 100) / 1000)  # waits for a random time between 1 and 100 milliseconds
                     if i in [2, 4]:
                         raise ValueError("This interation has failed!")
@@ -132,7 +148,7 @@ def log_exception_with_stack():
         try:
             always_fails()
         except:
-            pass
+            wiretap.log_error("There was an error!")
 
 
 def log_error_without_stack():
@@ -140,11 +156,11 @@ def log_error_without_stack():
         with wiretap.begin_scope():
             raise TestException("This is a test exception  message.!", other="Has some custom value!")
 
-    with wiretap.begin_scope() as t:
+    with wiretap.begin_scope():
         try:
             always_fails()
         except Exception as e:
-            t.log_error(message=str(e))
+            wiretap.log_error(message=str(e))
 
 
 def log_with_custom_correlation():
@@ -158,18 +174,33 @@ def log_multiple_times():
 
 
 def log_path():
-    with wiretap.begin_scope() as s:
-        s.log_trace(path=pathlib.Path("c:/temp/test.log"))
-
-
-def log_debug():
-    with wiretap.begin_scope(debug=True) as s:
-        s.log_debug(message="Scope visible only in debug mode.")
+    with wiretap.begin_scope():
+        wiretap.log_core("Logs paths", path=pathlib.Path("c:/temp/test.log"))
 
 
 def log_error():
-    with wiretap.begin_scope() as s:
-        s.log_error(message="This is an error message.")
+    with wiretap.begin_scope():
+        wiretap.log_error(message="This is an error message.")
+
+
+def demo():
+    log_without_scope()
+    log_with_defaults()
+    log_with_scope()
+    log_nested_activities()
+    log_with_none_block()
+    # log_empty_loop()
+    # log_single_loop()
+    log_single_loop_new()
+    # log_multiple_loops()
+    log_multiple_times()
+    log_multiple_times()
+    log_exception_with_stack()
+    log_error_without_stack()
+    log_with_custom_correlation()
+    log_multiple_times()
+    log_path()
+    log_error()
 
 
 if __name__ == "__main__":
@@ -185,21 +216,4 @@ if __name__ == "__main__":
         wiretap.dict_config(config)
 
     # can_everything()
-
-    with wiretap.begin_scope(name="demo") as scope:
-        log_without_scope()
-        log_with_defaults()
-        log_nested_activities()
-        log_with_none_block()
-        log_empty_loop()
-        log_single_loop()
-        log_multiple_loops()
-        log_multiple_times()
-        log_multiple_times()
-        log_exception_with_stack()
-        log_error_without_stack()
-        log_with_custom_correlation()
-        log_multiple_times()
-        log_path()
-        log_debug()
-        log_error()
+    demo()

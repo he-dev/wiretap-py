@@ -33,4 +33,4 @@ def test_counter():
     assert round(c.mean, 1) == 2.5
     assert round(c.elapsed, 1) == 10
 
-    pprint(c.dump())
+    pprint(c.state())

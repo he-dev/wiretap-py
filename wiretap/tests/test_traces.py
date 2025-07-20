@@ -140,10 +140,10 @@ def test_can_log_selected_args(dumpster: Dumpster):
 def test_can_log_other_traces(dumpster: Dumpster):
     @wiretap.telemetry()
     def case04(logger: wiretap.tracing.LoggerScope = None):
-        logger.other.trace_info("This is an info.").log_trace()
-        logger.other.trace_item("foo", "This is an item.").log_trace()
-        logger.other.trace_skip("Had to skip this!").log_trace()
-        logger.other.trace_metric("bar", "baz").log_trace()
+        logger.other.trace_info("This is an info.").log_event()
+        logger.other.trace_item("foo", "This is an item.").log_event()
+        logger.other.trace_skip("Had to skip this!").log_event()
+        logger.other.trace_metric("bar", "baz").log_event()
 
     case04()
 
@@ -172,7 +172,7 @@ def test_can_log_other_traces(dumpster: Dumpster):
 def test_can_log_noop(dumpster: Dumpster):
     @wiretap.telemetry()
     def case06(activity: wiretap.tracing.LoggerScope = None):
-        activity.final.trace_noop("This didn't go well.").log_trace()
+        activity.final.trace_noop("This didn't go well.").log_event()
 
     case06()
 
@@ -184,7 +184,7 @@ def test_can_log_noop(dumpster: Dumpster):
 def test_can_log_abort(dumpster: Dumpster):
     @wiretap.telemetry()
     def case07(activity: wiretap.tracing.LoggerScope = None):
-        activity.final.trace_abort("This didn't go well.").log_trace()
+        activity.final.trace_abort("This didn't go well.").log_event()
 
     case07()
 
@@ -212,8 +212,8 @@ def test_can_log_error(dumpster: Dumpster):
 def test_can_disable_begin(dumpster: Dumpster):
     @wiretap.telemetry(auto_begin=False)
     def case09(activity: wiretap.tracing.LoggerScope = None):
-        activity.start.trace_begin().with_message("This is a begin.").log_trace()
-        activity.final.end_activity().with_message("This is an end.").log_trace()
+        activity.start.trace_begin().with_message("This is a begin.").log_event()
+        activity.final.end_activity().with_message("This is an end.").log_event()
 
     case09()
 
@@ -294,7 +294,7 @@ def test_can_log_abort_on_exception(dumpster: Dumpster):
 def test_raises_when_not_initialized():
     @wiretap.telemetry(auto_begin=False)
     def case15(activity: wiretap.tracing.LoggerScope = None):
-        activity.other.trace_info("This is an info.").log_trace()
+        activity.other.trace_info("This is an info.").log_event()
 
     with pytest.raises(wiretap.tracing.ActivityStartMissing):
         case15()
@@ -303,7 +303,7 @@ def test_raises_when_not_initialized():
 def test_raises_when_duplicate_start(dumpster: Dumpster):
     @wiretap.telemetry()
     def case16(activity: wiretap.tracing.LoggerScope = None):
-        activity.start.trace_begin().with_message("This is the begin.").log_trace()
+        activity.start.trace_begin().with_message("This is the begin.").log_event()
 
     with pytest.raises(wiretap.tracing.ActivityAlreadyStarted):
         case16()
@@ -312,9 +312,9 @@ def test_raises_when_duplicate_start(dumpster: Dumpster):
 def test_can_log_custom_traces(dumpster: Dumpster):
     @wiretap.telemetry(auto_begin=False)
     def case17(activity: wiretap.tracing.LoggerScope = None):
-        activity.start.log_trace("one").log_trace()
-        activity.other.log_trace("two").log_trace()
-        activity.final.log_trace("three").log_trace()
+        activity.start.log_event("one").log_event()
+        activity.other.log_event("two").log_event()
+        activity.final.log_event("three").log_event()
 
     case17()
 

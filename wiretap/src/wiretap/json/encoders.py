@@ -4,7 +4,8 @@ from typing import Type, Any, Callable, Protocol, runtime_checkable, cast
 import cachetools
 
 from util.chain_path import ChainPath
-from wiretap.util import TagSet
+from wiretap import BasicStats
+from wiretap.stats import LoopStats
 
 
 @runtime_checkable
@@ -105,9 +106,9 @@ class ChainPathEncoder(JSONEncoder, JSONEncoderPro):
         return str(obj)
 
 
-class TagSetEncoder(JSONEncoder, JSONEncoderPro):
+class LoopStatsEncoder(JSONEncoder, JSONEncoderPro):
     def supports(self, obj_type: Type) -> bool:
-        return issubclass(obj_type, TagSet)
+        return issubclass(obj_type, LoopStats)
 
     def default(self, obj) -> Any | None:
-        return obj()
+        return obj.dump()

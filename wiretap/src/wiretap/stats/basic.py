@@ -1,6 +1,6 @@
 from typing import Any
 
-from wiretap.util import LoopStats
+from wiretap.stats import LoopStats
 
 
 class BasicStats(LoopStats):
@@ -31,10 +31,8 @@ class BasicStats(LoopStats):
     def dump(self) -> dict[str, Any]:
         if self.n > 0:
             return {
-                "count": {
-                    "total": self.n,
-                    "error": self.e
-                },
+                "count": self.n,
+                "error": self.e,
                 "smooth": round((self.n - self.e) / self.n, self.precision) if self.n > 0 else None,
                 "elapsed": round(self.sum, self.precision),
                 "mean": round(self.mean, self.precision),
@@ -47,3 +45,6 @@ class BasicStats(LoopStats):
             return {
                 "count": 0,
             }
+
+    def __str__(self) -> str:
+        return str(self.dump())
