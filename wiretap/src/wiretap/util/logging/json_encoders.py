@@ -3,9 +3,8 @@ from typing import Type, Any, Callable, Protocol, runtime_checkable, cast
 
 import cachetools
 
-from util.chain_path import ChainPath
-from wiretap import BasicStats
-from wiretap.stats import LoopStats
+from wiretap.util.chain_path import ChainPath
+from wiretap.util.stats import Serializable
 
 
 @runtime_checkable
@@ -21,7 +20,7 @@ class JSONEncoderCache:
     @classmethod
     @cachetools.cached(cache={}, key=lambda c, e, t: t)
     def get_encoder_for(cls, encoders: list[JSONEncoder], obj_type: Type) -> JSONEncoder:
-        # print(f"Searching encoder for {obj_type}") # Debugging message to see how often the search is used.
+        # print(f"Searching encoder for {obj_type}") # debug: Message to see how often the search is used.
 
         # Find an encoder that can handle the obj_type or use the default one otherwise.
         for encoder in encoders:
@@ -108,7 +107,7 @@ class ChainPathEncoder(JSONEncoder, JSONEncoderPro):
 
 class LoopStatsEncoder(JSONEncoder, JSONEncoderPro):
     def supports(self, obj_type: Type) -> bool:
-        return issubclass(obj_type, LoopStats)
+        return issubclass(obj_type, Serializable)
 
     def default(self, obj) -> Any | None:
-        return obj.dump()
+        return obj.to_dict()

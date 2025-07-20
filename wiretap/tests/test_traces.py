@@ -70,7 +70,7 @@ config = {
 
 @pytest.fixture(autouse=True)
 def reset_config():
-    wiretap.dict_config(config)
+    wiretap.configure(config)
 
 
 class Dumpster:

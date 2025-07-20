@@ -44,11 +44,10 @@ class KebabEnum(Enum):
 
 def trim_path(path: str) -> str:
     # core: Get rid of the unimportant part.
-    path = pathlib.Path(path)
+    _path = pathlib.Path(path)
     try:
-        cut_index = path.parts.index("src")
-        return pathlib.Path(*path.parts[cut_index:]).as_posix()
+        cut_index = _path.parts.index("src")
+        return pathlib.Path(*_path.parts[cut_index:]).as_posix()
     except ValueError:
         # core: 'path' is apparently a single name, so return the original one.
-        return path.as_posix()
-
+        return _path.as_posix()

@@ -1,5 +1,4 @@
 import asyncio
-import datetime
 import logging
 import logging.config
 import logging.handlers
@@ -8,12 +7,13 @@ import pathlib
 import random
 import time
 from enum import Enum
+from time import sleep
 
 import yaml
-from mypyc.ir.ops import Return
 
 import wiretap
-from wiretap import * # begin_scope, begin_loop, log_core, log_loop, add_next, log_util
+from wiretap import *
+from wiretap.util.stats.basic import BasicStats
 
 
 # @wiretap.telemetry()
@@ -75,34 +75,34 @@ def log_without_scope():
 
 def log_with_defaults():
     with wiretap.begin_scope(state={"foo": "bar"}):
-        wiretap.log_core("This is a core event.")
-        wiretap.log_util("This is a util event.")
-        wiretap.log_meta("This is a meta event.")
+        wiretap.log_info("This is a core event.")
+        wiretap.log_debug("This is a util event.")
+        wiretap.log_trace("This is a meta event.")
         logging.info("This is a plain info.")
 
 
 def log_with_scope():
     with wiretap.begin_scope(state={"foo": "bar"}), wiretap.log_scope():
-        wiretap.log_core("This is a core event.")
+        wiretap.log_info("This is a core event.")
 
 
 def log_nested_activities():
     with wiretap.begin_scope(name="first", state={"foo": "foo"}):
-        wiretap.log_core("This is the first activity.")
+        wiretap.log_info("This is the first activity.")
         with wiretap.begin_scope(name="second", state={"bar": "bar"}):
-            wiretap.log_core("This is the second activity.")
+            wiretap.log_info("This is the second activity.")
             with wiretap.begin_scope(name="third", state={"baz": "baz"}):
-                wiretap.log_core("This is the third activity.")
+                wiretap.log_info("This is the third activity.")
             with wiretap.begin_scope(name="other"):
-                wiretap.log_core("This is a transaction.")
+                wiretap.log_info("This is a transaction.")
 
 
 def log_with_none_block():
     with wiretap.begin_scope(tags={"foo"}):
-        wiretap.log_core("This is the info block.")
+        wiretap.log_info("This is the info block.")
         with wiretap.begin_scope(name="nope", tags={"bar"}):
-            wiretap.log_core("This is the lite scope.")
-            wiretap.log_util("This is the lite scope.")
+            wiretap.log_info("This is the lite scope.")
+            wiretap.log_debug("This is the lite scope.")
 
 
 def log_empty_loop():
@@ -116,13 +116,15 @@ def log_single_loop():
             pass
 
 
-def log_single_loop_new():
+def log_single_loop_3():
     with begin_scope():
+        sms_stats = BasicStats()
         for i in [1, 2, 3]:
-            with begin_scope(index=i):
-                add_next()
-                log_util("This item is complete.")
-        log_loop("Processed all items.")
+            with begin_scope(index=i) as iter_scope:
+                sleep(random.uniform(0.5, 1.5))
+                sms_stats.count_item(iter_scope.elapsed)
+                log_debug("This item is complete.")
+        log_info("Fake sms stats.", sms_stats=sms_stats)
 
 
 def log_multiple_loops():
@@ -175,7 +177,7 @@ def log_multiple_times():
 
 def log_path():
     with wiretap.begin_scope():
-        wiretap.log_core("Logs paths", path=pathlib.Path("c:/temp/test.log"))
+        wiretap.log_info("Logs paths", path=pathlib.Path("c:/temp/test.log"))
 
 
 def log_error():
@@ -191,7 +193,7 @@ def demo():
     log_with_none_block()
     # log_empty_loop()
     # log_single_loop()
-    log_single_loop_new()
+    log_single_loop_3()
     # log_multiple_loops()
     log_multiple_times()
     log_multiple_times()
@@ -213,7 +215,7 @@ if __name__ == "__main__":
     with open(r"..\..\cfg\wiretap.yml", "r") as file:
         config = yaml.safe_load(file)
         # config["handlers"]["elastic_file"]["filename"] = rf"c:\temp\elastic-v8.0.0-{datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')}.log"
-        wiretap.dict_config(config)
+        wiretap.configure(config)
 
     # can_everything()
     demo()

@@ -9,30 +9,32 @@ formatters:
       correlation: "<correlation>"
       extra: "<extra>"
   wiretap:
-    (): wiretap.formatters.TextFormatter
+    (): wiretap.util.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       [{asctime}.{msecs:03.0f} {levelname:7s}]
       {scope}: "{message}"
-      properties={context} source={source} activity={activity}
+      properties={properties}
+      activity={activity}
+      source={source}
   elastic:
-    (): wiretap.formatters.JSONFormatter
+    (): wiretap.util.logging.JsonFormatter
     encoders:
-      - wiretap.json.encoders.ChainPathEncoder
-      - wiretap.json.encoders.DateTimeEncoder
-      - wiretap.json.encoders.UUIDEncoder
-      - wiretap.json.encoders.SetEncoder
-      - wiretap.json.encoders.PathEncoder
-      - wiretap.json.encoders.LoopStatsEncoder
+      - wiretap.util.logging.ChainPathEncoder
+      - wiretap.util.logging.DateTimeEncoder
+      - wiretap.util.logging.UUIDEncoder
+      - wiretap.util.logging.SetEncoder
+      - wiretap.util.logging.PathEncoder
+      - wiretap.util.logging.LoopStatsEncoder
     properties:
-      - wiretap.json.modifiers.AddTimestamp
-      - wiretap.json.modifiers.AddMessage
-      - wiretap.json.modifiers.AddProperties
-      - wiretap.json.modifiers.AddActivity
-      - wiretap.json.modifiers.AddSource
-      - wiretap.json.modifiers.AddException
-      - (): wiretap.json.modifiers.AddEnvironmentVariables
+      - wiretap.util.logging.AddTimestamp
+      - wiretap.util.logging.AddMessage
+      - wiretap.util.logging.AddProperties
+      - wiretap.util.logging.AddActivity
+      - wiretap.util.logging.AddSource
+      - wiretap.util.logging.AddException
+      - (): wiretap.util.logging.AddEnvironmentVariables
         names:
           - app_id
 handlers:
