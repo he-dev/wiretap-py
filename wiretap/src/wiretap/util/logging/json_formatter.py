@@ -7,7 +7,7 @@ from typing import Any
 from wiretap.util.logging import json_encoders as enc, json_modifiers as mods
 from wiretap.util.logging.json_encoders import JSONEncoderDefaultFactory
 from wiretap.util.logging.json_modifiers import JsonModifier, JsonModifierContext
-from wiretap.meta.type_factory import parse_type
+from wiretap.util.logging.type_factory import create_instance
 
 DEFAULT_ENCODERS = [
     enc.DateTimeEncoder(),
@@ -40,10 +40,10 @@ class JsonFormatter(logging.Formatter):
         self.modifiers = DEFAULT_MODIFIERS
 
         if encoders is not None:
-            self.encoders = [parse_type(e, JSONEncoder) for e in encoders]
+            self.encoders = [create_instance(e, JSONEncoder) for e in encoders]
 
         if properties is not None:
-            self.modifiers = [parse_type(p, JsonModifier) for p in properties]
+            self.modifiers = [create_instance(p, JsonModifier) for p in properties]
 
     def format(self, record: logging.LogRecord):
         # core: Call each modifier.

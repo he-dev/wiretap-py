@@ -37,7 +37,7 @@ class LoopStats:
 
     @property
     def throughput_ms(self) -> int:
-        return self.count // self.duration_ms if self.duration_ms > 0 else float("nan")
+        return self.count // self.duration_ms if self.duration_ms > 0 else 0
 
     def to_dict(self) -> dict[str, Any]:
         return {

@@ -2,8 +2,9 @@ import dataclasses
 import logging
 import os
 import traceback
+from abc import ABC, abstractmethod
 from datetime import datetime, timezone
-from typing import Protocol, Any, runtime_checkable, Optional
+from typing import Any, Optional
 
 from wiretap.core.span import SpanEvent, Span
 from wiretap.util import trim_path
@@ -28,10 +29,10 @@ class JsonModifierContext:
     entry: JsonEntry
 
 
-@runtime_checkable
-class JsonModifier(Protocol):
+class JsonModifier(ABC):
     """Allows modifying the structure of the JSON entry."""
 
+    @abstractmethod
     def apply(self, context: JsonModifierContext) -> JsonEntry: ...
 
 
