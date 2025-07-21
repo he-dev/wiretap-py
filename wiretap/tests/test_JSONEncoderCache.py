@@ -2,8 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from wiretap.json import JSONEncoderCache
-from wiretap.json.encoders import UUIDEncoder, DateTimeEncoder
+from wiretap.util.logging import UUIDEncoder, DateTimeEncoder, JSONEncoderCache
 
 
 def test_get_encoder_for_uses_cached_encoder():

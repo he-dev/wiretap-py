@@ -1,7 +1,6 @@
-import json
 import logging
 
-from wiretap.core.activity_scope import ActivityEvent, ActivityScope
+from wiretap.core.span import SpanEvent, Span
 from wiretap.util import trim_path
 
 DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {scope}: {trace} | {elapsed:0.3f} sec | {message} | {trace_state}, {trace_tags}"
@@ -14,20 +13,22 @@ class TextFormatter(logging.Formatter):
 
         include_source = logging.getLogger(__name__).isEnabledFor(logging.DEBUG)
 
-        event = record.__dict__.get(ActivityEvent.KEY, None)
+        event = record.__dict__.get(SpanEvent.KEY, None)
         if not event:
-            if scope := ActivityScope.peek():
-                event = ActivityEvent(scope)
+            if scope := Span.current():
+                event = SpanEvent(scope)
 
         if event:
-            record.scope = event.scope
+            record.span_name = event.name
             record.indent = 1  # self.indent * activity.scope.depth
             record.properties = stringify_deep(event.state)
-            record.activity = {
+            record.span = {
                 "trace_id": event.trace_id,
                 "span_id": event.span_id,
                 "parent_id": event.parent_id,
-                "elapsed": round(event.elapsed, 1),
+                "elapsed": event.stopwatch.elapsed_ms if event.stopwatch.is_running else None,
+                "duration": None if event.stopwatch.is_running else round(event.stopwatch.duration_ms, 1),
+                "status": event.status.value,
             }
             record.source = {
                 "func": event.frame.function if event.frame else record.funcName,
@@ -36,7 +37,7 @@ class TextFormatter(logging.Formatter):
             } if include_source else "off"
 
         else:
-            record.scope = record.funcName
+            record.span_name = record.funcName
             record.message = record.msg
             record.indent = self.indent
             record.source = {
@@ -45,7 +46,7 @@ class TextFormatter(logging.Formatter):
                 "line": record.lineno
             } if include_source else "off"
             record.properties = None
-            record.activity = None
+            record.span = None
 
         return super().format(record)
 

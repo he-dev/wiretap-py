@@ -14,7 +14,7 @@ class LoopRates(Serializable):
 
     @property
     def total_elapsed(self) -> float:
-        return round(sum(stat.elapsed for stat in self.stats.values()), self.precision)
+        return round(sum(stat.duration_ms for stat in self.stats.values()), self.precision)
 
     def rate_for(self, category: str) -> float:
         return round(self.stats[category].count / self.total_count, self.precision) if self.total_count else float("nan")

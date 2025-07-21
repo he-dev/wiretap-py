@@ -105,7 +105,7 @@ class ChainPathEncoder(JSONEncoder, JSONEncoderPro):
         return str(obj)
 
 
-class LoopStatsEncoder(JSONEncoder, JSONEncoderPro):
+class SerializableEncoder(JSONEncoder, JSONEncoderPro):
     def supports(self, obj_type: Type) -> bool:
         return issubclass(obj_type, Serializable)
 

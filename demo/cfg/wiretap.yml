@@ -14,9 +14,9 @@ formatters:
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       [{asctime}.{msecs:03.0f} {levelname:7s}]
-      {scope}: "{message}"
+      {span_name}: "{message}"
       properties={properties}
-      activity={activity}
+      span={span}
       source={source}
   elastic:
     (): wiretap.util.logging.JsonFormatter
@@ -26,7 +26,8 @@ formatters:
       - wiretap.util.logging.UUIDEncoder
       - wiretap.util.logging.SetEncoder
       - wiretap.util.logging.PathEncoder
-      - wiretap.util.logging.LoopStatsEncoder
+      #- wiretap.util.logging.EnumEncoder
+      - wiretap.util.logging.SerializableEncoder
     properties:
       - wiretap.util.logging.AddTimestamp
       - wiretap.util.logging.AddMessage
@@ -34,9 +35,9 @@ formatters:
       - wiretap.util.logging.AddActivity
       - wiretap.util.logging.AddSource
       - wiretap.util.logging.AddException
-      - (): wiretap.util.logging.AddEnvironmentVariables
-        names:
-          - app_id
+#      - (): wiretap.util.logging.AddEnvironmentVariables
+#        names:
+#          - app_id
 handlers:
   console:
     class: logging.StreamHandler
@@ -66,7 +67,8 @@ loggers:
     #handlers: [ "console", "file", "elastic_file" ]
     handlers: [ "console", "elastic_file" ]
     # handlers: [ "console" ]
-    level: "TRACE"
     #level: "INFO"
+    #level: "DEBUG"
+    level: "TRACE"
   PIL:
     level: "WARNING"

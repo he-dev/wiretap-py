@@ -13,7 +13,7 @@ import yaml
 
 import wiretap
 from wiretap import *
-from wiretap.util.stats.basic import BasicStats
+from wiretap.home.scopes import log_duration
 
 
 # @wiretap.telemetry()
@@ -74,46 +74,46 @@ def log_without_scope():
 
 
 def log_with_defaults():
-    with wiretap.begin_scope(state={"foo": "bar"}):
-        wiretap.log_info("This is a core event.")
-        wiretap.log_debug("This is a util event.")
-        wiretap.log_trace("This is a meta event.")
+    with begin_scope(state={"foo": "bar"}):
+        log_info("This is a core event.")
+        log_debug("This is a util event.")
+        log_trace("This is a meta event.")
         logging.info("This is a plain info.")
 
 
-def log_with_scope():
-    with wiretap.begin_scope(state={"foo": "bar"}), wiretap.log_scope():
-        wiretap.log_info("This is a core event.")
+def log_with_timing_1():
+    with begin_scope(state={"foo": "bar"}), log_duration():
+        sleep(random.uniform(0.5, 1.0))
+        log_info("This is a core event.")
 
 
-def log_nested_activities():
-    with wiretap.begin_scope(name="first", state={"foo": "foo"}):
-        wiretap.log_info("This is the first activity.")
-        with wiretap.begin_scope(name="second", state={"bar": "bar"}):
-            wiretap.log_info("This is the second activity.")
-            with wiretap.begin_scope(name="third", state={"baz": "baz"}):
-                wiretap.log_info("This is the third activity.")
-            with wiretap.begin_scope(name="other"):
-                wiretap.log_info("This is a transaction.")
-
-
-def log_with_none_block():
-    with wiretap.begin_scope(tags={"foo"}):
-        wiretap.log_info("This is the info block.")
-        with wiretap.begin_scope(name="nope", tags={"bar"}):
-            wiretap.log_info("This is the lite scope.")
-            wiretap.log_debug("This is the lite scope.")
-
-
-def log_empty_loop():
-    with begin_scope() as t, begin_loop(name="empty_loop", tags={"test_loop_0"}):
+def log_with_timing_2():
+    try:
+        with begin_scope(state={"foo": "bar"}), log_duration(level="debug"):
+            sleep(random.uniform(0.5, 1.0))
+            raise Exception("This is a test exception.")
+            log_info("This is a core event.")
+    except:
         pass
 
 
-def log_single_loop():
-    with begin_scope(), begin_loop(name="one_iteration", tags={"test_loop_1"}) as loop:
-        with loop.begin_iteration():
-            pass
+def log_nested_activities():
+    with begin_scope(name="first", state={"foo": "foo"}):
+        log_info("This is the first activity.")
+        with begin_scope(name="second", state={"bar": "bar"}):
+            log_info("This is the second activity.")
+            with begin_scope(name="third", state={"baz": "baz"}):
+                log_info("This is the third activity.")
+            with begin_scope(name="other"):
+                log_info("This is a transaction.")
+
+
+def log_with_none_block():
+    with begin_scope(tags={"foo"}):
+        log_info("This is the info block.")
+        with begin_scope(name="nope", tags={"bar"}):
+            log_info("This is the lite scope.")
+            log_debug("This is the lite scope.")
 
 
 def log_single_loop_3():
@@ -122,7 +122,7 @@ def log_single_loop_3():
         for i in [1, 2, 3]:
             with begin_scope(index=i) as iter_scope:
                 sleep(random.uniform(0.5, 1.5))
-                sms_stats.count_item(iter_scope.elapsed)
+                sms_stats.count_item(iter_scope.stopwatch.elapsed_ms)
                 log_debug("This item is complete.")
         log_info("Fake sms stats.", sms_stats=sms_stats)
 
@@ -188,7 +188,8 @@ def log_error():
 def demo():
     log_without_scope()
     log_with_defaults()
-    log_with_scope()
+    log_with_timing_1()
+    log_with_timing_2()
     log_nested_activities()
     log_with_none_block()
     # log_empty_loop()

@@ -3,22 +3,24 @@ import dataclasses
 import inspect
 import logging
 import secrets
+import sys
 from contextvars import ContextVar  # noqa: built-in module
 from functools import reduce
 from inspect import FrameInfo
 from typing import Optional, Any, Iterator, TypeVar
 
-from wiretap.util import Elapsed
+from wiretap.core import NoActivityInScopeError, SpanStatus
+from wiretap.util.stopwatch import Stopwatch
 
-T = TypeVar("T", bound="ActivityScope")
+T = TypeVar("T", bound="Span")
 
 
-class ActivityScope:
+class Span:
     """
-    This class represents a single telemetry scope.
+    This class represents a single activity scope.
     """
 
-    current: ContextVar[Optional["ActivityScope"]] = ContextVar("current_activity", default=None)
+    _current: ContextVar[Optional["Span"]] = ContextVar("current_span", default=None)
 
     def __init__(
             self,
@@ -27,7 +29,7 @@ class ActivityScope:
             name: str | None,
             state: dict[str, Any] | None,
             frame: FrameInfo,
-            parent: Optional["ActivityScope"],
+            parent: Optional["Span"],
             **kwargs,
     ):
         self.trace_id: str = trace_id or (parent.trace_id if parent else secrets.token_hex(16))
@@ -35,13 +37,14 @@ class ActivityScope:
         self.parent_id: str | None = parent_id or (parent.span_id if parent else None)
         self.name: str = name or frame.function
         self.state: dict = (state or {}) | kwargs
+        self.status: SpanStatus = SpanStatus.UNSET
         self.frame: FrameInfo = frame
-        self.parent: Optional["ActivityScope"] = parent
-        self.elapsed: Elapsed = Elapsed()
+        self.parent: Optional["Span"] = parent
+        self.stopwatch: Stopwatch = Stopwatch()
         self.logger: logging.Logger = logging.getLogger(name)
 
-    def __iter__(self) -> Iterator["ActivityScope"]:
-        current: Optional["ActivityScope"] = self
+    def __iter__(self) -> Iterator["Span"]:
+        current: Optional["Span"] = self
         while current:
             yield current
             current = current.parent
@@ -54,22 +57,20 @@ class ActivityScope:
             frame_at: int | None = None,
             **kwargs
     ) -> None:
-        """Logs scrap trace at the info level."""
-
-        if scope := ActivityScope.peek():
+        if scope := Span.current():
             stack = inspect.stack(2)
             frame = stack[frame_at] if frame_at else scope.frame
 
             scope.logger.log(
                 level=level,
                 msg=message,
-                exc_info=level >= logging.ERROR,
+                exc_info=level >= logging.ERROR or sys.exc_info()[0] is not None,
                 extra={
-                    ActivityEvent.KEY: ActivityEvent(scope=scope, frame=frame, state=state, **kwargs)
+                    SpanEvent.KEY: SpanEvent(scope=scope, frame=frame, state=state, **kwargs)
                 }
             )
         else:
-            raise RuntimeError("No activity in scope.")
+            raise NoActivityInScopeError("Cannot log event because there is no activity in scope.")
 
     @classmethod
     @contextlib.contextmanager
@@ -87,6 +88,8 @@ class ActivityScope:
 
         Parameters:
         :param name: Name of the scope, derived from the calling frame if not provided.
+        :param trace_id: The trace ID to use for the scope. If None, a random ID will be generated.
+        :param parent_id: The parent ID to use for the scope. If None, the parent ID will be derived from the parent scope.
         :param state: Extra data to attach to the scope.
         :param frame: Frame information about the scope’s context.
 
@@ -96,29 +99,31 @@ class ActivityScope:
         if frame is None:
             raise ValueError("FrameInfo must not be None.")
 
-        parent = cls.peek()
+        parent = cls.current()
         scope = cls(name=name, trace_id=trace_id, parent_id=parent_id, state=state, frame=frame, parent=parent, **kwargs)
-        token = cls.current.set(scope)
+        token = cls._current.set(scope)
         try:
             yield scope
         finally:
-            cls.current.reset(token)
+            cls._current.reset(token)
 
+    # note: There is no builtin @classproperty! :-\
     @classmethod
-    def peek(cls) -> Optional["ActivityScope"]:
-        # core: Gets current activity from the stack.
-        return cls.current.get()
+    def current(cls) -> Optional["Span"]:
+        return cls._current.get()
 
 
 @dataclasses.dataclass
-class ActivityEvent:
+class SpanEvent:
     KEY = "_activity_event"
 
-    def __init__(self, scope: ActivityScope, frame: FrameInfo | None = None, state: dict[str, Any] | None = None, **kwargs):
-        self.scope = scope.name
+    def __init__(self, scope: Span, frame: FrameInfo | None = None, state: dict[str, Any] | None = None, **kwargs):
+        self.name = scope.name
         self.frame = frame
         self.trace_id = scope.trace_id
         self.span_id = scope.span_id
         self.parent_id = scope.parent_id
-        self.elapsed = scope.elapsed.value
+        self.stopwatch = scope.stopwatch
+        # core: Merge the state of all scopes.
         self.state = reduce(lambda c, n: (n.state or {}) | c, scope, (state or {}) | kwargs)
+        self.status = scope.status

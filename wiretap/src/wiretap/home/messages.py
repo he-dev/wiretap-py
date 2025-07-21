@@ -1,25 +1,31 @@
 import logging
-from typing import Optional
 
 from wiretap.core import TRACE_LEVEL
-from wiretap.core.activity_scope import ActivityScope
+from wiretap.core.span import Span
 
 
-def log_info(message: str, state: Optional[dict] = None, **kwargs) -> None:
-    ActivityScope.log_event(message=message, level=logging.INFO, state=state, frame_at=2, **kwargs)
+# node: Ignore duplicate code in these functions because they are too small to refactor.
+
+# noinspection DuplicatedCode
+def log_info(message: str, state: dict | None = None, **kwargs) -> None:
+    Span.log_event(message=message, level=logging.INFO, state=state, frame_at=kwargs.pop("frame_at", 2), **kwargs)
 
 
-def log_debug(message: str, state: Optional[dict] = None, **kwargs) -> None:
-    ActivityScope.log_event(message=message, level=logging.DEBUG, state=state, frame_at=2, **kwargs)
+# noinspection DuplicatedCode
+def log_debug(message: str, state: dict | None = None, **kwargs) -> None:
+    Span.log_event(message=message, level=logging.DEBUG, state=state, frame_at=kwargs.pop("frame_at", 2), **kwargs)
 
 
-def log_trace(message: str, state: Optional[dict] = None, **kwargs) -> None:
-    ActivityScope.log_event(message=message, level=TRACE_LEVEL, state=state, frame_at=2, **kwargs)
+# noinspection DuplicatedCode
+def log_trace(message: str, state: dict | None = None, **kwargs) -> None:
+    Span.log_event(message=message, level=TRACE_LEVEL, state=state, frame_at=kwargs.pop("frame_at", 2), **kwargs)
 
 
-def log_warning(message: str, state: Optional[dict] = None, **kwargs) -> None:
-    ActivityScope.log_event(message=message, level=logging.WARNING, state=state, frame_at=2, **kwargs)
+# noinspection DuplicatedCode
+def log_warning(message: str, state: dict | None = None, **kwargs) -> None:
+    Span.log_event(message=message, level=logging.WARNING, state=state, frame_at=kwargs.pop("frame_at", 2), **kwargs)
 
 
-def log_error(message: str, state: Optional[dict] = None, **kwargs) -> None:
-    ActivityScope.log_event(message=message, level=logging.ERROR, state=state, frame_at=2, **kwargs)
+# noinspection DuplicatedCode
+def log_error(message: str, state: dict | None = None, **kwargs) -> None:
+    Span.log_event(message=message, level=logging.ERROR, state=state, frame_at=kwargs.pop("frame_at", 2), **kwargs)

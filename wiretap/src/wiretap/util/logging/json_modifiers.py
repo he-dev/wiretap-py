@@ -5,9 +5,10 @@ import traceback
 from datetime import datetime, timezone
 from typing import Protocol, Any, runtime_checkable, Optional
 
-from wiretap.core.activity_scope import ActivityEvent, ActivityScope
+from wiretap.core.span import SpanEvent, Span
 from wiretap.util import trim_path
 
+# util: Type alias for convenience
 JsonEntry = dict[str, Any]
 
 
@@ -16,12 +17,12 @@ class JsonModifierContext:
     record: logging.LogRecord
 
     @property
-    def event(self) -> ActivityEvent | None:
-        if event := self.record.__dict__.get(ActivityEvent.KEY, None):
+    def event(self) -> SpanEvent | None:
+        if event := self.record.__dict__.get(SpanEvent.KEY, None):
             return event
         else:
-            if scope := ActivityScope.peek():
-                return ActivityEvent(scope)
+            if scope := Span.current():
+                return SpanEvent(scope)
         return None
 
     entry: JsonEntry
@@ -29,7 +30,7 @@ class JsonModifierContext:
 
 @runtime_checkable
 class JsonModifier(Protocol):
-    """Create a single JSON property in the final JSON object."""
+    """Allows modifying the structure of the JSON entry."""
 
     def apply(self, context: JsonModifierContext) -> JsonEntry: ...
 
@@ -64,21 +65,28 @@ class AddActivity(JsonModifier):
 
     def apply(self, context: JsonModifierContext) -> JsonEntry:
         if event := context.event:
-            return context.entry | {"activity": {
-                "name": event.scope,
-                "elapsed": round(event.elapsed, 1),
+            return context.entry | {
                 "trace_id": event.trace_id,
+                "name": event.name,
                 "span_id": event.span_id,
+                "elapsed_ms": event.stopwatch.elapsed_ms if event.stopwatch.is_running else None,
                 "parent_id": event.parent_id,
-            }}
+                "start_at": event.stopwatch.start_dt,
+                "end_at": None if event.stopwatch.is_running else event.stopwatch.end_dt,
+                "duration_ms": None if event.stopwatch.is_running else event.stopwatch.duration_ms,
+                "status": event.status,
+            }
         else:
-            return context.entry | {"activity": {
-                "name": context.record.funcName,
-                "elapsed": None,
+            return context.entry | {
                 "trace_id": None,
+                "name": context.record.funcName,
                 "span_id": None,
+                # "elapsed_s": None,
                 "parent_id": None,
-            }}
+                "start_at": None,
+                "end_at": None,
+                "duration_ms": None,
+            }
 
 
 class AddSource(JsonModifier):

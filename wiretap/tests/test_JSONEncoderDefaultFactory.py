@@ -1,8 +1,7 @@
 import json
 import pathlib
 
-from wiretap.json import JSONEncoderDefaultFactory
-from wiretap.json.encoders import UUIDEncoder, PathEncoder, DateTimeEncoder
+from wiretap.util.logging import UUIDEncoder, PathEncoder, DateTimeEncoder, JSONEncoderDefaultFactory
 
 
 def test_create_func_uses_custom_encoders():
