@@ -1,9 +1,9 @@
 from typing import Any
 
-from wiretap.util.stats import Serializable, LoopStats
+from wiretap.util.loops.loop_stats import LoopStats
 
 
-class LoopRates(Serializable):
+class LoopRates:
     def __init__(self, stats: dict[str, LoopStats], precision: int = 1):
         self.stats = stats
         self.precision = precision

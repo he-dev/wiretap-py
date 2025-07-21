@@ -2,6 +2,7 @@ import functools
 import json
 import logging
 from json import JSONEncoder
+from typing import Any
 
 from wiretap.util.logging import json_encoders as enc, json_modifiers as mods
 from wiretap.util.logging.json_encoders import JSONEncoderDefaultFactory
@@ -19,7 +20,7 @@ DEFAULT_ENCODERS = [
 DEFAULT_MODIFIERS = [
     mods.AddTimestamp(),
     mods.AddMessage(),
-    mods.AddActivity(),
+    mods.AddSpan(),
     mods.AddSource(),
     mods.AddProperties(),
     mods.AddException()
@@ -47,7 +48,7 @@ class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord):
         # core: Call each modifier.
         # entry = functools.reduce(lambda current, modifier: modifier.apply(record, current), self.modifiers, {})
-        entry = functools.reduce(lambda current, modifier: modifier.apply(JsonModifierContext(record, current)), self.modifiers, {})
+        entry: dict[str, Any] = functools.reduce(lambda current, modifier: modifier.apply(JsonModifierContext(record, current)), self.modifiers, {})
 
         return json.dumps(
             entry,

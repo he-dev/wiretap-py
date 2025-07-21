@@ -1,59 +1,61 @@
 version: 1
 formatters:
-  classic:
-    style: "{"
-    format: "{asctime}.{msecs:03d} | {module}.{funcName} | {message}"
-    datefmt: "%Y-%m-%d %H:%M:%S"
-    defaults:
-      status: "<status>"
-      correlation: "<correlation>"
-      extra: "<extra>"
-  wiretap:
+  console_full:
     (): wiretap.util.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
-      [{asctime}.{msecs:03.0f} {levelname:7s}]
+      [{asctime}.{msecs:03.0f} {levelname:7s}{indent}]
       {span_name}: "{message}"
-      properties={properties}
-      span={span}
-      source={source}
-  elastic:
+      | ctx={properties}
+      | span={span}
+      | src={source}
+  console_lite:
+    (): wiretap.util.logging.TextFormatter
+    style: "{"
+    datefmt: "%Y-%m-%d %H:%M:%S"
+    fmt: >-
+      [{asctime}.{msecs:03.0f} {levelname:7s}{indent}]
+      {span_name}: "{message}"
+      | ctx={properties}
+  elastic_json:
     (): wiretap.util.logging.JsonFormatter
     encoders:
-      - wiretap.util.logging.ChainPathEncoder
       - wiretap.util.logging.DateTimeEncoder
       - wiretap.util.logging.UUIDEncoder
       - wiretap.util.logging.SetEncoder
       - wiretap.util.logging.PathEncoder
-      #- wiretap.util.logging.EnumEncoder
-      - wiretap.util.logging.SerializableEncoder
+      - wiretap.util.logging.ToDictEncoder
     properties:
       - wiretap.util.logging.AddTimestamp
       - wiretap.util.logging.AddMessage
       - wiretap.util.logging.AddProperties
-      - wiretap.util.logging.AddActivity
+      - wiretap.util.logging.AddSpan
       - wiretap.util.logging.AddSource
       - wiretap.util.logging.AddException
 #      - (): wiretap.util.logging.AddEnvironmentVariables
 #        names:
 #          - app_id
 handlers:
-  console:
+  console_full:
     class: logging.StreamHandler
-    formatter: wiretap
+    formatter: console_full
     #level: INFO
-  file:
+  console_lite:
+    class: logging.StreamHandler
+    formatter: console_lite
+    #level: INFO
+  console_file:
     class: "logging.handlers.TimedRotatingFileHandler"
     when: "d"
     interval: 1
-    filename: "c:\\temp\\wiretap.log"
-    formatter: wiretap
+    filename: "c:\\temp\\wiretap_console.log"
+    formatter: console_full
     #level: TRACE
   elastic_file:
     class: "logging.FileHandler"
-    filename: "c:\\temp\\elastic.log"
-    formatter: elastic
+    filename: "c:\\temp\\wiretap_elastic.log"
+    formatter: elastic_json
     #level: DEBUG
   #sqlserver:
   #  class: "wiretap_sqlserver.SqlServerHandler"
@@ -65,7 +67,8 @@ handlers:
 loggers:
   root:
     #handlers: [ "console", "file", "elastic_file" ]
-    handlers: [ "console", "elastic_file" ]
+    handlers: [ "console_full", "console_file", "elastic_file" ]
+    # handlers: [ "console_lite", "elastic_file" ]
     # handlers: [ "console" ]
     #level: "INFO"
     #level: "DEBUG"

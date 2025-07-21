@@ -4,8 +4,6 @@ from collections import deque
 from enum import Enum
 from typing import TypeVar, Optional, Iterable, Generator
 
-#from .elapsed import Elapsed
-
 T = TypeVar('T')
 
 

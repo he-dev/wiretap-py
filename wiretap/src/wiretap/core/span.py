@@ -39,6 +39,7 @@ class Span:
         self.state: dict = (state or {}) | kwargs
         self.status: SpanStatus = SpanStatus.UNSET
         self.frame: FrameInfo = frame
+        self.depth: int = 0 if parent is None else parent.depth + 1
         self.parent: Optional["Span"] = parent
         self.stopwatch: Stopwatch = Stopwatch()
         self.logger: logging.Logger = logging.getLogger(name)
@@ -120,6 +121,7 @@ class SpanEvent:
     def __init__(self, scope: Span, frame: FrameInfo | None = None, state: dict[str, Any] | None = None, **kwargs):
         self.name = scope.name
         self.frame = frame
+        self.depth = scope.depth
         self.trace_id = scope.trace_id
         self.span_id = scope.span_id
         self.parent_id = scope.parent_id

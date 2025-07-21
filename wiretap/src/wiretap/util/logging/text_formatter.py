@@ -20,14 +20,14 @@ class TextFormatter(logging.Formatter):
 
         if event:
             record.span_name = event.name
-            record.indent = 1  # self.indent * activity.scope.depth
+            record.indent = self.indent * event.depth
             record.properties = stringify_deep(event.state)
             record.span = {
                 "trace_id": event.trace_id,
                 "span_id": event.span_id,
                 "parent_id": event.parent_id,
-                "elapsed": event.stopwatch.elapsed_ms if event.stopwatch.is_running else None,
-                "duration": None if event.stopwatch.is_running else round(event.stopwatch.duration_ms, 1),
+                "elapsed_ms": event.stopwatch.elapsed_ms if event.stopwatch.is_running else None,
+                "duration_ms": None if event.stopwatch.is_running else round(event.stopwatch.duration_ms, 1),
                 "status": event.status.value,
             }
             record.source = {
@@ -39,7 +39,7 @@ class TextFormatter(logging.Formatter):
         else:
             record.span_name = record.funcName
             record.message = record.msg
-            record.indent = self.indent
+            record.indent = ""
             record.source = {
                 "func": record.funcName,
                 "file": trim_path(record.filename),

@@ -4,7 +4,6 @@ from typing import Type, Any, Callable, Protocol, runtime_checkable, cast
 import cachetools
 
 from wiretap.util.chain_path import ChainPath
-from wiretap.util.stats import Serializable
 
 
 @runtime_checkable
@@ -105,9 +104,9 @@ class ChainPathEncoder(JSONEncoder, JSONEncoderPro):
         return str(obj)
 
 
-class SerializableEncoder(JSONEncoder, JSONEncoderPro):
+class ToDictEncoder(JSONEncoder, JSONEncoderPro):
     def supports(self, obj_type: Type) -> bool:
-        return issubclass(obj_type, Serializable)
+        return hasattr(obj_type, "to_dict")
 
     def default(self, obj) -> Any | None:
         return obj.to_dict()

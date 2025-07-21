@@ -22,12 +22,12 @@ class Stopwatch(ContextDecorator):
         return self.end_pc == self.start_pc
 
     @property
-    def duration_ms(self) -> float:
+    def duration_ms(self) -> int:
         """Gets the duration in milliseconds."""
         return (self.end_pc - self.start_pc) // 1_000_000
 
     @property
-    def elapsed_ms(self) -> float:
+    def elapsed_ms(self) -> int:
         """Gets the elapsed time in milliseconds."""
         return (time.perf_counter_ns() - self.start_pc) // 1_000_000
 
