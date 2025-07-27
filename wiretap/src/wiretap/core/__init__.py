@@ -19,5 +19,5 @@ def configure(config: dict):
     logging.config.dictConfig(config)
 
 
-class NoActivityInScopeError(Exception):
+class NoSpanInScopeError(Exception):
     pass

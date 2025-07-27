@@ -1,2 +1,2 @@
 setuptools~=70.0.0
-cachetools>=5.5.2
+cachetools>=6.1.0

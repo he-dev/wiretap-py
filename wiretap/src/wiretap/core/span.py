@@ -7,9 +7,9 @@ import sys
 from contextvars import ContextVar  # noqa: built-in module
 from functools import reduce
 from inspect import FrameInfo
-from typing import Optional, Any, Iterator, TypeVar
+from typing import Optional, Any, Iterator, TypeVar, ClassVar
 
-from wiretap.core import NoActivityInScopeError, SpanStatus
+from wiretap.core import NoSpanInScopeError, SpanStatus
 from wiretap.util.stopwatch import Stopwatch
 
 T = TypeVar("T", bound="Span")
@@ -20,7 +20,7 @@ class Span:
     This class represents a single activity scope.
     """
 
-    _current: ContextVar[Optional["Span"]] = ContextVar("current_span", default=None)
+    _current: ClassVar[ContextVar[Optional["Span"]]] = ContextVar("current_span", default=None)
 
     def __init__(
             self,
@@ -71,7 +71,7 @@ class Span:
                 }
             )
         else:
-            raise NoActivityInScopeError("Cannot log event because there is no activity in scope.")
+            raise NoSpanInScopeError("Cannot log event because there is no activity in scope.")
 
     @classmethod
     @contextlib.contextmanager

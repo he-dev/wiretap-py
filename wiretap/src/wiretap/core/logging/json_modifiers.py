@@ -66,17 +66,15 @@ class AddSpan(JsonModifier):
 
     def apply(self, context: JsonModifierContext) -> JsonEntry:
         if event := context.event:
+
             return context.entry | {
                 "trace_id": event.trace_id,
                 "name": event.name,
                 "span_id": event.span_id,
                 "parent_id": event.parent_id,
-                "start_at": event.stopwatch.start_dt,
-                "end_at": None if event.stopwatch.is_running else event.stopwatch.end_dt,
-                "elapsed_ms": event.stopwatch.elapsed_ms if event.stopwatch.is_running else None,
-                "duration_ms": None if event.stopwatch.is_running else event.stopwatch.duration_ms,
                 "status": event.status,
-                "version": "11",
+            } | event.stopwatch.to_dict() | {
+                "version": "11"
             }
         else:
             return context.entry | {
@@ -86,8 +84,6 @@ class AddSpan(JsonModifier):
                 "parent_id": None,
                 "start_at": None,
                 "end_at": None,
-                "elapsed_ms": None,
-                "duration_ms": None,
                 "status": None,
                 "version": "11",
             }

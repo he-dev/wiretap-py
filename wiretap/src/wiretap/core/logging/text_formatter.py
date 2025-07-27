@@ -3,9 +3,6 @@ import logging
 from wiretap.core.span import SpanEvent, Span
 from wiretap.util import trim_path
 
-DEFAULT_FORMAT = "{asctime}.{msecs:03.0f} {indent} {scope}: {trace} | {elapsed:0.3f} sec | {message} | {trace_state}, {trace_tags}"
-
-
 class TextFormatter(logging.Formatter):
     indent: str = "."
 
@@ -19,17 +16,16 @@ class TextFormatter(logging.Formatter):
                 event = SpanEvent(scope)
 
         if event:
+
             record.span_name = event.name
             record.indent = self.indent * event.depth
             record.properties = stringify_deep(event.state)
-            record.span = {
+            record.span = {} | {
                 "trace_id": event.trace_id,
                 "span_id": event.span_id,
                 "parent_id": event.parent_id,
-                "elapsed_ms": event.stopwatch.elapsed_ms if event.stopwatch.is_running else None,
-                "duration_ms": None if event.stopwatch.is_running else round(event.stopwatch.duration_ms, 1),
                 "status": event.status.value,
-            }
+            } | event.stopwatch.to_dict(iso=True)
             record.source = {
                 "func": event.frame.function if event.frame else record.funcName,
                 "file": trim_path(event.frame.filename) if event.frame else trim_path(record.filename),

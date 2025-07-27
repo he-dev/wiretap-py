@@ -1,7 +1,7 @@
 version: 1
 formatters:
   console_full:
-    (): wiretap.util.logging.TextFormatter
+    (): wiretap.core.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
@@ -11,7 +11,7 @@ formatters:
       | span={span}
       | src={source}
   console_lite:
-    (): wiretap.util.logging.TextFormatter
+    (): wiretap.core.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
@@ -19,27 +19,29 @@ formatters:
       {span_name}: "{message}"
       | ctx={properties}
   elastic_json:
-    (): wiretap.util.logging.JsonFormatter
+    (): wiretap.core.logging.JsonFormatter
     encoders:
-      - wiretap.util.logging.DateTimeEncoder
-      - wiretap.util.logging.UUIDEncoder
-      - wiretap.util.logging.SetEncoder
-      - wiretap.util.logging.PathEncoder
-      - wiretap.util.logging.ToDictEncoder
+      - wiretap.core.logging.DateTimeEncoder
+      - wiretap.core.logging.UUIDEncoder
+      - wiretap.core.logging.SetEncoder
+      - wiretap.core.logging.PathEncoder
+      - wiretap.core.logging.ToDictEncoder
     properties:
-      - wiretap.util.logging.AddTimestamp
-      - wiretap.util.logging.AddMessage
-      - wiretap.util.logging.AddProperties
-      - wiretap.util.logging.AddSpan
-      - wiretap.util.logging.AddSource
-      - wiretap.util.logging.AddException
-#      - (): wiretap.util.logging.AddEnvironmentVariables
+      - wiretap.core.logging.AddTimestamp
+      - wiretap.core.logging.AddMessage
+      - wiretap.core.logging.AddProperties
+      - wiretap.core.logging.AddSpan
+      - wiretap.core.logging.AddSource
+      - wiretap.core.logging.AddException
+#      - (): wiretap.core.logging.AddEnvironmentVariables
 #        names:
 #          - app_id
 handlers:
   console_full:
     class: logging.StreamHandler
     formatter: console_full
+    filters:
+      - exclude_span_begin
     #level: INFO
   console_lite:
     class: logging.StreamHandler
@@ -63,7 +65,9 @@ handlers:
   #  insert: null
   #  level: "DEBUG"
   #  formatter: "auto"
-
+filters:
+  exclude_span_begin:
+    (): wiretap.core.logging.ExcludeSpanBegin
 loggers:
   root:
     #handlers: [ "console", "file", "elastic_file" ]

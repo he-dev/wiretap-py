@@ -22,7 +22,7 @@ class LoopRates:
     def to_dict(self) -> dict[str, Any]:
         result: dict[str, Any] = {
             "total_count": self.total_count,
-            "total_elapsed": self.total_elapsed,
+            "total_duration": self.total_elapsed,
         }
         result.update({f"{cat}_rate": self.rate_for(cat) for cat in self.stats})
         return result

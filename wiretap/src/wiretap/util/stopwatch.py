@@ -39,6 +39,17 @@ class Stopwatch(ContextDecorator):
     def end_dt(self) -> datetime:
         return datetime.fromtimestamp(self.end_at, timezone.utc)
 
+    def to_dict(self, iso: bool = False) -> dict:
+        # core: Create keys based on the state of the stopwatch.
+        return {
+            "start_at": self.start_dt.isoformat() if iso else self.start_dt,
+            "elapsed_ms": self.elapsed_ms,
+        } if self.is_running else {
+            "start_at": self.start_dt.isoformat() if iso else self.start_dt,
+            "end_at": self.end_dt.isoformat() if iso else self.end_dt,
+            "duration_ms": self.duration_ms,
+        }
+
     def __enter__(self):
         return self
 

@@ -42,7 +42,7 @@ class LoopStats:
     def to_dict(self) -> dict[str, Any]:
         return {
             "count": self.count,
-            "elapsed_ms": self.duration_ms,
+            "duration_ms": self.duration_ms,
             "mean": self.mean,
             "std_dev": self.std_dev,
             "throughput_ms": self.throughput_ms,
