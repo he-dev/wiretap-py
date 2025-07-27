@@ -114,9 +114,10 @@ class Span:
         return cls._current.get()
 
 
+# util: Collects all the data for logging in one place.
 @dataclasses.dataclass
 class SpanEvent:
-    KEY = "_activity_event"
+    KEY = "_span_event"
 
     def __init__(self, scope: Span, frame: FrameInfo | None = None, state: dict[str, Any] | None = None, **kwargs):
         self.name = scope.name
