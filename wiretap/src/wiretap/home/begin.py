@@ -46,7 +46,7 @@ def begin_span(
                 message=f"{span.name}: {span.status}.",
                 frame_at=0,
                 level=TRACE_LEVEL,
-                event="span_begin"
+                event="begin_span"
             )
             yield span
             span.stopwatch.stop()
@@ -61,7 +61,7 @@ def begin_span(
                     message=f"{span.name}: {span.status}. Duration: {span.stopwatch.duration_ms} ms.",
                     frame_at=0,
                     level=duration_level,
-                    event="span_end"
+                    event="end_span"
                 )
 
 
