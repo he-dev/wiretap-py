@@ -4,6 +4,7 @@ import logging.config
 import logging.handlers
 import pathlib
 import random
+from datetime import date
 from enum import Enum
 from time import sleep
 
@@ -163,3 +164,8 @@ def log_path():
 def log_error_():
     with begin_span():
         log_error(message="This is an error message.")
+
+
+def log_unknown_type():
+    with begin_span():
+        log_info("This is an info message.", unknown_type=date.today())

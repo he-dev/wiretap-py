@@ -10,6 +10,7 @@ from inspect import FrameInfo
 from typing import Optional, Any, Iterator, TypeVar, ClassVar
 
 from wiretap.core import NoSpanInScopeError, SpanStatus
+from wiretap.meta import LogLevelName, map_level_name_to_int
 from wiretap.util.stopwatch import Stopwatch
 
 T = TypeVar("T", bound="Span")
@@ -53,19 +54,22 @@ class Span:
     @staticmethod
     def log_event(
             message: str | None = None,
-            level: int = logging.INFO,
+            level: LogLevelName = "info",
             state: dict | None = None,
             frame_at: int | None = None,
             **kwargs
     ) -> None:
+
+        _level = map_level_name_to_int(level)
+
         if scope := Span.current():
             stack = inspect.stack(2)
             frame = stack[frame_at] if frame_at else scope.frame
 
             scope.logger.log(
-                level=level,
+                level=_level,
                 msg=message,
-                exc_info=level >= logging.ERROR or sys.exc_info()[0] is not None,
+                exc_info=_level >= logging.ERROR or sys.exc_info()[0] is not None,
                 extra={
                     SpanEvent.KEY: SpanEvent(scope=scope, frame=frame, state=state, **kwargs)
                 }

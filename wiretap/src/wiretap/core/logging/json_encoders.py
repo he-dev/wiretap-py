@@ -26,7 +26,7 @@ class JSONEncoderCache:
             if isinstance(encoder, JSONEncoderPro):
                 if encoder.supports(obj_type):
                     return cast(JSONEncoder, encoder)
-        return JSONEncoder()
+        return JSONEncoder(default=lambda x: str(x))
 
 
 class JSONEncoderDefaultFactory:

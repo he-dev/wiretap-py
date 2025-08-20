@@ -1,6 +1,6 @@
 from enum import Enum
 
-TRACE_LEVEL = 5
+from wiretap.meta import TRACE_LEVEL
 
 
 class SpanStatus(str, Enum):

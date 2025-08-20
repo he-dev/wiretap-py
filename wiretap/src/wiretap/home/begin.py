@@ -7,7 +7,7 @@ from wiretap.core import TRACE_LEVEL, SpanStatus
 from wiretap.core.span import Span
 
 # meta: Let's not repeat it twice.
-DurationLevel = Literal["info", "debug", "trace"]
+DurationLevel = Literal["info", "debug", "trace", "off"]
 
 
 @contextlib.contextmanager
@@ -16,7 +16,7 @@ def begin_span(
         state: dict[str, Any] | None = None,
         trace_id: Any | None = None,
         parent_id: Any | None = None,
-        log_duration_as: DurationLevel | None = "info",
+        duration_level: DurationLevel = "info",
         **kwargs
 ) -> Iterator[Span]:
     """
@@ -26,16 +26,13 @@ def begin_span(
     :param state: A dictionary of extra data to log that is attached to each trace.
     :param trace_id: The trace ID to use for the span. If None, a random ID will be generated.
     :param parent_id: The parent ID to use for the span. If None, the parent ID will be derived from the parent span.
-    :param log_duration_as: Whether to log the duration of the span and at which level. If None, no logging will be performed.
+    :param duration_level: Whether to log the duration of the span and at which level. If None, no logging will be performed.
     :param kwargs: Additional keyword arguments to be passed to each trace.
     :returns: The newly created span.
     """
 
-    duration_level = logging.NOTSET
-
-    # core: Map duration level early to throw a potential exception right away and not at the end.
-    if log_duration_as:
-        duration_level = _map_duration_level(log_duration_as)
+    # core: Check duration level early to throw a potential exception right away and not at the end.
+    _ensure_duration_level_in_range(duration_level)
 
     stack = inspect.stack(2)
     frame = stack[2]
@@ -45,7 +42,7 @@ def begin_span(
             Span.log_event(
                 message=f"{span.name}: {span.status}.",
                 frame_at=0,
-                level=TRACE_LEVEL,
+                level="trace",
                 event="begin_span"
             )
             yield span
@@ -56,7 +53,7 @@ def begin_span(
             span.status = SpanStatus.ERROR
             raise
         finally:
-            if log_duration_as:
+            if duration_level:
                 Span.log_event(
                     message=f"{span.name}: {span.status}. Duration: {span.stopwatch.duration_ms} ms.",
                     frame_at=0,
@@ -65,13 +62,15 @@ def begin_span(
                 )
 
 
-def _map_duration_level(level: DurationLevel | None) -> int:
+def _ensure_duration_level_in_range(level: DurationLevel | None) -> None:
     match level:
+        case None:
+            pass  # core: OK
         case "info":
-            return logging.INFO
+            pass  # core: OK
         case "debug":
-            return logging.DEBUG
+            pass  # core: OK
         case "trace":
-            return TRACE_LEVEL
+            pass  # core: OK
         case _:
             raise ValueError(f"Invalid duration level: {level}")

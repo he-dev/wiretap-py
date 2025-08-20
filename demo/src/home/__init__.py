@@ -9,6 +9,7 @@ from use_cases import *
 def demo():
     log_without_scope()
     log_with_defaults()
+    log_unknown_type()
     log_with_timing_1()
     log_with_timing_2()
     log_nested_activities()

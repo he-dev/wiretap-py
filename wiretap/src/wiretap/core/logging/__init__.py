@@ -8,5 +8,5 @@ class ExcludeSpanBegin(logging.Filter):
     def filter(self, record: logging.LogRecord):
         event: SpanEvent | None = record.__dict__.get(SpanEvent.KEY, None)
         if event:
-            return not (event.state.get("event", None) == "span_begin" and record.levelno < logging.DEBUG)
+            return not (event.state.get("event", None) == "begin_span" and record.levelno < logging.DEBUG)
         return True
