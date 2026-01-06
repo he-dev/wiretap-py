@@ -69,7 +69,7 @@ def log_without_scope():
 
 
 def log_with_defaults():
-    with begin_span(state={"foo": "bar"}):
+    with begin_span(state={"foo": "bar"}) as asdf:
         log_info("This is a core event.")
         log_debug("This is a util event.")
         log_trace("This is a meta event.")
@@ -84,7 +84,7 @@ def log_with_timing_1():
 
 def log_with_timing_2():
     try:
-        with begin_span(log_duration_as="debug", state={"foo": "bar"}):
+        with begin_span(state={"foo": "bar"}, on_finally=[log_duration("debug")]):
             sleep(random.uniform(0.5, 1.0))
             raise Exception("This is a test exception.")
             log_info("This is a core event.")
@@ -112,12 +112,11 @@ def log_with_none_block():
 
 
 def log_single_loop_3():
-    with begin_span():
+    with begin_span(on_finally=[log_duration()]):
         sms_stats = LoopStats()
         for i in [1, 2, 3]:
-            with begin_span(index=i) as iter_scope:
+            with begin_span(index=i, on_finally=[sms_stats.count_span()]):
                 sleep(random.uniform(0.5, 1.5))
-                sms_stats.count_item(iter_scope.stopwatch.elapsed_ms)
                 log_debug("This item is complete.")
         log_info("Fake sms stats.", sms_stats=sms_stats)
 

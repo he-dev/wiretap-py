@@ -7,7 +7,7 @@ import sys
 from contextvars import ContextVar  # noqa: built-in module
 from functools import reduce
 from inspect import FrameInfo
-from typing import Optional, Any, Iterator, TypeVar, ClassVar
+from typing import Optional, Any, Iterator, TypeVar, ClassVar, Protocol
 
 from wiretap.core import NoSpanInScopeError, SpanStatus
 from wiretap.meta import LogLevelName, map_level_name_to_int

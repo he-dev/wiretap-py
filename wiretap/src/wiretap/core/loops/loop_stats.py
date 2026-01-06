@@ -1,5 +1,9 @@
 import math
-from typing import Any
+from collections import defaultdict
+from typing import Any, Callable
+
+from wiretap.core import SpanStatus
+from wiretap.core.span import Span
 
 
 class LoopStats:
@@ -14,14 +18,26 @@ class LoopStats:
         self.count: int = 0
         self.mean: float = 0.0
         self.M2: float = 0.0  # Sum of squares of differences from the mean.
+        self.status: dict[str, int] = defaultdict(int)
 
     def count_item(self, duration_ms: int) -> None:
+        """Counts a single item's duration."""
+
         self.duration_ms += duration_ms
         self.count += 1
         delta: float = self.duration_ms - self.mean
         self.mean += delta / self.count
         delta2: float = self.duration_ms - self.mean
         self.M2 += delta * delta2
+
+    def count_span(self) -> Callable[[Span], None]:
+        """Returns a function that counts a span."""
+
+        def _count_span(span: Span) -> None:
+            self.status[span.status] += 1
+            self.count_item(span.stopwatch.duration_ms)
+
+        return _count_span
 
     @property
     def var(self) -> float:
@@ -41,11 +57,15 @@ class LoopStats:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "count": self.count,
+            "total_count": self.count,
+            "success_count": self.status[SpanStatus.OK.value],
+            "success_rate": self.status[SpanStatus.OK.value] / self.count,
+            "error_count": self.status[SpanStatus.ERROR.value],
+            "error_rate": self.status[SpanStatus.ERROR.value] / self.count,
             "duration_ms": self.duration_ms,
+            "throughput_ms": self.throughput_ms,
             "mean": self.mean,
             "std_dev": self.std_dev,
-            "throughput_ms": self.throughput_ms,
         } if self.count > 0 else {"count": 0}
 
     def __str__(self) -> str:
