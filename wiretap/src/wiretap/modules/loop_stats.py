@@ -2,8 +2,7 @@ import math
 from collections import defaultdict
 from typing import Any, Callable
 
-from wiretap.core import SpanStatus
-from wiretap.core.span import Span
+from wiretap.modules.span import Span, SpanStatus
 
 
 class LoopStats:

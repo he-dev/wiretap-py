@@ -6,8 +6,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from wiretap.core.span import SpanEvent, Span
-from wiretap.util import trim_path
+from wiretap.modules.span import SpanEvent, Span
+from wiretap.toolbox import trim_path
 
 # util: Type alias for convenience
 JsonEntry = dict[str, Any]

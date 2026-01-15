@@ -1,8 +1,8 @@
-from .core import configure
-from .core.loops.loop_stats import LoopStats
-from .core.loops.loop_rates import LoopRates
-from .home.begin import begin_span
-from .home.log import log_info, log_debug, log_trace, log_warning, log_error, log_duration
+from .modules import configure
+from .modules.loop_stats import LoopStats
+from .modules.loop_rates import LoopRates
+from .premise.begin import begin_span
+from .premise.log import log_info, log_debug, log_trace, log_warning, log_error, log_duration
 
 # core: Star import for convenience.
 __all__ = [

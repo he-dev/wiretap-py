@@ -3,7 +3,7 @@ from typing import Type, Any, Callable, Protocol, runtime_checkable, cast
 
 import cachetools
 
-from wiretap.util.chain_path import ChainPath
+from wiretap.modules.chain_path import ChainPath
 
 
 @runtime_checkable

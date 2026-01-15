@@ -1,7 +1,7 @@
 import logging
 
-from wiretap.core.span import SpanEvent, Span
-from wiretap.util import trim_path
+from wiretap.modules.span import SpanEvent, Span
+from wiretap.toolbox import trim_path
 
 
 class TextFormatter(logging.Formatter):

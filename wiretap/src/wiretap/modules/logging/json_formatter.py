@@ -4,9 +4,9 @@ import logging
 from json import JSONEncoder
 from typing import Any
 
-from wiretap.core.logging.json_encoders import JSONEncoderDefaultFactory
-from wiretap.core.logging.json_modifiers import JsonModifier, JsonModifierContext
-from wiretap.util.logging.type_factory import create_instance
+from wiretap.modules.logging.json_encoders import JSONEncoderDefaultFactory
+from wiretap.modules.logging.json_modifiers import JsonModifier, JsonModifierContext
+from wiretap.toolbox.type_factory import create_instance
 
 
 class JsonFormatter(logging.Formatter):

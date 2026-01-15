@@ -5,15 +5,31 @@ import logging
 import secrets
 import sys
 from contextvars import ContextVar  # noqa: built-in module
+from enum import Enum
 from functools import reduce
 from inspect import FrameInfo
-from typing import Optional, Any, Iterator, TypeVar, ClassVar, Protocol
+from typing import Optional, Any, Iterator, TypeVar, ClassVar, Protocol, Literal
 
-from wiretap.core import NoSpanInScopeError, SpanStatus
-from wiretap.meta import LogLevelName, map_level_name_to_int
-from wiretap.util.stopwatch import Stopwatch
+from wiretap.modules.stopwatch import Stopwatch
 
 T = TypeVar("T", bound="Span")
+
+TRACE_LEVEL = 5
+
+LogLevelName = Literal["off", "trace", "debug", "info", "warning", "error", "critical"]
+
+
+class SpanStatus(str, Enum):
+    UNSET = "unset"
+    OK = "ok"
+    ERROR = "error"
+
+    def __str__(self):
+        return self.value
+
+
+class NoSpanInScopeError(Exception):
+    pass
 
 
 class Span:
@@ -60,7 +76,7 @@ class Span:
             **kwargs
     ) -> None:
 
-        _level = map_level_name_to_int(level)
+        _level = _map_level_name_to_int(level)
 
         if scope := Span.current():
             stack = inspect.stack(2)
@@ -134,3 +150,23 @@ class SpanEvent:
         # core: Merge the state of all scopes.
         self.state = reduce(lambda c, n: (n.state or {}) | c, scope, (state or {}) | kwargs)
         self.status = scope.status
+
+
+def _map_level_name_to_int(level: LogLevelName) -> int:
+    match level:
+        case "off":
+            return logging.NOTSET
+        case "trace":
+            return TRACE_LEVEL
+        case "debug":
+            return logging.DEBUG
+        case "info":
+            return logging.INFO
+        case "warning":
+            return logging.WARNING
+        case "error":
+            return logging.ERROR
+        case "critical":
+            return logging.CRITICAL
+        case _:
+            raise ValueError(f"Invalid duration level: {level}")

@@ -1,10 +1,8 @@
 import contextlib
 import inspect
-import logging
 from typing import Any, Iterator, Literal, Callable
 
-from wiretap.core import TRACE_LEVEL, SpanStatus
-from wiretap.core.span import Span
+from wiretap.modules.span import Span, SpanStatus
 
 # meta: Let's not repeat it twice.
 DurationLevel = Literal["info", "debug", "trace", "off"]

@@ -1,15 +1,6 @@
 from enum import Enum
 
-from wiretap.meta import TRACE_LEVEL
-
-
-class SpanStatus(str, Enum):
-    UNSET = "unset"
-    OK = "ok"
-    ERROR = "error"
-
-    def __str__(self):
-        return self.value
+from wiretap.modules.span import TRACE_LEVEL
 
 
 def configure(config: dict):
@@ -17,7 +8,3 @@ def configure(config: dict):
     import logging.config
     logging.addLevelName(TRACE_LEVEL, "TRACE")
     logging.config.dictConfig(config)
-
-
-class NoSpanInScopeError(Exception):
-    pass

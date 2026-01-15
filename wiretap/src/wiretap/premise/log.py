@@ -1,7 +1,7 @@
 from typing import Callable
 
-from wiretap.core.span import Span
-from wiretap.home.begin import DurationLevel
+from wiretap.modules.span import Span
+from wiretap.premise.begin import DurationLevel
 
 
 # node: Ignore duplicate code in these functions because they are too small to refactor.

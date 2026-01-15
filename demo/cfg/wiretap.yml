@@ -1,7 +1,7 @@
 version: 1
 formatters:
   console_full:
-    (): wiretap.core.logging.TextFormatter
+    (): wiretap.modules.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
@@ -11,7 +11,7 @@ formatters:
       | span={span}
       | src={source}
   console_lite:
-    (): wiretap.core.logging.TextFormatter
+    (): wiretap.modules.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
@@ -19,21 +19,21 @@ formatters:
       {span_name}: "{message}"
       | ctx={properties}
   elastic_json:
-    (): wiretap.core.logging.JsonFormatter
+    (): wiretap.modules.logging.JsonFormatter
     encoders:
-      - wiretap.core.logging.DateTimeEncoder
-      - wiretap.core.logging.UUIDEncoder
-      - wiretap.core.logging.SetEncoder
-      - wiretap.core.logging.PathEncoder
-      - wiretap.core.logging.ToDictEncoder
+      - wiretap.modules.logging.DateTimeEncoder
+      - wiretap.modules.logging.UUIDEncoder
+      - wiretap.modules.logging.SetEncoder
+      - wiretap.modules.logging.PathEncoder
+      - wiretap.modules.logging.ToDictEncoder
     properties:
-      - wiretap.core.logging.AddTimestamp
-      - wiretap.core.logging.AddMessage
-      - wiretap.core.logging.AddProperties
-      - wiretap.core.logging.AddSpan
-      - wiretap.core.logging.AddSource
-      - wiretap.core.logging.AddException
-#      - (): wiretap.core.logging.AddEnvironmentVariables
+      - wiretap.modules.logging.AddTimestamp
+      - wiretap.modules.logging.AddMessage
+      - wiretap.modules.logging.AddProperties
+      - wiretap.modules.logging.AddSpan
+      - wiretap.modules.logging.AddSource
+      - wiretap.modules.logging.AddException
+#      - (): wiretap.modules.logging.AddEnvironmentVariables
 #        names:
 #          - app_id
 handlers:
@@ -67,7 +67,7 @@ handlers:
   #  formatter: "auto"
 filters:
   exclude_span_begin:
-    (): wiretap.core.logging.ExcludeSpanBegin
+    (): wiretap.modules.logging.ExcludeSpanBegin
 loggers:
   root:
     #handlers: [ "console", "file", "elastic_file" ]

@@ -48,3 +48,4 @@ def trim_path(path: str) -> str:
     except ValueError:
         # core: 'path' is apparently a single name, so return the original one.
         return _path.as_posix()
+
