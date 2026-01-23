@@ -1,4 +1,4 @@
-from wiretap.modules import DurationLevel
+from wiretap.context.services.log_messages import log_event
 from wiretap.modules.span import Span, SpanStatus, LogLevelName
 
 
@@ -18,14 +18,14 @@ class LogStatus:
     def __call__(self, span: Span) -> None:
         # core: When passed to on_begin the UNSET status is handled, otherwise on_end the other one.
         if span.status == SpanStatus.UNSET:
-            Span.log_event(
+            log_event(
                 message=f"Span '{span.operation}' began.",
                 frame_at=0,
                 level=self.level or "trace",
                 event="begin_span"
             )
         else:
-            Span.log_event(
+            log_event(
                 message=f"Span '{span.operation}' ended with status '{span.status}' in {span.stopwatch.duration_ms} ms.",
                 frame_at=0,
                 level=self.level or "info",

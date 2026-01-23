@@ -168,3 +168,11 @@ def log_error_():
 def log_unknown_type():
     with begin_span():
         log_info("This is an info message.", unknown_type=date.today())
+
+
+def log_child_method():
+    def child_method(message: str):
+        log_info(message)
+
+    with begin_span():
+        child_method("This is a child method.")

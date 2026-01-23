@@ -1,5 +1,4 @@
 import contextlib
-import dataclasses
 import inspect
 import logging
 import secrets
@@ -8,7 +7,7 @@ from contextvars import ContextVar  # noqa: built-in module
 from enum import Enum
 from functools import reduce
 from inspect import FrameInfo
-from typing import Optional, Any, Iterator, TypeVar, ClassVar, Protocol, Literal
+from typing import Optional, Any, Iterator, TypeVar, ClassVar, Literal
 
 from wiretap.modules.stopwatch import Stopwatch
 
@@ -67,32 +66,6 @@ class Span:
             yield current
             current = current.parent
 
-    @staticmethod
-    def log_event(
-            message: str | None = None,
-            level: LogLevelName = "info",
-            state: dict | None = None,
-            frame_at: int | None = None,
-            **kwargs
-    ) -> None:
-
-        _level = _map_level_name_to_int(level)
-
-        if scope := Span.current():
-            stack = inspect.stack(2)
-            frame = stack[frame_at] if frame_at else scope.frame
-
-            scope.logger.log(
-                level=_level,
-                msg=message,
-                exc_info=_level >= logging.ERROR or sys.exc_info()[0] is not None,
-                extra={
-                    SpanEvent.KEY: SpanEvent(span=scope, frame=frame, state=state, **kwargs)
-                }
-            )
-        else:
-            raise NoSpanInScopeError("Cannot log event because there is no activity in scope.")
-
     @classmethod
     @contextlib.contextmanager
     def push(
@@ -135,7 +108,7 @@ class Span:
 
 
 # util: Collects all the data for logging in one place.
-@dataclasses.dataclass
+# @dataclasses.dataclass
 class SpanEvent:
     KEY = "_span_event"
 
@@ -150,23 +123,3 @@ class SpanEvent:
         # core: Merge the state of all scopes.
         self.state = reduce(lambda c, n: (n.state or {}) | c, span, (state or {}) | kwargs)
         self.status = span.status
-
-
-def _map_level_name_to_int(level: LogLevelName) -> int:
-    match level:
-        case "off":
-            return logging.NOTSET
-        case "trace":
-            return TRACE_LEVEL
-        case "debug":
-            return logging.DEBUG
-        case "info":
-            return logging.INFO
-        case "warning":
-            return logging.WARNING
-        case "error":
-            return logging.ERROR
-        case "critical":
-            return logging.CRITICAL
-        case _:
-            raise ValueError(f"Invalid duration level: {level}")

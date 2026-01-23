@@ -36,10 +36,11 @@ def create_instance(type_name: str | dict, expected_type: Type[T]) -> T:
         case _:
             raise TypeError(f"Cannot create type from '{type(type_name)}'. Only from str or dict.")
 
-    if not obj:
+    if obj is None:
         raise TypeError(f"Cannot parse {expected_type} due to an invalid definition.")
 
-    if not issubclass(type(obj), expected_type):
+    # if not issubclass(type(obj), expected_type):
+    if not isinstance(obj, expected_type):
         raise TypeError(f"Cannot parse {expected_type} due to an unexpected type '{type(obj)}'.")
 
     return obj

@@ -31,6 +31,7 @@ def begin_span(
         The newly created span.
     """
 
+    # util: Use defaults for convenience.
     on_begin = on_begin or (lambda _: None)
     on_end = on_end or (lambda _: None)
 

@@ -17,18 +17,18 @@ formatters:
   elastic_json:
     (): wiretap.modules.logging.JsonFormatter
     encoders:
-      - wiretap.modules.logging.DateTimeEncoder
-      - wiretap.modules.logging.UUIDEncoder
-      - wiretap.modules.logging.SetEncoder
-      - wiretap.modules.logging.PathEncoder
-      - wiretap.modules.logging.ToDictEncoder
+      - wiretap.modules.services.EncodeDateTime
+      - wiretap.modules.services.EncodeUUID
+      - wiretap.modules.services.EncodeSet
+      - wiretap.modules.services.EncodePath
+      - wiretap.modules.services.EncodeToDict
     properties:
-      - wiretap.modules.logging.AddTimestamp
-      - wiretap.modules.logging.AddMessage
-      - wiretap.modules.logging.AddProperties
-      - wiretap.modules.logging.AddSpan
-      - wiretap.modules.logging.AddSource
-      - wiretap.modules.logging.AddException
+      - wiretap.modules.services.AddTimestamp
+      - wiretap.modules.services.AddMessage
+      - wiretap.modules.services.AddProperties
+      - wiretap.modules.services.AddSpan
+      - wiretap.modules.services.AddSource
+      - wiretap.modules.services.AddException
 #      - (): wiretap.modules.logging.AddEnvironmentVariables
 #        names:
 #          - app_id
@@ -36,8 +36,8 @@ handlers:
   console_full:
     class: logging.StreamHandler
     formatter: console_full
-    filters:
-      - exclude_span_begin
+    #filters:
+    #  - exclude_span_begin
     #level: INFO
   console_lite:
     class: logging.StreamHandler
@@ -61,9 +61,9 @@ handlers:
   #  insert: null
   #  level: "DEBUG"
   #  formatter: "auto"
-filters:
-  exclude_span_begin:
-    (): wiretap.modules.logging.ExcludeSpanBegin
+#filters:
+  #exclude_span_begin:
+  #  (): wiretap.modules.logging.ExcludeSpanBegin
 loggers:
   root:
     #handlers: [ "console", "file", "elastic_file" ]

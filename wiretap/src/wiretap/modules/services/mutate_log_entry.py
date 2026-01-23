@@ -10,11 +10,11 @@ from wiretap.modules.span import SpanEvent, Span
 from wiretap.toolbox import trim_path
 
 # util: Type alias for convenience
-JsonEntry = dict[str, Any]
+LogEntry = dict[str, Any]
 
 
 @dataclasses.dataclass
-class JsonModifierContext:
+class LogContext:
     record: logging.LogRecord
 
     @property
@@ -26,17 +26,18 @@ class JsonModifierContext:
                 return SpanEvent(scope)
         return None
 
-    entry: JsonEntry
+    entry: LogEntry
 
 
-class JsonModifier(ABC):
+# meta: Using ABC because we're creating objects dynamically.
+class MutateLogEntry(ABC):
     """Allows modifying the structure of the JSON entry."""
 
     @abstractmethod
-    def apply(self, context: JsonModifierContext) -> JsonEntry: ...
+    def __call__(self, context: LogContext) -> LogEntry: ...
 
 
-class AddTimestamp(JsonModifier):
+class AddTimestamp(MutateLogEntry):
     def __init__(self, tz: str = "utc"):
         super().__init__()
         match tz.casefold().strip():
@@ -47,51 +48,48 @@ class AddTimestamp(JsonModifier):
             case _:
                 raise ValueError(f"Invalid timezone: {tz}. Only [utc|local] are supported.")
 
-    def apply(self, context: JsonModifierContext) -> JsonEntry:
+    def __call__(self, context: LogContext) -> LogEntry:
         return context.entry | {
             "timestamp": datetime.fromtimestamp(context.record.created, tz=self.tz)
         }
 
 
-class AddMessage(JsonModifier):
+class AddMessage(MutateLogEntry):
 
-    def apply(self, context: JsonModifierContext) -> JsonEntry:
+    def __call__(self, context: LogContext) -> LogEntry:
         return context.entry | {
-            "message": context.record.msg,
+            "message": context.record.getMessage(),
             "level": context.record.levelname.lower(),
         }
 
 
-class AddSpan(JsonModifier):
+class AddSpan(MutateLogEntry):
 
-    def apply(self, context: JsonModifierContext) -> JsonEntry:
+    def __call__(self, context: LogContext) -> LogEntry:
         if event := context.event:
 
             return context.entry | {
                 "trace_id": event.trace_id,
-                "name": event.operation,
+                "operation": event.operation,
                 "span_id": event.span_id,
                 "parent_id": event.parent_id,
                 "status": event.status,
-            } | event.stopwatch.to_dict() | {
-                "version": "11"
-            }
+            } | event.stopwatch.to_dict()
         else:
             return context.entry | {
                 "trace_id": None,
-                "name": context.record.funcName,
+                "operation": context.record.funcName,
                 "span_id": None,
                 "parent_id": None,
                 "start_at": None,
                 "end_at": None,
                 "status": None,
-                "version": "11",
             }
 
 
-class AddSource(JsonModifier):
+class AddSource(MutateLogEntry):
 
-    def apply(self, context: JsonModifierContext) -> JsonEntry:
+    def __call__(self, context: LogContext) -> LogEntry:
         if event := context.event:
             return context.entry | {"source": {
                 "func": event.frame.function if event.frame else context.record.funcName,
@@ -106,21 +104,21 @@ class AddSource(JsonModifier):
             }}
 
 
-class AddProperties(JsonModifier):
+class AddProperties(MutateLogEntry):
 
     def __init__(self, names: Optional[list[str]] = None):
         self.names = names or ["src"]
 
-    def apply(self, context: JsonModifierContext) -> JsonEntry:
+    def __call__(self, context: LogContext) -> LogEntry:
         if event := context.event:
             return context.entry | {"properties": event.state}
         else:
             return context.entry | {"properties": {}}
 
 
-class AddException(JsonModifier):
+class AddException(MutateLogEntry):
 
-    def apply(self, context: JsonModifierContext) -> JsonEntry:
+    def __call__(self, context: LogContext) -> LogEntry:
         if context.record.exc_info and all(context.record.exc_info):
             exc_cls, exc, exc_tb = context.record.exc_info
             # note: format_exception returns a list of lines. Join it a single sing or otherwise an array will be logged.
@@ -134,11 +132,11 @@ class AddException(JsonModifier):
         return context.entry
 
 
-class AddEnvironmentVariables(JsonModifier):
+class AddEnvironmentVariables(MutateLogEntry):
 
     def __init__(self, names: list[str]):
         self.names = names
 
-    def apply(self, context: JsonModifierContext) -> JsonEntry:
+    def __call__(self, context: LogContext) -> LogEntry:
         env = {k: os.environ.get(k) for k in self.names}
         return context.entry | {"environment": env} if env else context.entry
