@@ -52,7 +52,7 @@ class Span:
         self.trace_id: str = trace_id or (parent.trace_id if parent else secrets.token_hex(16))
         self.span_id: str = secrets.token_hex(8)
         self.parent_id: str | None = parent_id or (parent.span_id if parent else None)
-        self.name: str = name or frame.function
+        self.operation: str = name or frame.function
         self.state: dict = (state or {}) | kwargs
         self.status: SpanStatus = SpanStatus.UNSET
         self.frame: FrameInfo = frame
@@ -87,7 +87,7 @@ class Span:
                 msg=message,
                 exc_info=_level >= logging.ERROR or sys.exc_info()[0] is not None,
                 extra={
-                    SpanEvent.KEY: SpanEvent(scope=scope, frame=frame, state=state, **kwargs)
+                    SpanEvent.KEY: SpanEvent(span=scope, frame=frame, state=state, **kwargs)
                 }
             )
         else:
@@ -139,17 +139,17 @@ class Span:
 class SpanEvent:
     KEY = "_span_event"
 
-    def __init__(self, scope: Span, frame: FrameInfo | None = None, state: dict[str, Any] | None = None, **kwargs):
-        self.name = scope.name
+    def __init__(self, span: Span, frame: FrameInfo | None = None, state: dict[str, Any] | None = None, **kwargs):
+        self.operation = span.operation
         self.frame = frame
-        self.depth = scope.depth
-        self.trace_id = scope.trace_id
-        self.span_id = scope.span_id
-        self.parent_id = scope.parent_id
-        self.stopwatch = scope.stopwatch
+        self.depth = span.depth
+        self.trace_id = span.trace_id
+        self.span_id = span.span_id
+        self.parent_id = span.parent_id
+        self.stopwatch = span.stopwatch
         # core: Merge the state of all scopes.
-        self.state = reduce(lambda c, n: (n.state or {}) | c, scope, (state or {}) | kwargs)
-        self.status = scope.status
+        self.state = reduce(lambda c, n: (n.state or {}) | c, span, (state or {}) | kwargs)
+        self.status = span.status
 
 
 def _map_level_name_to_int(level: LogLevelName) -> int:

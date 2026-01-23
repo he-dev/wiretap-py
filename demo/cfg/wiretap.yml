@@ -5,19 +5,15 @@ formatters:
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
-      [{asctime}.{msecs:03.0f} {levelname:7s}{indent}]
-      {span_name}: "{message}"
-      | ctx={properties}
-      | span={span}
-      | src={source}
+      {asctime}.{msecs:03.0f} [{levelname:7s}]
+      {indent}{operation}: "{message}", properties={properties}, span={span}, source={source}
   console_lite:
     (): wiretap.modules.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       [{asctime}.{msecs:03.0f} {levelname:7s}{indent}]
-      {span_name}: "{message}"
-      | ctx={properties}
+      {operation}: "{message}", properties={properties}
   elastic_json:
     (): wiretap.modules.logging.JsonFormatter
     encoders:

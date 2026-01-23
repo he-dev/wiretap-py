@@ -84,7 +84,7 @@ def log_with_timing_1():
 
 def log_with_timing_2():
     try:
-        with begin_span(state={"foo": "bar"}, on_finally=[log_duration("debug")]):
+        with begin_span(state={"foo": "bar"}, on_begin=LogStatus("debug")):
             sleep(random.uniform(0.5, 1.0))
             raise Exception("This is a test exception.")
             log_info("This is a core event.")
@@ -112,10 +112,10 @@ def log_with_none_block():
 
 
 def log_single_loop_3():
-    with begin_span(on_finally=[log_duration()]):
+    with begin_span(on_end=LogStatus()):
         sms_stats = LoopStats()
         for i in [1, 2, 3]:
-            with begin_span(index=i, on_finally=[sms_stats.count_span()]):
+            with begin_span(index=i, on_end=CountSpan(sms_stats)):
                 sleep(random.uniform(0.5, 1.5))
                 log_debug("This item is complete.")
         log_info("Fake sms stats.", sms_stats=sms_stats)

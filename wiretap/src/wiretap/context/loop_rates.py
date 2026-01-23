@@ -1,6 +1,6 @@
 from typing import Any
 
-from wiretap.modules.loop_stats import LoopStats
+from wiretap.context.loop_stats import LoopStats
 
 
 class LoopRates:

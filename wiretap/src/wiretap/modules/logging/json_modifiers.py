@@ -69,7 +69,7 @@ class AddSpan(JsonModifier):
 
             return context.entry | {
                 "trace_id": event.trace_id,
-                "name": event.name,
+                "name": event.operation,
                 "span_id": event.span_id,
                 "parent_id": event.parent_id,
                 "status": event.status,

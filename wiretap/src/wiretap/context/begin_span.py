@@ -1,11 +1,8 @@
 import contextlib
 import inspect
-from typing import Any, Iterator, Literal, Callable
+from typing import Any, Iterator, Callable
 
-from wiretap.modules.span import Span, SpanStatus
-
-# meta: Let's not repeat it twice.
-DurationLevel = Literal["info", "debug", "trace", "off"]
+from wiretap.modules.span import Span, SpanStatus, SpanEvent
 
 
 @contextlib.contextmanager
@@ -14,7 +11,8 @@ def begin_span(
         state: dict[str, Any] | None = None,
         trace_id: Any | None = None,
         parent_id: Any | None = None,
-        on_finally: list[Callable[[Span], None]] | None = None,
+        on_begin: Callable[[Span], None] | None = None,
+        on_end: Callable[[Span], None] | None = None,
         **kwargs
 ) -> Iterator[Span]:
     """
@@ -25,24 +23,23 @@ def begin_span(
         state: A dictionary of extra data to log that is attached to each trace.
         trace_id: The trace ID to use for the span. If None, a random ID will be generated.
         parent_id: The parent ID to use for the span. If None, the parent ID will be derived from the parent span.
-        on_finally: A callback to be called after the span is finished.
+        on_begin: A callback to be called when the span would log an event.
+        on_end: A callback to be called when the span would log an event.
         kwargs: Additional keyword arguments to be passed to each trace.
 
     Returns:
         The newly created span.
     """
 
+    on_begin = on_begin or (lambda _: None)
+    on_end = on_end or (lambda _: None)
+
     stack = inspect.stack(2)
     frame = stack[2]
 
     with Span.push(name, trace_id=trace_id, parent_id=parent_id, state=state, frame=frame, **kwargs) as span:
         try:
-            Span.log_event(
-                message=f"{span.name}: {span.status}.",
-                frame_at=0,
-                level="trace",
-                event="begin_span"
-            )
+            on_begin(span)
             yield span
             span.stopwatch.stop()
             span.status = SpanStatus.OK
@@ -51,5 +48,15 @@ def begin_span(
             span.status = SpanStatus.ERROR
             raise
         finally:
-            for callback in [c for c in (on_finally or []) if c is not None]:
-                callback(span)
+            on_end(span)
+
+
+class SpanHooks:
+    """Allows attaching multiple callbacks to a span's status."""
+
+    def __init__(self, *callbacks: Callable[[Span], None]):
+        self.callbacks = callbacks
+
+    def __call__(self, span: Span) -> None:
+        for cb in self.callbacks:
+            cb(span)

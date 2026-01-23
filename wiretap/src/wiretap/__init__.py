@@ -1,8 +1,9 @@
 from .modules import configure
-from .modules.loop_stats import LoopStats
-from .modules.loop_rates import LoopRates
-from .premise.begin import begin_span
-from .premise.log import log_info, log_debug, log_trace, log_warning, log_error, log_duration
+from .context.loop_stats import LoopStats, CountSpan
+from .context.loop_rates import LoopRates
+from .context.begin_span import begin_span, SpanHooks
+from .context.log_messages import log_info, log_debug, log_trace, log_warning, log_error
+from .context.log_span_status import LogStatus
 
 # core: Star import for convenience.
 __all__ = [
@@ -12,7 +13,9 @@ __all__ = [
     "log_trace",
     "log_warning",
     "log_error",
-    "log_duration",
+    "LogStatus",
+    "SpanHooks",
     "LoopStats",
+    "CountSpan",
     "LoopRates",
 ]

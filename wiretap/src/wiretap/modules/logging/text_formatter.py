@@ -16,7 +16,7 @@ class TextFormatter(logging.Formatter):
         # core: This is a native wiretap record.
         event: SpanEvent | None = record.__dict__.get(SpanEvent.KEY, None)
         if event:
-            record.span_name = event.name
+            record.operation = event.operation
             record.indent = self.indent * event.depth
             record.properties = stringify_deep(event.state)
             record.span = {} | {
@@ -37,7 +37,7 @@ class TextFormatter(logging.Formatter):
         span: Span | None = Span.current()
         if span:
             event = SpanEvent(span)
-            record.span_name = event.name
+            record.operation = event.operation
             record.indent = self.indent * event.depth
             record.properties = stringify_deep(event.state)
             record.span = {} | {
@@ -55,7 +55,7 @@ class TextFormatter(logging.Formatter):
             return super().format(record)
 
         # core: This is a native logging record, but stand-alone.
-        record.span_name = record.funcName
+        record.operation = record.funcName
         record.message = record.msg
         record.indent = ""
         record.source = {

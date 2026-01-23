@@ -19,24 +19,16 @@ class LoopStats:
         self.M2: float = 0.0  # Sum of squares of differences from the mean.
         self.status: dict[str, int] = defaultdict(int)
 
-    def count_item(self, duration_ms: int) -> None:
+    def count_item(self, status: SpanStatus, duration_ms: int) -> None:
         """Counts a single item's duration."""
 
+        self.status[status] += 1
         self.duration_ms += duration_ms
         self.count += 1
         delta: float = self.duration_ms - self.mean
         self.mean += delta / self.count
         delta2: float = self.duration_ms - self.mean
         self.M2 += delta * delta2
-
-    def count_span(self) -> Callable[[Span], None]:
-        """Returns a function that counts a span."""
-
-        def _count_span(span: Span) -> None:
-            self.status[span.status] += 1
-            self.count_item(span.stopwatch.duration_ms)
-
-        return _count_span
 
     @property
     def var(self) -> float:
@@ -69,3 +61,12 @@ class LoopStats:
 
     def __str__(self) -> str:
         return str(self.to_dict())
+
+
+class CountSpan:
+    def __init__(self, stats: LoopStats) -> None:
+        self.stats = stats
+
+    def __call__(self, span: Span) -> None:
+        if span.status != SpanStatus.UNSET:
+            self.stats.count_item(span.status, span.stopwatch.elapsed_ms)
