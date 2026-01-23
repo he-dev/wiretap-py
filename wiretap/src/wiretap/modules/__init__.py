@@ -6,8 +6,4 @@ from wiretap.modules.span import TRACE_LEVEL
 DurationLevel = Literal["auto", "info", "debug", "trace", "off"]
 
 
-def configure(config: dict):
-    """Configures logging and adds TRACE level not defined in the logging module by default."""
-    import logging.config
-    logging.addLevelName(TRACE_LEVEL, "TRACE")
-    logging.config.dictConfig(config)
+

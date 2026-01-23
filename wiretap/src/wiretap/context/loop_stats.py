@@ -1,6 +1,6 @@
 import math
 from collections import defaultdict
-from typing import Any, Callable
+from typing import Any
 
 from wiretap.modules.span import Span, SpanStatus
 

@@ -36,8 +36,6 @@ handlers:
   console_full:
     class: logging.StreamHandler
     formatter: console_full
-    #filters:
-    #  - exclude_span_begin
     #level: INFO
   console_lite:
     class: logging.StreamHandler
@@ -55,15 +53,6 @@ handlers:
     filename: "c:\\temp\\wiretap_elastic.log"
     formatter: elastic_json
     #level: DEBUG
-  #sqlserver:
-  #  class: "wiretap_sqlserver.SqlServerHandler"
-  #  #connection_string: "DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost,1433;DATABASE=automation;UID=sa;PWD=;"
-  #  insert: null
-  #  level: "DEBUG"
-  #  formatter: "auto"
-#filters:
-  #exclude_span_begin:
-  #  (): wiretap.modules.logging.ExcludeSpanBegin
 loggers:
   root:
     #handlers: [ "console", "file", "elastic_file" ]

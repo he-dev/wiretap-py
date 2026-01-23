@@ -2,7 +2,7 @@ import contextlib
 import inspect
 from typing import Any, Iterator, Callable
 
-from wiretap.modules.span import Span, SpanStatus, SpanEvent
+from wiretap.modules.span import Span, SpanStatus
 
 
 @contextlib.contextmanager
@@ -53,7 +53,7 @@ def begin_span(
 
 
 class SpanHooks:
-    """Allows attaching multiple callbacks to a span's status."""
+    """Allows attaching multiple callbacks to span events."""
 
     def __init__(self, *callbacks: Callable[[Span], None]):
         self.callbacks = callbacks

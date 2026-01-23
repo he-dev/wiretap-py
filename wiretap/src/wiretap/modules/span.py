@@ -1,8 +1,6 @@
 import contextlib
-import inspect
 import logging
 import secrets
-import sys
 from contextvars import ContextVar  # noqa: built-in module
 from enum import Enum
 from functools import reduce

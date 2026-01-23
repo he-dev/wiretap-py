@@ -1,4 +1,4 @@
-from .modules import configure
+from .modules.services import configure
 from .context.loop_stats import LoopStats, CountSpan
 from .context.loop_rates import LoopRates
 from .context.services.begin_span import begin_span, SpanHooks
