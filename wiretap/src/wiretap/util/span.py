@@ -7,7 +7,7 @@ from functools import reduce
 from inspect import FrameInfo
 from typing import Optional, Any, Iterator, TypeVar, ClassVar, Literal
 
-from wiretap.modules.stopwatch import Stopwatch
+from wiretap.util.stopwatch import Stopwatch
 
 T = TypeVar("T", bound="Span")
 

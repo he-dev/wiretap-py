@@ -6,8 +6,8 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from wiretap.modules.span import SpanEvent, Span
-from wiretap.toolbox import trim_path
+from wiretap.util.span import SpanEvent, Span
+from wiretap.meta import trim_path
 
 # util: Type alias for convenience
 LogEntry = dict[str, Any]

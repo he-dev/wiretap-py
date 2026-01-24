@@ -1,35 +1,35 @@
 version: 1
 formatters:
   console_full:
-    (): wiretap.modules.logging.TextFormatter
+    (): wiretap.util.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       {asctime}.{msecs:03.0f} [{levelname:7s}]
       {indent}{operation}: "{message}", properties={properties}, span={span}, source={source}
   console_lite:
-    (): wiretap.modules.logging.TextFormatter
+    (): wiretap.util.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       [{asctime}.{msecs:03.0f} {levelname:7s}{indent}]
       {operation}: "{message}", properties={properties}
   elastic_json:
-    (): wiretap.modules.logging.JsonFormatter
+    (): wiretap.util.logging.JsonFormatter
     encoders:
-      - wiretap.modules.services.EncodeDateTime
-      - wiretap.modules.services.EncodeUUID
-      - wiretap.modules.services.EncodeSet
-      - wiretap.modules.services.EncodePath
-      - wiretap.modules.services.EncodeToDict
+      - wiretap.util.services.EncodeDateTime
+      - wiretap.util.services.EncodeUUID
+      - wiretap.util.services.EncodeSet
+      - wiretap.util.services.EncodePath
+      - wiretap.util.services.EncodeToDict
     properties:
-      - wiretap.modules.services.AddTimestamp
-      - wiretap.modules.services.AddMessage
-      - wiretap.modules.services.AddProperties
-      - wiretap.modules.services.AddSpan
-      - wiretap.modules.services.AddSource
-      - wiretap.modules.services.AddException
-#      - (): wiretap.modules.logging.AddEnvironmentVariables
+      - wiretap.util.services.AddTimestamp
+      - wiretap.util.services.AddMessage
+      - wiretap.util.services.AddProperties
+      - wiretap.util.services.AddSpan
+      - wiretap.util.services.AddSource
+      - wiretap.util.services.AddException
+#      - (): wiretap.util.logging.AddEnvironmentVariables
 #        names:
 #          - app_id
 handlers:

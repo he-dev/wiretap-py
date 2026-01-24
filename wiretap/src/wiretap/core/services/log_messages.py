@@ -2,7 +2,7 @@ import inspect
 import logging
 import sys
 
-from wiretap.modules.span import Span, LogLevelName, TRACE_LEVEL, SpanEvent, NoSpanInScopeError
+from wiretap.util.span import Span, LogLevelName, TRACE_LEVEL, SpanEvent, NoSpanInScopeError
 
 
 # note: Ignore duplicate code in these functions because they are too small to refactor.

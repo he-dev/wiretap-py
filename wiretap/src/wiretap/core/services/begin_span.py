@@ -2,7 +2,7 @@ import contextlib
 import inspect
 from typing import Any, Iterator, Callable
 
-from wiretap.modules.span import Span, SpanStatus
+from wiretap.util.span import Span, SpanStatus
 
 
 @contextlib.contextmanager

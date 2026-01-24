@@ -1,5 +1,5 @@
-from wiretap.context.services.log_messages import log_event
-from wiretap.modules.span import Span, SpanStatus, LogLevelName
+from wiretap.core.services.log_messages import log_event
+from wiretap.util.span import Span, SpanStatus, LogLevelName
 
 
 class LogStatus:

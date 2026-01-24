@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from wiretap.modules.chain_path import ChainPath
+from wiretap.util.chain_path import ChainPath
 
 
 class DefaultEncode:

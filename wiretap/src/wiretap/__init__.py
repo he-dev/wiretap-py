@@ -1,9 +1,9 @@
-from .modules.services import configure
-from .context.loop_stats import LoopStats, CountSpan
-from .context.loop_rates import LoopRates
-from .context.services.begin_span import begin_span, SpanHooks
-from .context.services.log_messages import log_info, log_debug, log_trace, log_warning, log_error
-from .context.services.log_status import LogStatus
+from .util.services import configure
+from .core.loop_stats import LoopStats, CountSpan
+from .core.loop_rates import LoopRates
+from .core.services.begin_span import begin_span, SpanHooks
+from .core.services.log_messages import log_info, log_debug, log_trace, log_warning, log_error
+from .core.services.log_status import LogStatus
 
 # core: Star import for convenience.
 __all__ = [
