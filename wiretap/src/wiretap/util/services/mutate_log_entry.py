@@ -19,11 +19,12 @@ class LogContext:
 
     @property
     def event(self) -> SpanEvent | None:
-        if event := self.record.__dict__.get(SpanEvent.KEY, None):
+        if event := SpanEvent.extract_from(self.record):
             return event
-        else:
-            if scope := Span.current():
-                return SpanEvent(scope)
+
+        if span := Span.current():
+            return SpanEvent(span)
+
         return None
 
     entry: LogEntry
@@ -69,21 +70,21 @@ class AddSpan(MutateLogEntry):
         if event := context.event:
 
             return context.entry | {
-                "trace_id": event.trace_id,
                 "operation": event.operation,
+                "status": event.status,
+                "trace_id": event.trace_id,
                 "span_id": event.span_id,
                 "parent_id": event.parent_id,
-                "status": event.status,
             } | event.stopwatch.to_dict()
         else:
             return context.entry | {
-                "trace_id": None,
                 "operation": context.record.funcName,
+                "status": None,
+                "trace_id": None,
                 "span_id": None,
                 "parent_id": None,
                 "start_at": None,
                 "end_at": None,
-                "status": None,
             }
 
 

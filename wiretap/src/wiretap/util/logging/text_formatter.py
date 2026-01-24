@@ -8,14 +8,12 @@ class TextFormatter(logging.Formatter):
     indent: str = "."
 
     def format(self, record: logging.LogRecord):
+        # meta: Adds custom properties to the record so that they can be used in the configured log format.
 
         include_source = logging.getLogger(__name__).isEnabledFor(logging.DEBUG)
 
-        # event: SpanEvent | None = record.__dict__.get(SpanEvent.KEY, None)
-
         # core: This is a native wiretap record.
-        event: SpanEvent | None = record.__dict__.get(SpanEvent.KEY, None)
-        if event:
+        if event := SpanEvent.extract_from(record):
             record.operation = event.operation
             record.indent = self.indent * event.depth
             record.properties = stringify_deep(event.state)
@@ -34,8 +32,7 @@ class TextFormatter(logging.Formatter):
             return super().format(record)
 
         # core: This is a native logging record, but inside a wiretap's span.
-        span: Span | None = Span.current()
-        if span:
+        if span := Span.current():
             event = SpanEvent(span)
             record.operation = event.operation
             record.indent = self.indent * event.depth

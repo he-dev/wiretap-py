@@ -38,7 +38,7 @@ def begin_span(
     stack = inspect.stack(2)
     frame = stack[2]
 
-    with Span.push(name, trace_id=trace_id, parent_id=parent_id, state=state, frame=frame, **kwargs) as span:
+    with Span(name, state=state, trace_id=trace_id, parent_id=parent_id, frame=frame, **kwargs).push() as span:
         try:
             on_begin(span)
             yield span

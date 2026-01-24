@@ -5,9 +5,6 @@ import sys
 from wiretap.util.span import Span, LogLevelName, TRACE_LEVEL, SpanEvent, NoSpanInScopeError
 
 
-# note: Ignore duplicate code in these functions because they are too small to refactor.
-
-
 def log_event(
         message: str | None = None,
         level: LogLevelName = "info",
@@ -32,13 +29,14 @@ def log_event(
             level=_level,
             msg=message,
             exc_info=_level >= logging.ERROR or sys.exc_info()[0] is not None,
-            extra={
-                SpanEvent.KEY: SpanEvent(span=span, frame=frame, state=state, **kwargs)
-            }
+            # meta: Carry the span-event for further processing via the extra dict.
+            extra=SpanEvent(span=span, frame=frame, state=state, **kwargs).to_dict()
         )
     else:
         raise NoSpanInScopeError("Cannot log event because there is no activity in scope.")
 
+
+# note: Ignore duplicate code for the below functions because they are too small to refactor.
 
 # noinspection DuplicatedCode
 def log_info(message: str, state: dict | None = None, **kwargs) -> None:

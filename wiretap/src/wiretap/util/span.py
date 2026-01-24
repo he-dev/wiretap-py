@@ -34,27 +34,38 @@ class Span:
     This class represents a single activity scope.
     """
 
-    _current: ClassVar[ContextVar[Optional["Span"]]] = ContextVar("current_span", default=None)
+    _stack: ClassVar[ContextVar[Optional["Span"]]] = ContextVar("current_span", default=None)
 
     def __init__(
             self,
-            trace_id: Any | None,
-            parent_id: Any | None,
             name: str | None,
             state: dict[str, Any] | None,
+            trace_id: Any | None,
+            parent_id: Any | None,
             frame: FrameInfo,
-            parent: Optional["Span"],
             **kwargs,
     ):
-        self.trace_id: str = trace_id or (parent.trace_id if parent else secrets.token_hex(16))
+        """
+        Initialize a new Span instance.
+
+        Args:
+            name: The name of the span.
+            state: The initial state of the span.
+            trace_id: The trace ID for the span.
+            parent_id: The parent span ID.
+            frame: The frame information for the span.
+            **kwargs: Additional keyword arguments.
+        """
+
+        self.trace_id: str = trace_id or secrets.token_hex(16)
+        # meta: Cannot use id because it's reserved by python.
         self.span_id: str = secrets.token_hex(8)
-        self.parent_id: str | None = parent_id or (parent.span_id if parent else None)
+        self.parent_id: str | None = parent_id
         self.operation: str = name or frame.function
         self.state: dict = (state or {}) | kwargs
         self.status: SpanStatus = SpanStatus.UNSET
         self.frame: FrameInfo = frame
-        self.depth: int = 0 if parent is None else parent.depth + 1
-        self.parent: Optional["Span"] = parent
+        self.parent: Optional["Span"] = None
         self.stopwatch: Stopwatch = Stopwatch()
         self.logger: logging.Logger = logging.getLogger(name)
 
@@ -64,60 +75,55 @@ class Span:
             yield current
             current = current.parent
 
-    @classmethod
+    @property
+    def depth(self) -> int:
+        return self.parent.depth + 1 if self.parent else 0
+
     @contextlib.contextmanager
-    def push(
-            cls: type[T],
-            name: str | None,
-            trace_id: Any | None,
-            parent_id: Any | None,
-            state: dict[str, Any] | None,
-            frame: FrameInfo,
-            **kwargs,
-    ) -> Iterator[T]:
+    def push(self) -> Iterator["Span"]:
         """
-        Pushes a new telemetry scope onto the stack.
-
-        Parameters:
-        :param name: Name of the scope, derived from the calling frame if not provided.
-        :param trace_id: The trace ID to use for the scope. If None, a random ID will be generated.
-        :param parent_id: The parent ID to use for the scope. If None, the parent ID will be derived from the parent scope.
-        :param state: Extra data to attach to the scope.
-        :param frame: Frame information about the scope’s context.
-
-        :returns: The newly created scope.
+        Pushes the current span onto the stack.
         """
 
-        if frame is None:
-            raise ValueError("FrameInfo must not be None.")
+        if parent := Span.current():
+            self.parent = parent
+            # core: Set the parent_id only when it is not overridden by a custom value.
+            if self.parent_id is None:
+                self.parent_id = parent.span_id
 
-        parent = cls.current()
-        scope = cls(name=name, trace_id=trace_id, parent_id=parent_id, state=state, frame=frame, parent=parent, **kwargs)
-        token = cls._current.set(scope)
+        token = Span._stack.set(self)
         try:
-            yield scope
+            yield self
         finally:
-            cls._current.reset(token)
+            Span._stack.reset(token)
+            self.parent = None
 
     # note: There is no builtin @classproperty! :-\
     @classmethod
     def current(cls) -> Optional["Span"]:
-        return cls._current.get()
+        return cls._stack.get()
 
 
-# util: Collects all the data for logging in one place.
-# @dataclasses.dataclass
 class SpanEvent:
+    """This class represents a single span event containing both the span and the event states."""
+
     KEY = "_span_event"
 
     def __init__(self, span: Span, frame: FrameInfo | None = None, state: dict[str, Any] | None = None, **kwargs):
         self.operation = span.operation
-        self.frame = frame
-        self.depth = span.depth
-        self.trace_id = span.trace_id
-        self.span_id = span.span_id
-        self.parent_id = span.parent_id
-        self.stopwatch = span.stopwatch
         # core: Merge the state of all scopes.
         self.state = reduce(lambda c, n: (n.state or {}) | c, span, (state or {}) | kwargs)
+        self.depth = span.depth
         self.status = span.status
+        self.stopwatch = span.stopwatch
+        self.span_id = span.span_id
+        self.trace_id = span.trace_id
+        self.parent_id = span.parent_id
+        self.frame = frame
+
+    def to_dict(self) -> dict:
+        return {SpanEvent.KEY: self}
+
+    @staticmethod
+    def extract_from(record: logging.LogRecord) -> Optional["SpanEvent"]:
+        return record.__dict__.get(SpanEvent.KEY, None)
