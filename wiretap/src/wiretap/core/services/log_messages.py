@@ -1,6 +1,7 @@
 import inspect
 import logging
 import sys
+from types import FrameType
 
 from wiretap.util.span import Span, LogLevelName, TRACE_LEVEL, SpanEvent, NoSpanInScopeError
 
@@ -21,9 +22,16 @@ def log_event(
 
         # core: Fetch the current frame in case logging is called by a method without its own span.
         # meta: Avoids inspect.stack for performance reasons.
-        frame = sys._getframe(frame_at or 1)
-        info = inspect.getframeinfo(frame)
-        frame = inspect.FrameInfo(frame, info.filename, info.lineno, info.function, info.code_context, info.index)
+        frame_type: FrameType = sys._getframe(frame_at or 1)
+        info = inspect.getframeinfo(frame_type)
+        frame: inspect.FrameInfo = inspect.FrameInfo(
+            frame_type,
+            info.filename,
+            info.lineno,
+            info.function,
+            info.code_context,
+            info.index
+        )
 
         span.logger.log(
             level=_level,
