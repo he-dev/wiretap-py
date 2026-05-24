@@ -58,7 +58,7 @@ class Span:
         """
 
         self.trace_id: str = trace_id or secrets.token_hex(16)
-        # meta: Cannot use id because it's reserved by python.
+        # note: Cannot use id because it's reserved by python.
         self.span_id: str = secrets.token_hex(8)
         self.parent_id: str | None = parent_id
         self.operation: str = name or frame.function

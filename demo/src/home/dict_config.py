@@ -20,7 +20,7 @@ config = {
             "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {event} | {elapsed:.3f}s | {message} | {snapshot} | {tags}",
         },
         "elastic": {
-            "()": wiretap.formatters.JsonFormatter,
+            "()": wiretap.formatters.JSONFormatter,
             ".": {
                 "json_encoder_cls": wiretap.tools.JSONMultiEncoder
             }

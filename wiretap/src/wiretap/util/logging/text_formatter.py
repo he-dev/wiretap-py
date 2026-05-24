@@ -1,5 +1,7 @@
 import logging
+from typing import Any
 
+from wiretap.util.activity_scope import ActivityScope
 from wiretap.util.span import SpanEvent, Span
 from wiretap.meta import trim_path
 
@@ -11,6 +13,47 @@ class TextFormatter(logging.Formatter):
         # meta: Adds custom properties to the record so that they can be used in the configured log format.
 
         include_source = logging.getLogger(__name__).isEnabledFor(logging.DEBUG)
+
+        # core: This is a wiretap record.
+        if state_items := record.__dict__.get("wiretap", None):
+            record.activity = state_items.get("activity", None)
+            record.activity_status = state_items.get("activity_status", None)
+            record.activity_role = state_items.get("activity_role", None)
+            record.message = record.msg
+            record.elapsed_ms = state_items.get("elapsed_ms", None)
+            record.indent = self.indent * state_items.get("depth", 0)
+            record.properties = stringify_deep(state_items)
+            record.source = "?"
+            return super().format(record)
+
+        # core: This is a native logging record inside a wiretap's activity.'
+        if scope := ActivityScope.current():
+            state_items = scope.state_items
+            record.activity = state_items.get("activity", None)
+            record.activity_status = state_items.get("activity_status", None)
+            record.activity_role = state_items.get("activity_role", None)
+            record.message = record.msg
+            record.elapsed_ms = state_items.get("elapsed_ms", None)
+            record.indent = self.indent * state_items.get("depth", 0)
+            record.properties = stringify_deep(state_items)
+            record.source = "?"
+            return super().format(record)
+
+        # core: This is a native logging record outside a wiretap's span.
+        record.activity = record.funcName
+        record.activity_status = None
+        record.activity_role = "Buzz"
+        record.message = record.msg
+        record.elapsed_ms = -1
+        record.indent = ""
+        record.source = {
+            "func": record.funcName,
+            "file": trim_path(record.filename),
+            "line": record.lineno
+        } if include_source else "off"
+        record.properties = None
+
+        return super().format(record)
 
         # core: This is a native wiretap record.
         if event := SpanEvent.extract_from(record):
@@ -66,7 +109,7 @@ class TextFormatter(logging.Formatter):
         return super().format(record)
 
 
-def stringify_deep(obj: dict) -> dict | str:
+def stringify_deep(obj: dict | Any) -> dict | str:
     match obj:
         case dict():
             return {k: stringify_deep(v) for k, v in obj.items()}

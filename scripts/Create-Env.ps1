@@ -13,7 +13,7 @@ if(Test-Path $EnvPath) {
 
 Write-Information "Creating virtual environment..." -InformationAction Continue
 
-"$env:PYTHON_HOME\v3.10\python.exe -m venv $EnvPath" | Invoke-Expression
+"$env:PUBLIC\Stuff\tools\python\v3.14\python.exe -m venv $EnvPath" | Invoke-Expression
 Write-Information "Done!" -InformationAction Continue
 
 Write-Information "Installing packages..." -InformationAction Continue

@@ -5,11 +5,11 @@ from json import JSONEncoder
 from typing import Any
 
 from wiretap.util.services.encode_log_entry import DefaultEncode
-from wiretap.util.services.mutate_log_entry import MutateLogEntry, LogContext
+from wiretap.util.services.mutate_log_entry import ComposeJSON, ComposeJSONContext
 from wiretap.meta.type_factory import create_instance
 
 
-class JsonFormatter(logging.Formatter):
+class JSONFormatter(logging.Formatter):
 
     def __init__(
             self,
@@ -22,11 +22,11 @@ class JsonFormatter(logging.Formatter):
             self.default_encode = DefaultEncode([create_instance(e, JSONEncoder) for e in encoders])
 
         if properties is not None:
-            self.modifiers = [create_instance(p, MutateLogEntry) for p in properties]
+            self.modifiers = [create_instance(p, ComposeJSON) for p in properties]
 
     def format(self, record: logging.LogRecord):
         # core: Apply each modifier.
-        entry: dict[str, Any] = functools.reduce(lambda current, modifier: modifier(LogContext(record, current)), self.modifiers, {})
+        entry: dict[str, Any] = functools.reduce(lambda current, compose_json: compose_json(ComposeJSONContext(record, current)), self.modifiers, {})
 
         return json.dumps(
             entry,

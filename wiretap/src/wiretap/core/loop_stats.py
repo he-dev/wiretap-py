@@ -63,10 +63,9 @@ class LoopStats:
         return str(self.to_dict())
 
 
-class CountSpan:
+class CountEvent:
     def __init__(self, stats: LoopStats) -> None:
         self.stats = stats
 
     def __call__(self, span: Span) -> None:
-        if span.status != SpanStatus.UNSET:
-            self.stats.count_item(span.status, span.stopwatch.elapsed_ms)
+        self.stats.count_item(span.status, span.stopwatch.elapsed_ms)

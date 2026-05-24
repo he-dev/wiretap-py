@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    python_requires=">=3.10"
+    python_requires=">=3.12"
 )
 
 # https://pypi.org/classifiers/
