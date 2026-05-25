@@ -12,7 +12,7 @@ from time import sleep
 import yaml
 
 import wiretap
-from wiretap.util.activity_scope import WithMessageParts, AppendMessagePart
+from wiretap.util.activity_scope import WithMessageParts, AppendMessagePart, with_zero_status
 
 
 class Workflow:
@@ -33,16 +33,18 @@ class Workflow:
             pass
 
 
+@with_zero_status
 @dataclass(frozen=True)
-class DeletingFile(wiretap.Buzz, WithMessageParts):
+class DeletingFile(wiretap.Buzz):
     path: str = wiretap.state_item()
 
     def message_parts(self, append: AppendMessagePart) -> None:
         append("Path: {path}")
 
     @dataclass(frozen=True)
-    class Okay(wiretap.Okay):
+    class Okay2(wiretap.Okay):
         pass
+
 
 
 def demo_begin_scope():
@@ -54,7 +56,7 @@ def demo_begin_scope():
             # wiretap.note.log_debug("This is a note".)
             scope.log_status(Workflow.ExecutingStep.Beep(message="Step is being processed..."))
             with wiretap.begin_scope(DeletingFile(path="/path/to/file.txt")) as y:
-                y.log_status(DeletingFile.Okay())
+                y.log_status(DeletingFile.Okay2())
 
             # sleep(random.uniform(0.5, 1.0))
             scope.log_status(Workflow.ExecutingStep.Okay(items_processed=100))
