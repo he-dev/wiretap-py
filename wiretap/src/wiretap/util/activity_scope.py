@@ -42,6 +42,7 @@ class LastCount:
         return self._value == 0
 
 
+# core: Annotates a dataclass' field as a state-item so that it can be automatically dumped.
 def state_item(**kwargs):
     return field(metadata={"state_item": True}, **kwargs)
 
@@ -55,11 +56,6 @@ type SetStateItem = Callable[[str, Any], None]
 class WithStateItems(Protocol):
     # core: contributes structured fields to the log scope.
     def state_items(self, add: SetStateItem) -> None: ...
-
-
-def with_zero_status(cls: type) -> type:
-    cls._with_zero_status = True
-    return cls
 
 
 @runtime_checkable
@@ -105,44 +101,25 @@ class CompactMessagePrefix(WithMessageParts):
         append("Elapsed: {elapsed_ms} ms")
 
 
-# core: marker roles. Empty bases checked with isinstance — never Protocol, because
-# a methodless runtime_checkable Protocol matches every object and breaks the checks.
-class ActivityStatusRole:
-    class Last:
-        ...
-
-    class Veto:
-        ...
-
-    class User:
-        ...
-
-    class Auto:
-        ...
-
-
 class WithCompactMessageSchema:
     message_schema: ClassVar[MessageSchema] = CompactMessageSchema()
 
 
+class ActivityRole(Enum):
+    Core = "Core"
+    Buzz = "Buzz"
+
+
 @dataclass(frozen=True)
 class Activity(ABC):
+    role: ClassVar[ActivityRole | None] = None
+    must_log_zero: ClassVar[bool] = False
+    can_log_void: ClassVar[bool] = False
 
     @property
     def name(self) -> str:
         return type(self).__qualname__
 
-    @property
-    @abc.abstractmethod
-    def role(self) -> str: ...
-
-
-class Core(Activity):
-    role = "Core"
-
-
-class Buzz(Activity):
-    role = "Buzz"
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,18 +140,40 @@ class ActivityStatus[A: Activity]:
 def resolve_status_level[A: Activity](activity: Activity, status: ActivityStatus[A]) -> int:
     match status:
         case Zero():
-            if getattr(activity, "_with_zero_status", False):
+            if activity.must_log_zero:
                 return logging.INFO
             else:
                 return logging.DEBUG
         case Void():
-            return logging.INFO
+            if activity.can_log_void:
+                return logging.INFO
+            else:
+                return logging.DEBUG
         case Okay():
             return logging.INFO
         case Fail():
-            return logging.ERROR
+            if auto := type(status) is Fail:
+                return logging.DEBUG
+            else:
+                return logging.ERROR
         case _:
             return logging.INFO
+
+
+def resolve_activity_contract[A: Activity](activity: Activity, status: ActivityStatus[A], auto: bool) -> bool:
+    match status:
+        case Zero():
+            return activity.must_log_zero
+        case Beep():
+            return False
+        case Void():
+            return activity.can_log_void
+        case Okay():
+            return True
+        case Fail():
+            return not auto
+
+    raise TypeError(f"Cannot resolve activity contract because such status as {status} is not supported.")
 
 
 # ── core statuses (user-loggable) ────────────────────────────────────────────────
@@ -182,13 +181,13 @@ def resolve_status_level[A: Activity](activity: Activity, status: ActivityStatus
 
 # core: everything went according to plan.
 @dataclass(frozen=True, )
-class Okay[A: Activity](ActivityStatus[A], ActivityStatusRole.Last, ActivityStatusRole.User):
+class Okay[A: Activity](ActivityStatus[A]):
     pass
 
 
 # core: an error occurred.
 @dataclass(frozen=True)
-class Fail[A: Activity](ActivityStatus[A], ActivityStatusRole.Last, ActivityStatusRole.User):
+class Fail[A: Activity](ActivityStatus[A]):
     exception: Exception | None
 
     def message_parts(self, append: AppendMessagePart) -> None:
@@ -200,14 +199,14 @@ class Fail[A: Activity](ActivityStatus[A], ActivityStatusRole.Last, ActivityStat
 
 # note: the very first status. Its previous name was "First".
 @dataclass(frozen=True)
-class Zero[A: Activity](ActivityStatus[A], ActivityStatusRole.Auto):
+class Zero[A: Activity](ActivityStatus[A]):
     pass
 
 
 # core: emitted while the activity runs; carries an ad-hoc message. The level is a
 # constructor argument now — debug/trace are factory methods, not subclasses.
 @dataclass(frozen=True)
-class Beep[A: Activity](ActivityStatus[A], ActivityStatusRole.Auto):
+class Beep[A: Activity](ActivityStatus[A]):
     message: str
 
     def message_parts(self, append: AppendMessagePart) -> None:
@@ -217,18 +216,19 @@ class Beep[A: Activity](ActivityStatus[A], ActivityStatusRole.Auto):
 
 # info/warn are factory methods; the message text follows from the level.
 @dataclass(frozen=True)
-class Void[A: Activity](ActivityStatus[A], ActivityStatusRole.Auto, ActivityStatusRole.Last):
+class Void[A: Activity](ActivityStatus[A]):
     reason: str = state_item(default="Unspecified")
 
     def message_parts(self, append: AppendMessagePart) -> None:
         append("CanBeVoid policy is set; it allows omitting an explicit last status.")
 
 
-@dataclass(frozen=True)
-class Last[A: Activity](ActivityStatus[A], ActivityStatusRole.Auto, ActivityStatusRole.Last):
-
-    def message_parts(self, append: AppendMessagePart) -> None:
-        append("An explicit last status is missing; using this as fallback.")
+def is_last(status: ActivityStatus[Any]) -> bool:
+    match status:
+        case Void() | Okay() | Fail():
+            return True
+        case _:
+            return False
 
 
 class ActivityScope[A: Activity]:
@@ -263,7 +263,7 @@ class ActivityScope[A: Activity]:
             "scope_id": self.scope_id,
             "parent_id": self.parent.scope_id if self.parent else None,
             "activity": self._activity.name,
-            "activity_role": self._activity.role,
+            "activity_role": self._activity.role.value,
             "message_role": "Data",
             "elapsed_ms": self.stopwatch.elapsed_ms,
             "depth": self.depth,
@@ -276,19 +276,20 @@ class ActivityScope[A: Activity]:
     def log_status(self, status: Beep[A] | Void[A] | Okay[A] | Fail[A]) -> ActivityScope[A]:
         return self._log(status)
 
+    def log_last(self, status: Void[A] | Okay[A] | Fail[A]) -> ActivityScope[A]:
+        return self._log(status)
+
     def _log(self, status: ActivityStatus[A]) -> ActivityScope[A]:
 
         state_items: dict[str, Any] = self.state_items
         state_items |= {
-            "activity_status": status.code,
+            "activity_status": status.code
         }
-        state_items |= dump_state_items(self._activity)
-        state_items |= dump_state_items(status)
 
         for item in [self._activity, status]:
             state_items |= dump_state_items(item)
 
-        if isinstance(status, ActivityStatusRole.Last):
+        if is_last(status):
             self._last_count.increment()
 
         def set_state_item(key: str, value: Any) -> None:
@@ -355,7 +356,9 @@ def dump_state_items(obj: Any) -> dict[str, object]:
 
 
 @dataclass(frozen=True)
-class Prototyping(Core):
+class Prototyping(Activity):
+    role = ActivityRole.Buzz
+    must_log_zero = True
     activity_name: str
     state: dict[str, Any] | None
 

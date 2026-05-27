@@ -12,13 +12,15 @@ from time import sleep
 import yaml
 
 import wiretap
-from wiretap.util.activity_scope import WithMessageParts, AppendMessagePart, with_zero_status
+from wiretap import state_item
+from wiretap.util.activity_scope import WithMessageParts, AppendMessagePart
 
 
 class Workflow:
     @dataclass(frozen=True, slots=True)
-    class ExecutingStep(wiretap.Core):
-        step_index: wiretap.StateItem[int]
+    class ExecutingStep(wiretap.Activity):
+        role = wiretap.ActivityRole.Core
+        step_index: int = state_item()
 
         @dataclass(frozen=True, slots=True)
         class Beep(wiretap.Beep):
@@ -26,16 +28,17 @@ class Workflow:
 
         @dataclass(frozen=True, slots=True)
         class Okay(wiretap.Okay):
-            items_processed: wiretap.StateItem[int]
+            items_processed: int = state_item()
 
         @dataclass(frozen=True, slots=True)
         class Fail(wiretap.Fail):
             pass
 
 
-@with_zero_status
 @dataclass(frozen=True)
-class DeletingFile(wiretap.Buzz):
+class DeletingFile(wiretap.Activity):
+    role = wiretap.ActivityRole.Buzz
+    must_log_zero = True
     path: str = wiretap.state_item()
 
     def message_parts(self, append: AppendMessagePart) -> None:
