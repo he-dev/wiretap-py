@@ -1,73 +1,56 @@
-import asyncio
 import logging
-import logging.config
-import logging.handlers
-import pathlib
-import random
 from dataclasses import dataclass, field
-from datetime import date
-from enum import Enum
-from time import sleep
+from typing import Annotated
 
 import yaml
 
 import wiretap
-from wiretap import state_item
-from wiretap.util.activity_scope import WithMessageParts, AppendMessagePart
 
 
 class Workflow:
-    @dataclass(frozen=True, slots=True)
-    class ExecutingStep(wiretap.Activity):
-        role = wiretap.ActivityRole.Core
-        step_index: int = state_item()
+    @dataclass(frozen=True)
+    class ExecuteStep(wiretap.Activity):
+        step_index: Annotated[int, wiretap.StateItem()]
 
-        @dataclass(frozen=True, slots=True)
-        class Beep(wiretap.Beep):
-            pass
+        @dataclass(frozen=True)
+        class Okay(wiretap.Okay["Workflow.ExecuteStep"]):
+            items_processed: Annotated[int, wiretap.StateItem()]
 
-        @dataclass(frozen=True, slots=True)
-        class Okay(wiretap.Okay):
-            items_processed: int = state_item()
-
-        @dataclass(frozen=True, slots=True)
-        class Fail(wiretap.Fail):
+        @dataclass(frozen=True)
+        class Fail(wiretap.Fail["Workflow.ExecuteStep"]):
             pass
 
 
 @dataclass(frozen=True)
-class DeletingFile(wiretap.Activity):
-    role = wiretap.ActivityRole.Buzz
-    must_log_zero = True
-    path: str = wiretap.state_item()
+class DeleteFile(wiretap.Flag["DeleteFile"]):
+    path: Annotated[str, wiretap.StateItem(), wiretap.MessagePart()]
 
-    def message_parts(self, append: AppendMessagePart) -> None:
+    # note: Handled by StateItem annotation.
+    # def state_item(self, set: wiretap.SetStateItem) -> None:
+    #    set("Path", self.path)
+
+    # case: Shadows MessagePart annotation and causes a warning.
+    def message_parts(self, append: wiretap.AppendMessagePart) -> None:
         append("Path: {path}")
 
-    @dataclass(frozen=True)
-    class Okay2(wiretap.Okay):
-        pass
 
-
-
-def demo_begin_scope():
-    wiretap.log_note("This is a note outside a scope.")
-    with wiretap.begin_scope(Workflow.ExecutingStep(step_index=1)) as scope:
-        wiretap.log_note("This is a note inside a scope.")
+def scenarios():
+    wiretap.log_note("This message is outside a scope.")
+    with wiretap.begin_scope(Workflow.ExecuteStep(step_index=1)) as scope:
+        wiretap.log_note("This is a plain message inside a scope.")
         try:
             # busy...
             # wiretap.note.log_debug("This is a note".)
-            scope.log_status(Workflow.ExecutingStep.Beep(message="Step is being processed..."))
-            with wiretap.begin_scope(DeletingFile(path="/path/to/file.txt")) as y:
-                y.log_status(DeletingFile.Okay2())
+            wiretap.log_note("Step is being processed...")
+            wiretap.log_flag(DeleteFile(path="/path/to/file.txt"))
 
             # sleep(random.uniform(0.5, 1.0))
-            scope.log_status(Workflow.ExecutingStep.Okay(items_processed=100))
+            scope.log_buzz(Workflow.ExecuteStep.Okay(items_processed=100))
         except Exception as e:
-            scope.log_status(Workflow.ExecutingStep.Fail(exception=e))
+            scope.log_buzz(Workflow.ExecuteStep.Fail(exception=e))
 
     with wiretap.begin_scope(wiretap.Prototyping(activity_name="Testing", state=None)) as scope:
-        scope.log_status(wiretap.Prototyping.Beep(message="This is a beep."))
+        wiretap.log_note("This is a beep.")
         # scope.log_status(wiretap.Prototyping.Okay(message="This is an okay."))
         # scope.log_status(Prototyping.Fail(message="This is a fail.", exception=None))
 
@@ -77,4 +60,4 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
         # config["handlers"]["elastic_file"]["filename"] = rf"c:\temp\elastic-v8.0.0-{datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')}.log"
         wiretap.configure(config)
-    demo_begin_scope()
+    scenarios()

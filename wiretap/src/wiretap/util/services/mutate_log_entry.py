@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from wiretap.util.activity_scope import ActivityScope
-from wiretap.util.span import SpanEvent, Span
 from wiretap.meta import trim_path
 
 # util: Type alias for convenience
@@ -19,14 +18,12 @@ class ComposeJSONContext:
     record: logging.LogRecord
 
     @property
-    def scope(self) -> ActivityScope[Any] | None:
-        return ActivityScope.current()
+    def scope(self) -> dict[str, Any] | None:
+        if data := getattr(self.record, "wiretap", None):
+            return data
 
-        if event := SpanEvent.extract_from(self.record):
-            return event
-
-        if span := Span.current():
-            return SpanEvent(span)
+        if scope := ActivityScope.current():
+            return scope.to_extra(status=None, state=None)
 
         return None
 
@@ -70,24 +67,18 @@ class AddMessage(ComposeJSON):
 class AddSpan(ComposeJSON):
 
     def __call__(self, context: ComposeJSONContext) -> JSONEntry:
-        if event := context.scope:
+        if scope := context.scope:
 
             return context.entry | {
-                "operation": event.operation,
-                "status": event.status,
-                "trace_id": event.trace_id,
-                "span_id": event.span_id,
-                "parent_id": event.parent_id,
-            } | event.stopwatch.to_dict()
+                "trace_id": scope["trace_id"],
+                "span_id": scope["span_id"],
+                "parent_id": scope["parent_id"],
+            }
         else:
             return context.entry | {
-                "operation": context.record.funcName,
-                "status": None,
                 "trace_id": None,
                 "span_id": None,
                 "parent_id": None,
-                "start_at": None,
-                "end_at": None,
             }
 
 
@@ -95,11 +86,7 @@ class AddSource(ComposeJSON):
 
     def __call__(self, context: ComposeJSONContext) -> JSONEntry:
         if scope := context.scope:
-            return context.entry | {"source": {
-                "func": scope.frame.function if scope.frame else context.record.funcName,
-                "file": trim_path(scope.frame.filename) if scope.frame else trim_path(context.record.filename),
-                "line": scope.frame.lineno if scope.frame else context.record.lineno,
-            }}
+            return context.entry | {"source": scope["source"]}
         else:
             return context.entry | {"source": {
                 "func": context.record.funcName,
@@ -108,16 +95,13 @@ class AddSource(ComposeJSON):
             }}
 
 
-class AddProperties(ComposeJSON):
-
-    def __init__(self, names: Optional[list[str]] = None):
-        self.names = names or ["src"]
+class AddActivity(ComposeJSON):
 
     def __call__(self, context: ComposeJSONContext) -> JSONEntry:
         if scope := context.scope:
-            return context.entry | {"properties": scope.state_items}
+            return context.entry | {"activity": scope["activity"]}
         else:
-            return context.entry | {"properties": {}}
+            return context.entry | {"activity": {}}
 
 
 class AddException(ComposeJSON):
