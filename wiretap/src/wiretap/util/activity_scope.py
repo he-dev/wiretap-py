@@ -1,18 +1,12 @@
 import abc
-import contextlib
 import inspect
 import logging
 import secrets
-import sys
 from abc import ABC
 from contextvars import ContextVar  # noqa: built-in module
-from dataclasses import dataclass, fields, is_dataclass, field
-from enum import Enum
-from functools import reduce, cache, lru_cache
-from inspect import FrameInfo
-from types import FrameType
-from typing import Optional, Any, Iterator, TypeVar, ClassVar, Literal, runtime_checkable, Protocol, Callable, Self, \
-    Annotated, get_type_hints
+from dataclasses import dataclass, field
+from functools import lru_cache
+from typing import Any, Iterator, ClassVar, runtime_checkable, Protocol, Callable, Annotated, get_type_hints
 
 from wiretap.util.stopwatch import Stopwatch
 
@@ -29,6 +23,7 @@ class MessagePart:
     label: str | None = None
 
 
+# core: Reads and caches annotated fields for status classes because they use [Annotated] fields.
 @lru_cache(maxsize=None)
 def _annotated_fields(cls: type) -> dict[type, dict[str, Any]]:
     # note: The index structure is: {channel_type: {field_name: annotation}} resolved once per class.
@@ -40,6 +35,7 @@ def _annotated_fields(cls: type) -> dict[type, dict[str, Any]]:
     return index
 
 
+# core: Warns about conflicting annotations between a class and a protocol.
 @lru_cache(maxsize=None)
 def _warn_if_protocol_shadows_annotations(cls: type, protocol: type, annotation: type) -> None:
     if _annotated_fields(cls).get(annotation):
@@ -92,9 +88,6 @@ class LastCount:
     @property
     def overflows(self) -> bool:
         return self._value > 1
-
-    def to_dict(self) -> dict:
-        return {"last_index": self._value}
 
     @property
     def is_zero(self) -> bool:
@@ -158,7 +151,7 @@ class WithCompactMessageSchema:
 
 
 @dataclass(frozen=True)
-class Activity(ABC):
+class Activity:
     tags: ClassVar[dict[str, Any] | None] = None
     must_log_zero: ClassVar[bool] = False
     can_log_void: ClassVar[bool] = False
@@ -169,7 +162,17 @@ class Activity(ABC):
 
 
 @dataclass(frozen=True)
-class ActivityBuzz[A: Activity]:
+class Buzz(Activity):
+    pass
+
+
+@dataclass(frozen=True)
+class Snap(Activity):
+    pass
+
+
+@dataclass(frozen=True)
+class ActivityStatus[A: Activity]:
     # core: the phantom A binds a status to one activity type. It is consumed by
     # ActivityScope[A].log_status, which is what makes the type checker reject
     # logging activity X's status into a scope opened for activity Y.
@@ -179,13 +182,13 @@ class ActivityBuzz[A: Activity]:
         # meta: Gets the status code from the concrete subclass but nearest to ActivityBuzz.
         for cls in type(self).__mro__:
             # note: Flags are derived directly from ActivityBuzz.
-            if cls.__base__ is ActivityBuzz:
+            if cls.__base__ is ActivityStatus:
                 return cls.__name__
-        raise TypeError(f"Activity status code not found because {type(self).__qualname__} does not inherit : must inherit from {ActivityBuzz.__qualname__}.")
+        raise TypeError(f"Activity status code not found because {type(self).__qualname__} does not inherit : must inherit from {ActivityStatus.__qualname__}.")
 
 
-def resolve_buzz_level[A: Activity](activity: Activity, buzz: ActivityBuzz[A]) -> int:
-    match buzz:
+def resolve_status_level[A: Activity](activity: Activity, status: ActivityStatus[A]) -> int:
+    match status:
         case Zero():
             if activity.must_log_zero:
                 return logging.INFO
@@ -199,7 +202,7 @@ def resolve_buzz_level[A: Activity](activity: Activity, buzz: ActivityBuzz[A]) -
         case Okay():
             return logging.INFO
         case Fail():
-            if auto := type(buzz) is Fail:
+            if auto := type(status) is Fail:
                 return logging.DEBUG
             else:
                 return logging.ERROR
@@ -209,18 +212,13 @@ def resolve_buzz_level[A: Activity](activity: Activity, buzz: ActivityBuzz[A]) -
 
 # core: everything went according to plan.
 @dataclass(frozen=True)
-class Okay[A: Activity](ActivityBuzz[A]):
-    pass
-
-
-@dataclass(frozen=True)
-class Flag[A: Activity](ActivityBuzz[A], Activity):
+class Okay[A: Activity](ActivityStatus[A]):
     pass
 
 
 # core: an error occurred.
 @dataclass(frozen=True)
-class Fail[A: Activity](ActivityBuzz[A]):
+class Fail[A: Activity](ActivityStatus[A]):
     exception: Exception | None
 
     def message_parts(self, append: AppendMessagePart) -> None:
@@ -230,28 +228,13 @@ class Fail[A: Activity](ActivityBuzz[A]):
 
 # note: the very first status. Its previous name was "First".
 @dataclass(frozen=True)
-class Zero[A: Activity](ActivityBuzz[A]):
+class Zero[A: Activity](ActivityStatus[A]):
     pass
 
 
-# core: emitted while the activity runs; carries an ad-hoc message. The level is a
-# constructor argument now — debug/trace are factory methods, not subclasses.
 @dataclass(frozen=True)
-class Note[A: Activity](ActivityBuzz[A], Activity):
-    message: Annotated[str, MessagePart()]
-
-
-@dataclass(frozen=True)
-class Void[A: Activity](ActivityBuzz[A]):
+class Void[A: Activity](ActivityStatus[A]):
     reason: Annotated[str, StateItem(), MessagePart()]
-
-
-def is_last(status: ActivityBuzz[Any]) -> bool:
-    match status:
-        case Flag() | Void() | Okay() | Fail():
-            return True
-        case _:
-            return False
 
 
 class ActivityScope[A: Activity]:
@@ -303,15 +286,11 @@ class ActivityScope[A: Activity]:
     def begin(cls, activity: A, trace_id: Any | None, caller: Caller | None) -> ActivityScope[A]:
         return cls(activity, trace_id, caller)
 
-    def log_buzz(self, buzz: Void[A] | Okay[A] | Fail[A]) -> ActivityScope[A]:
-        if isinstance(buzz, Flag):
-            # note: Flags are also activities so create a new scope for them.
-            with begin_scope(buzz, frame_offset=1) as scope:
-                return scope._log(buzz)
-        else:
-            return self._log(buzz)
+    def log_status(self, status: Void[A] | Okay[A] | Fail[A]) -> ActivityScope[A]:
+        self._last_count.increment()
+        return self._log(status)
 
-    def _log(self, status: ActivityBuzz[A]) -> ActivityScope[A]:
+    def _log(self, status: ActivityStatus[A]) -> ActivityScope[A]:
 
         state: dict[str, Any] = {}
 
@@ -324,18 +303,15 @@ class ActivityScope[A: Activity]:
 
         extra: dict[str, Any] = self.to_extra(status.code, state)
 
-        if is_last(status):
-            self._last_count.increment()
-
         # note: Some buzzes like Flag implement both the status and the activity, so it is the same object.
-        sources = dict.fromkeys([self._activity, status]) # meta: ordered and deduped
+        sources = dict.fromkeys([self._activity, status])  # meta: ordered and deduped
         message = self.message_schema.compose(extra, self.message_prefix, *sources)
-        status_level = resolve_buzz_level(self._activity, status)
+        status_level = resolve_status_level(self._activity, status)
 
         # core: Special overflow handling for the last status.
         if self._last_count.overflows:
             status_level = logging.DEBUG
-            extra |= self._last_count.to_dict()
+            _logger.warning(f"Last status logged {self._last_count.value} times. This is a bug.")
 
         self._logger.log(status_level, message, extra={"wiretap": extra})
         return self
@@ -351,7 +327,7 @@ class ActivityScope[A: Activity]:
         self._token = ActivityScope._stack.set(self)
 
         match self._activity:
-            case Flag() | Note():
+            case Snap():
                 # note: Flags and Notes do not have the zero status.
                 pass
             case _:
@@ -375,14 +351,38 @@ FRAME_INDEX_SELF = 0
 FRAME_INDEX_CALLER = 1
 
 
-def begin_scope[A: Activity](activity: A, trace_id: Any | None = None, frame_offset: int = 0) -> ActivityScope[A]:
-    frame = sys._getframe(FRAME_INDEX_CALLER + frame_offset)
-    caller = Caller(
-        func=frame.f_code.co_name,
-        file=frame.f_code.co_filename,
-        line=frame.f_lineno,
-    )
+def begin_buzz[A: Activity](activity: A, trace_id: Any | None = None, frame_offset: int = 0, with_caller_info: bool = True) -> ActivityScope[A]:
+    # frame = sys._getframe(FRAME_INDEX_CALLER + frame_offset)
+    # caller = Caller(
+    #     func=frame.f_code.co_name,
+    #     file=frame.f_code.co_filename,
+    #     line=frame.f_lineno,
+    # )
+
+    if with_caller_info:
+        frame = inspect.currentframe()
+        try:
+            steps = FRAME_INDEX_CALLER + frame_offset
+            for _ in range(steps):
+                if frame is None:
+                    break
+                frame = frame.f_back
+
+            caller = Caller(
+                func=frame.f_code.co_name if frame is not None else "<unknown>",
+                file=frame.f_code.co_filename if frame is not None else "<unknown>",
+                line=frame.f_lineno if frame is not None else 0
+            )
+        finally:
+            del frame
+    else:
+        caller = None
+
     return ActivityScope.begin(activity, trace_id, caller)
+
+
+def begin_snap[A: Snap](activity: A, trace_id: Any | None = None, frame_offset: int = 0) -> ActivityScope[A]:
+    return begin_buzz(activity, trace_id, frame_offset)
 
 
 @dataclass(frozen=True)
@@ -390,10 +390,6 @@ class Prototyping(Activity):
     must_log_zero = True
     activity_name: str
     state: dict[str, Any] | None
-
-    @dataclass(frozen=True)
-    class Note(Note):
-        message: str
 
     @dataclass(frozen=True)
     class Okay(Okay):
@@ -404,12 +400,7 @@ class Prototyping(Activity):
         message: str
 
 
-def log_note(message: str) -> None:
-    if scope := ActivityScope.current():
-        scope._log(Note(message=message))
-
-
-def log_flag(buzz: Flag) -> None:
+def log_status[A: Snap](snap: Snap, flag: Okay[A]) -> None:
     # note: Flags are also activities so create a new scope for them.
-    with begin_scope(buzz, frame_offset=1) as scope:
-        return scope._log(buzz)
+    with begin_snap(snap, frame_offset=1) as snap:
+        snap.log_status(flag)
