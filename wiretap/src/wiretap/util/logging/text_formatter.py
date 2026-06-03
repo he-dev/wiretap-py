@@ -1,7 +1,6 @@
 import logging
 from typing import Any
 
-from wiretap.util import span
 from wiretap.util.activity_scope import ActivityScope
 from wiretap.meta import trim_path
 
@@ -37,7 +36,7 @@ class TextFormatter(logging.Formatter):
 
         # core: This is a native logging record outside a wiretap's span.
         record.indent = ""
-        record.message = record.msg
+        record.message = record.getMessage()
         record.activity = {
             "name": record.funcName,
             "tags": None,

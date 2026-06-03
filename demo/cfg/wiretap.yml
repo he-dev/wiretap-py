@@ -60,10 +60,11 @@ loggers:
     # handlers: [ "console_lite", "console_file", "elastic_file" ]
     # handlers: [ "console_lite", "elastic_file" ]
     # handlers: [ "console" ]
-    #level: "INFO"
-    level: "DEBUG"
+    level: "INFO"
+    #level: "DEBUG"
     #level: "TRACE"
   wiretap:
+    #level: "INFO"
     level: "DEBUG"
   PIL:
     level: "WARNING"

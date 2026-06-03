@@ -90,7 +90,7 @@ class AddSource(ComposeJSON):
         else:
             return context.entry | {"source": {
                 "func": context.record.funcName,
-                "file": context.record.filename,
+                "file": trim_path(context.record.filename),
                 "line": context.record.lineno,
             }}
 

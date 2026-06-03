@@ -2,19 +2,23 @@ import abc
 import inspect
 import logging
 import secrets
-from abc import ABC
 from contextvars import ContextVar  # noqa: built-in module
 from dataclasses import dataclass, field
 from functools import lru_cache
+from itertools import islice
 from typing import Any, Iterator, ClassVar, runtime_checkable, Protocol, Callable, Annotated, get_type_hints
 
+from wiretap.meta import trim_path, fast_reverse
 from wiretap.util.stopwatch import Stopwatch
 
+# util: Internal logger.
 _logger = logging.getLogger("wiretap")
 
 
 @dataclass(frozen=True)
 class StateItem:
+    # core: When True, the field applies to all activities down the stack.
+    inheritable: bool = field(default=False)
     default_value: Any = field(default=None)
 
 
@@ -53,6 +57,14 @@ def get_state_items(source: object, add: AddStateItem) -> None:
     else:
         for name, annotation in annotations.items():
             state_item: StateItem = annotation
+            add(name, getattr(source, name, state_item.default_value))
+
+
+def get_state_items_all(source: object, add: AddStateItem) -> None:
+    annotations = _annotated_fields(type(source)).get(StateItem, {})
+    for name, annotation in annotations.items():
+        state_item: StateItem = annotation
+        if state_item.inheritable:
             add(name, getattr(source, name, state_item.default_value))
 
 
@@ -95,7 +107,7 @@ class LastCount:
 
 
 # meta: mirror of the C# delegates; structured-template + args, and key/value.
-type AppendMessagePart = Callable[[str], None]
+type AppendMessagePart = Callable[[str | None], None]
 type AddStateItem = Callable[[str, Any], None]
 
 
@@ -150,9 +162,9 @@ class WithCompactMessageSchema:
     message_schema: ClassVar[MessageSchema] = CompactMessageSchema()
 
 
-@dataclass(frozen=True)
+@dataclass  # (frozen=True)
 class Activity:
-    tags: ClassVar[dict[str, Any] | None] = None
+    tags: ClassVar[list[Any] | None] = None
     must_log_zero: ClassVar[bool] = False
     can_log_void: ClassVar[bool] = False
 
@@ -161,17 +173,17 @@ class Activity:
         return type(self).__qualname__
 
 
-@dataclass(frozen=True)
+@dataclass  # (frozen=True)
 class Buzz(Activity):
     pass
 
 
-@dataclass(frozen=True)
+@dataclass  # (frozen=True)
 class Snap(Activity):
     pass
 
 
-@dataclass(frozen=True)
+@dataclass  # (frozen=True)
 class ActivityStatus[A: Activity]:
     # core: the phantom A binds a status to one activity type. It is consumed by
     # ActivityScope[A].log_status, which is what makes the type checker reject
@@ -202,7 +214,7 @@ def resolve_status_level[A: Activity](activity: Activity, status: ActivityStatus
         case Okay():
             return logging.INFO
         case Fail():
-            if auto := type(status) is Fail:
+            if logged_on_exit := type(status) is Fail:
                 return logging.DEBUG
             else:
                 return logging.ERROR
@@ -211,13 +223,13 @@ def resolve_status_level[A: Activity](activity: Activity, status: ActivityStatus
 
 
 # core: everything went according to plan.
-@dataclass(frozen=True)
+@dataclass  # (frozen=True)
 class Okay[A: Activity](ActivityStatus[A]):
     pass
 
 
 # core: an error occurred.
-@dataclass(frozen=True)
+@dataclass  # (frozen=True)
 class Fail[A: Activity](ActivityStatus[A]):
     exception: Exception | None
 
@@ -227,12 +239,12 @@ class Fail[A: Activity](ActivityStatus[A]):
 
 
 # note: the very first status. Its previous name was "First".
-@dataclass(frozen=True)
+@dataclass  # (frozen=True)
 class Zero[A: Activity](ActivityStatus[A]):
     pass
 
 
-@dataclass(frozen=True)
+@dataclass  # (frozen=True)
 class Void[A: Activity](ActivityStatus[A]):
     reason: Annotated[str, StateItem(), MessagePart()]
 
@@ -298,14 +310,17 @@ class ActivityScope[A: Activity]:
             if value is not None:
                 state[key] = value
 
+        # core: Get inheritable state items from the parent scopes.
+        # note: Collect state items from top to bottom so that the last status wins.
+        for item in fast_reverse(islice(iter(self), 1, None)):
+            get_state_items_all(item._activity, set_state_item)
+
         for item in [self._activity, status]:
             get_state_items(item, set_state_item)
 
         extra: dict[str, Any] = self.to_extra(status.code, state)
 
-        # note: Some buzzes like Flag implement both the status and the activity, so it is the same object.
-        sources = dict.fromkeys([self._activity, status])  # meta: ordered and deduped
-        message = self.message_schema.compose(extra, self.message_prefix, *sources)
+        message = self.message_schema.compose(extra, self.message_prefix, self._activity, status)
         status_level = resolve_status_level(self._activity, status)
 
         # core: Special overflow handling for the last status.
@@ -352,13 +367,6 @@ FRAME_INDEX_CALLER = 1
 
 
 def begin_buzz[A: Activity](activity: A, trace_id: Any | None = None, frame_offset: int = 0, with_caller_info: bool = True) -> ActivityScope[A]:
-    # frame = sys._getframe(FRAME_INDEX_CALLER + frame_offset)
-    # caller = Caller(
-    #     func=frame.f_code.co_name,
-    #     file=frame.f_code.co_filename,
-    #     line=frame.f_lineno,
-    # )
-
     if with_caller_info:
         frame = inspect.currentframe()
         try:
@@ -370,7 +378,7 @@ def begin_buzz[A: Activity](activity: A, trace_id: Any | None = None, frame_offs
 
             caller = Caller(
                 func=frame.f_code.co_name if frame is not None else "<unknown>",
-                file=frame.f_code.co_filename if frame is not None else "<unknown>",
+                file=trim_path(frame.f_code.co_filename) if frame is not None else "<unknown>",
                 line=frame.f_lineno if frame is not None else 0
             )
         finally:
@@ -385,22 +393,66 @@ def begin_snap[A: Snap](activity: A, trace_id: Any | None = None, frame_offset: 
     return begin_buzz(activity, trace_id, frame_offset)
 
 
-@dataclass(frozen=True)
-class Prototyping(Activity):
-    must_log_zero = True
-    activity_name: str
-    state: dict[str, Any] | None
+@dataclass  # (frozen=True)
+class Prototype(Activity):
+    tags = ["prototype"]
 
-    @dataclass(frozen=True)
+    def __init__(self, name: str, message: str | None = None, **kwargs) -> None:
+        self._name = name
+        self._message = message
+        self._state = kwargs
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def state_items(self, add: AddStateItem) -> None:
+        for key, value in self._state.items():
+            add(key, value)
+
+    def message_parts(self, append: AppendMessagePart) -> None:
+        append(self._message)
+
+    @dataclass
+    class Void(Void):
+        def __init__(self, message: str | None = None, **kwargs) -> None:
+            self._message = message
+            self._state = kwargs
+
+        def state_items(self, add: AddStateItem) -> None:
+            for key, value in self._state.items():
+                add(key, value)
+
+        def message_parts(self, append: AppendMessagePart) -> None:
+            append(self._message)
+
+    @dataclass
     class Okay(Okay):
-        message: str
+        def __init__(self, message: str | None = None, **kwargs) -> None:
+            self._message = message
+            self._state = kwargs
 
-    @dataclass(frozen=True)
+        def state_items(self, add: AddStateItem) -> None:
+            for key, value in self._state.items():
+                add(key, value)
+
+        def message_parts(self, append: AppendMessagePart) -> None:
+            append(self._message)
+
+    @dataclass
     class Fail(Fail):
-        message: str
+        def __init__(self, message: str | None = None, **kwargs) -> None:
+            self._message = message
+            self._state = kwargs
+
+        def state_items(self, add: AddStateItem) -> None:
+            for key, value in self._state.items():
+                add(key, value)
+
+        def message_parts(self, append: AppendMessagePart) -> None:
+            append(self._message)
 
 
 def log_status[A: Snap](snap: Snap, flag: Okay[A]) -> None:
-    # note: Flags are also activities so create a new scope for them.
-    with begin_snap(snap, frame_offset=1) as snap:
+    with begin_snap(snap, frame_offset=2) as snap:
         snap.log_status(flag)
