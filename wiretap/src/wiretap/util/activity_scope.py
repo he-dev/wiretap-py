@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import abc
 import inspect
 import logging
@@ -314,12 +316,13 @@ class ActivityScope[A: Activity]:
         for item in reversed(list(islice(iter(self), 1, None))):
             get_state_items_all(item._activity, set_state_item)
 
-        for item in [self._activity, status]:
+        # core: Activity, scope, and status each get a chance to fulfill the monitoring contract.
+        for item in [self._activity, self, status]:
             get_state_items(item, set_state_item)
 
         extra: dict[str, Any] = self.to_extra(status.code, state)
 
-        message = self.message_schema.compose(extra, self.message_prefix, self._activity, status)
+        message = self.message_schema.compose(extra, self.message_prefix, self._activity, self, status)
         status_level = resolve_status_level(self._activity, status)
 
         # core: Special overflow handling for the last status.
@@ -367,6 +370,12 @@ FRAME_INDEX_SELF = 0
 FRAME_INDEX_CALLER = 1
 
 
+@runtime_checkable
+class ActivityScopeFactory[A: Activity](Protocol):
+    # core: Allows an activity contract to choose its runtime scope implementation.
+    def create_scope(self, trace_id: Any | None, caller: Caller | None) -> ActivityScope[A]: ...
+
+
 def begin_buzz[A: Activity](activity: A, trace_id: Any | None = None, frame_offset: int = 0, with_caller_info: bool = True) -> ActivityScope[A]:
     if with_caller_info:
         frame = inspect.currentframe()
@@ -386,6 +395,9 @@ def begin_buzz[A: Activity](activity: A, trace_id: Any | None = None, frame_offs
             del frame
     else:
         caller = None
+
+    if isinstance(activity, ActivityScopeFactory):
+        return activity.create_scope(trace_id, caller)
 
     return ActivityScope(activity, trace_id, caller)
 

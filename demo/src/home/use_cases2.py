@@ -41,6 +41,27 @@ class DeleteFile(wiretap.Snap):
 
 def scenarios():
     logging.info("This is a log message outside of any activity.")
+
+    with wiretap.begin_buzz(wiretap.ProcessBatch(batch_name="DeleteFiles")) as batch:
+        for path in [
+            "/path/to/one.txt",
+            "/path/to/two.txt",
+            "/path/to/archive.tmp",
+        ]:
+            with batch.item() as item:
+                try:
+                    logging.info("Deleting file.")
+                    if path.endswith(".tmp"):
+                        raise ValueError("Temporary files are not deleted by this workflow.")
+
+                    wiretap.log_status(DeleteFile(path=path), DeleteFile.Okay())
+                    item.okay()
+                except Exception as e:
+                    item.fail()
+                    logging.error("Unable to delete file.", exc_info=True)
+
+        batch.log_status(wiretap.ProcessBatch.Okay())
+
     with wiretap.begin_buzz(Workflow.ExecuteStep(step_index=1)) as scope:
         try:
             # busy...

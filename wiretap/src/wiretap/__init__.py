@@ -4,8 +4,10 @@ from .core.loop_rates import LoopRates
 from .util.activity_scope import (
     begin_buzz, Prototype, Buzz, Snap, ActivityStatus,
     Okay, Fail, Void, StateItem, MessagePart,
-    AddStateItem, AppendMessagePart, log_status
+    AddStateItem, AppendMessagePart, log_status,
+    ActivityScopeFactory
 )
+from .util.process_batch import ProcessBatch
 
 # core: Star import for convenience.
 __all__ = [
@@ -22,5 +24,7 @@ __all__ = [
     "MessagePart",
     "AppendMessagePart",
     "AddStateItem",
-    "log_status"
+    "log_status",
+    "ActivityScopeFactory",
+    "ProcessBatch"
 ]

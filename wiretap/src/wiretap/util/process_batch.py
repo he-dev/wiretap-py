@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import logging
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from typing import Any, Annotated, Generic
+from typing import Any, Annotated, Literal
 
 from wiretap.util.activity_scope import (
     Activity,
@@ -11,12 +10,16 @@ from wiretap.util.activity_scope import (
     AddStateItem,
     AppendMessagePart,
     Buzz,
+    Caller,
     Fail,
     MessagePart,
     Okay,
     StateItem,
     Void,
 )
+
+
+type BatchItemStatus = Literal["okay", "fail", "void"]
 
 
 @dataclass
@@ -33,6 +36,9 @@ class ProcessBatch(Buzz):
     @property
     def name(self) -> str:
         return self.batch_name
+
+    def create_scope(self, trace_id: Any | None, caller: Caller | None) -> ProcessBatchScope[ProcessBatch]:
+        return ProcessBatchScope(self, trace_id, caller)
 
     @dataclass
     class Okay(Okay["ProcessBatch"]):
@@ -60,11 +66,15 @@ class BatchStats:
         self.fail_count = 0
         self.void_count = 0
         self.duration_ms = 0
+        self.duration_ms_min: int | None = None
+        self.duration_ms_max: int | None = None
 
-    def count(self, status: str, duration_ms: int) -> None:
+    def count(self, status: BatchItemStatus, duration_ms: int) -> None:
         # core: Each iteration contributes exactly one outcome to the batch summary.
         self.total_count += 1
         self.duration_ms += duration_ms
+        self.duration_ms_min = duration_ms if self.duration_ms_min is None else min(self.duration_ms_min, duration_ms)
+        self.duration_ms_max = duration_ms if self.duration_ms_max is None else max(self.duration_ms_max, duration_ms)
 
         match status:
             case "okay":
@@ -75,16 +85,24 @@ class BatchStats:
                 self.void_count += 1
 
     @property
-    def mean_duration_ms(self) -> float:
+    def duration_ms_mean(self) -> float:
         return self.duration_ms / self.total_count if self.total_count else 0.0
 
     @property
-    def error_rate(self) -> float:
+    def fail_rate(self) -> float:
         return self.fail_count / self.total_count if self.total_count else 0.0
 
     @property
-    def success_rate(self) -> float:
+    def okay_rate(self) -> float:
         return self.okay_count / self.total_count if self.total_count else 0.0
+
+    @property
+    def void_rate(self) -> float:
+        return self.void_count / self.total_count if self.total_count else 0.0
+
+    @property
+    def throughput_s(self) -> float:
+        return self.total_count / (self.duration_ms / 1000) if self.duration_ms else 0.0
 
     def state_items(self, add: AddStateItem) -> None:
         add("total_count", self.total_count)
@@ -92,15 +110,18 @@ class BatchStats:
         add("fail_count", self.fail_count)
         add("void_count", self.void_count)
         add("duration_ms", self.duration_ms)
-        add("mean_duration_ms", self.mean_duration_ms)
-        add("success_rate", self.success_rate)
-        add("error_rate", self.error_rate)
+        add("duration_ms_mean", self.duration_ms_mean)
+        add("duration_ms_min", self.duration_ms_min)
+        add("duration_ms_max", self.duration_ms_max)
+        add("okay_rate", self.okay_rate)
+        add("fail_rate", self.fail_rate)
+        add("void_rate", self.void_rate)
+        add("throughput_s", self.throughput_s)
 
     def message_parts(self, append: AppendMessagePart) -> None:
-        append("Items: {total_count}")
-        append("Okay: {okay_count}")
-        append("Failed: {fail_count}")
-        append("Void: {void_count}")
+        append("Items: {state[total_count]}")
+        append("Okay: {state[okay_count]} ({state[okay_rate]:0.1%})")
+        append("Throughput: {state[throughput_s]:0.1f}/s")
 
 
 class BatchItem(AbstractContextManager["BatchItem"]):
@@ -110,7 +131,7 @@ class BatchItem(AbstractContextManager["BatchItem"]):
 
         self._stats = stats
         self._stopwatch = Stopwatch()
-        self._status: str | None = None
+        self._status: BatchItemStatus | None = None
 
     def okay(self) -> None:
         self._status = "okay"
@@ -131,7 +152,7 @@ class BatchItem(AbstractContextManager["BatchItem"]):
         self._stats.count(self._status or "void", self._stopwatch.elapsed_ms)
 
 
-class ProcessBatchScope[A: Activity](ActivityScope[A], Generic[A]):
+class ProcessBatchScope[A: Activity](ActivityScope[A]):
     """Draft specialized scope for batch contracts.
 
     Intended usage:
@@ -143,12 +164,12 @@ class ProcessBatchScope[A: Activity](ActivityScope[A], Generic[A]):
 
             batch.log_status(ProcessBatch.Okay())
 
-    The missing core integration is small: ActivityScope._log should collect
-    state/message parts from `self` between the activity and status sources.
-    Then this scope can contribute BatchStats through the existing protocols.
+    ActivityScope._log collects state/message parts from `self` between the
+    activity and status sources. That lets this scope contribute BatchStats
+    through the existing protocols.
     """
 
-    def __init__(self, activity: A, trace_id: Any | None, caller: Any | None = None) -> None:
+    def __init__(self, activity: A, trace_id: Any | None, caller: Caller | None = None) -> None:
         super().__init__(activity, trace_id, caller)
         self._stats = BatchStats()
 
@@ -165,14 +186,3 @@ class ProcessBatchScope[A: Activity](ActivityScope[A], Generic[A]):
         if self._stats.total_count == 0:
             return
         self._stats.message_parts(append)
-
-
-def begin_process_batch(activity: ProcessBatch, trace_id: Any | None = None) -> ProcessBatchScope[ProcessBatch]:
-    """Draft convenience constructor until begin_buzz can select custom scopes."""
-
-    # todo: Replace this helper once begin_buzz can select a scope type from the activity.
-    logging.getLogger(__name__).warning(
-        "begin_process_batch is a draft helper. The intended final shape is "
-        "begin_buzz(activity) returning the activity's configured scope type."
-    )
-    return ProcessBatchScope(activity, trace_id)
