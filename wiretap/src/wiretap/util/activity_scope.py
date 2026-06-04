@@ -20,8 +20,8 @@ _logger = logging.getLogger("wiretap")
 
 @dataclass(frozen=True)
 class StateItem:
-    # core: When True, the value is shared with all activities down the stack.
-    inheritable: bool = field(default=False)
+    # core: When True, the value cascades to all activities down the stack.
+    cascade: bool = field(default=False)
     default_value: Any = field(default=None)
 
 
@@ -67,7 +67,7 @@ def get_state_items_all(source: object, add: AddStateItem) -> None:
     annotations = _annotated_fields(type(source)).get(StateItem, {})
     for name, annotation in annotations.items():
         state_item: StateItem = annotation
-        if state_item.inheritable:
+        if state_item.cascade:
             add(name, getattr(source, name, state_item.default_value))
 
 
@@ -311,7 +311,7 @@ class ActivityScope[A: Activity]:
             if value is not None:
                 state[key] = value
 
-        # core: Get inheritable state items from the parent scopes.
+        # core: Get cascading state items from the parent scopes.
         # note: Collect state items from top to bottom so that the last status wins.
         for item in reversed(list(islice(iter(self), 1, None))):
             get_state_items_all(item._activity, set_state_item)

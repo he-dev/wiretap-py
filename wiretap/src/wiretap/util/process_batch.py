@@ -31,7 +31,7 @@ class ProcessBatch(Buzz):
     """
 
     # core: Identifies the batch contract independently from the code that processes it.
-    batch_name: Annotated[str, StateItem(inheritable=True), MessagePart("Batch")]
+    batch_name: Annotated[str, StateItem(cascade=True)]
 
     @property
     def name(self) -> str:

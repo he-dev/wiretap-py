@@ -10,7 +10,7 @@ import wiretap
 class Workflow:
     @dataclass#(frozen=True)
     class ExecuteStep(wiretap.Buzz):
-        step_index: Annotated[int, wiretap.StateItem(inheritable=True)]
+        step_index: Annotated[int, wiretap.StateItem(cascade=True)]
 
         @dataclass#(frozen=True)
         class Okay(wiretap.Okay["Workflow.ExecuteStep"]):
