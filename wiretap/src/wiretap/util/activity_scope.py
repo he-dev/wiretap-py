@@ -8,7 +8,8 @@ from functools import lru_cache
 from itertools import islice
 from typing import Any, Iterator, ClassVar, runtime_checkable, Protocol, Callable, Annotated, get_type_hints
 
-from wiretap.meta import trim_path, fast_reverse
+from wiretap.meta import trim_path
+from wiretap.util.path_of import PathOf
 from wiretap.util.stopwatch import Stopwatch
 
 # util: Internal logger.
@@ -17,7 +18,7 @@ _logger = logging.getLogger("wiretap")
 
 @dataclass(frozen=True)
 class StateItem:
-    # core: When True, the field applies to all activities down the stack.
+    # core: When True, the value is shared with all activities down the stack.
     inheritable: bool = field(default=False)
     default_value: Any = field(default=None)
 
@@ -214,10 +215,11 @@ def resolve_status_level[A: Activity](activity: Activity, status: ActivityStatus
         case Okay():
             return logging.INFO
         case Fail():
-            if logged_on_exit := type(status) is Fail:
-                return logging.DEBUG
-            else:
-                return logging.ERROR
+            # if logged_on_exit := type(status) is Fail:
+            #    return logging.DEBUG
+            # else:
+            #    return logging.ERROR
+            return logging.ERROR
         case _:
             return logging.INFO
 
@@ -281,22 +283,19 @@ class ActivityScope[A: Activity]:
             "parent_id": self.parent.scope_id if self.parent else None,
             "activity": {
                 "name": self._activity.name,
+                "path": PathOf(reversed(list(self)), lambda a: a._activity.name),
                 "depth": self.depth,
                 "status": status.lower() if status else None,
                 "elapsed_ms": self.stopwatch.elapsed_ms,
+                "logs_from": {
+                    "func": self.caller.func,
+                    "file": self.caller.file,
+                    "line": self.caller.line,
+                } if self.caller else None,
                 "tags": self._activity.tags
             },
-            "state": state,
-            "source": {
-                "func": self.caller.func,
-                "file": self.caller.file,
-                "line": self.caller.line,
-            } if self.caller else None,
+            "state": state
         }
-
-    @classmethod
-    def begin(cls, activity: A, trace_id: Any | None, caller: Caller | None) -> ActivityScope[A]:
-        return cls(activity, trace_id, caller)
 
     def log_status(self, status: Void[A] | Okay[A] | Fail[A]) -> ActivityScope[A]:
         self._last_count.increment()
@@ -312,7 +311,7 @@ class ActivityScope[A: Activity]:
 
         # core: Get inheritable state items from the parent scopes.
         # note: Collect state items from top to bottom so that the last status wins.
-        for item in fast_reverse(islice(iter(self), 1, None)):
+        for item in reversed(list(islice(iter(self), 1, None))):
             get_state_items_all(item._activity, set_state_item)
 
         for item in [self._activity, status]:
@@ -338,6 +337,8 @@ class ActivityScope[A: Activity]:
     def __enter__(self) -> ActivityScope[A]:
         if parent := ActivityScope._stack.get():
             self.parent = parent
+            # core: Parent's trace ID needs to be propagated to child scopes.
+            self.trace_id = parent.trace_id
 
         self._token = ActivityScope._stack.set(self)
 
@@ -386,15 +387,18 @@ def begin_buzz[A: Activity](activity: A, trace_id: Any | None = None, frame_offs
     else:
         caller = None
 
-    return ActivityScope.begin(activity, trace_id, caller)
+    return ActivityScope(activity, trace_id, caller)
 
 
 def begin_snap[A: Snap](activity: A, trace_id: Any | None = None, frame_offset: int = 0) -> ActivityScope[A]:
     return begin_buzz(activity, trace_id, frame_offset)
 
 
-@dataclass  # (frozen=True)
+@dataclass
 class Prototype(Activity):
+    """
+    A prototype activity for testing and development purposes.
+    """
     tags = ["prototype"]
 
     def __init__(self, name: str, message: str | None = None, **kwargs) -> None:

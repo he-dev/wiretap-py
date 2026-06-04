@@ -1,4 +1,4 @@
-from .util.services import configure
+from .util.logging.buzz import configure
 from .core.loop_stats import LoopStats, CountEvent
 from .core.loop_rates import LoopRates
 from .util.activity_scope import (
@@ -10,7 +10,7 @@ from .util.activity_scope import (
 # core: Star import for convenience.
 __all__ = [
     "begin_buzz",
-    "Buzz"
+    "Buzz",
     "Snap",
     "ActivityStatus",
     "Void",

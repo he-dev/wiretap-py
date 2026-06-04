@@ -3,7 +3,6 @@ from collections import defaultdict
 from typing import Any
 
 
-
 class LoopStats:
     """
     Uses the Welford's algorithm because it is an efficient method for computing the mean and standard deviation
@@ -24,9 +23,9 @@ class LoopStats:
         self.status[status] += 1
         self.duration_ms += duration_ms
         self.count += 1
-        delta: float = self.duration_ms - self.mean
+        delta: float = duration_ms - self.mean
         self.mean += delta / self.count
-        delta2: float = self.duration_ms - self.mean
+        delta2: float = duration_ms - self.mean
         self.M2 += delta * delta2
 
     @property

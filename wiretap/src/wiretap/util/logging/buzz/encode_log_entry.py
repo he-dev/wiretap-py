@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from wiretap.util.chain_path import ChainPath
+from wiretap.util.path_of import PathOf
 
 
 class DefaultEncode:
@@ -80,11 +80,11 @@ class EncodeSet(JSONEncoder):
         raise TypeError
 
 
-class EncodeChainPath(JSONEncoder):
+class EncodePathOf(JSONEncoder):
     """Supports: ChainPath -> string"""
 
     def default(self, obj: Any) -> Any:
-        if isinstance(obj, ChainPath):
+        if isinstance(obj, PathOf):
             return str(obj)
         raise TypeError
 

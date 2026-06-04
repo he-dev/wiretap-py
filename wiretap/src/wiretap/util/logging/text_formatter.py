@@ -1,5 +1,4 @@
 import logging
-from typing import Any
 
 from wiretap.util.activity_scope import ActivityScope
 from wiretap.meta import trim_path
@@ -31,16 +30,17 @@ class TextFormatter(logging.Formatter):
                 "parent_id": scope.get("parent_id", None),
             }
             record.state = scope["state"]
-            record.source = scope["source"] if include_source else None
+            record.source = None
             return super().format(record)
 
         # core: This is a native logging record outside a wiretap's span.
         record.indent = ""
         record.message = record.getMessage()
         record.activity = {
-            "name": record.funcName,
+            "name": None,
             "tags": None,
-            "elapsed_ms": None
+            "elapsed_ms": None,
+            "logs_from": None,
         }
         record.span = None
         record.state = None
@@ -51,11 +51,3 @@ class TextFormatter(logging.Formatter):
         } if include_source else None
 
         return super().format(record)
-
-
-def stringify_deep(obj: dict | Any) -> dict | str:
-    match obj:
-        case dict():
-            return {k: stringify_deep(v) for k, v in obj.items()}
-        case _:
-            return str(obj)

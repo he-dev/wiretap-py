@@ -40,6 +40,7 @@ class DeleteFile(wiretap.Snap):
 
 
 def scenarios():
+    logging.info("This is a log message outside of any activity.")
     with wiretap.begin_buzz(Workflow.ExecuteStep(step_index=1)) as scope:
         try:
             # busy...

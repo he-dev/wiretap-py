@@ -6,7 +6,7 @@ formatters:
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       {asctime}.{msecs:03.0f} [{levelname:7s}]
-      {indent}{message}; tags: {activity[tags]}; state: {state}; span: {span}; source={source}
+      {indent}{message}; tags: {activity[tags]}; logs_from: {activity[logs_from]}; state: {state}; span: {span}; source={source}
   console_lite:
     (): wiretap.util.logging.TextFormatter
     style: "{"
@@ -17,21 +17,22 @@ formatters:
   elastic_json:
     (): wiretap.util.logging.JSONFormatter
     encoders:
-      - wiretap.util.services.EncodeDateTime
-      - wiretap.util.services.EncodeUUID
-      - wiretap.util.services.EncodeSet
-      - wiretap.util.services.EncodePath
-      - wiretap.util.services.EncodeToDict
-    properties:
-      - wiretap.util.services.AddTimestamp
-      - wiretap.util.services.AddMessage
-      - wiretap.util.services.AddActivity
-      - wiretap.util.services.AddSpan
-      - wiretap.util.services.AddSource
-      - wiretap.util.services.AddException
-#      - (): wiretap.util.logging.AddEnvironmentVariables
-#        names:
-#          - app_id
+      - wiretap.util.logging.buzz.EncodeDateTime
+      - wiretap.util.logging.buzz.EncodeUUID
+      - wiretap.util.logging.buzz.EncodeSet
+      - wiretap.util.logging.buzz.EncodePath
+      - wiretap.util.logging.buzz.EncodePathOf
+      - wiretap.util.logging.buzz.EncodeToDict
+    middleware:
+      - wiretap.util.logging.buzz.AddTimestamp
+      - wiretap.util.logging.buzz.AddMessage
+      - wiretap.util.logging.buzz.AddActivity
+      - wiretap.util.logging.buzz.AddSpan
+      - wiretap.util.logging.buzz.AddSource
+      - wiretap.util.logging.buzz.AddException
+      - (): wiretap.util.logging.buzz.AddEnvironmentVariable
+        names:
+          - OpenJDK_21
 handlers:
   console_full:
     class: logging.StreamHandler
@@ -60,9 +61,8 @@ loggers:
     # handlers: [ "console_lite", "console_file", "elastic_file" ]
     # handlers: [ "console_lite", "elastic_file" ]
     # handlers: [ "console" ]
-    level: "INFO"
-    #level: "DEBUG"
-    #level: "TRACE"
+    #level: "INFO"
+    level: "DEBUG"
   wiretap:
     #level: "INFO"
     level: "DEBUG"

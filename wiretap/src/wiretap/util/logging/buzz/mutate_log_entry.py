@@ -4,17 +4,17 @@ import os
 import traceback
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
-from wiretap.util.activity_scope import ActivityScope
 from wiretap.meta import trim_path
+from wiretap.util.activity_scope import ActivityScope
 
 # util: Type alias for convenience
 JSONEntry = dict[str, Any]
 
 
 @dataclasses.dataclass
-class ComposeJSONContext:
+class JSONMiddlewareContext:
     record: logging.LogRecord
 
     @property
@@ -31,42 +31,44 @@ class ComposeJSONContext:
 
 
 # meta: Using ABC because we're creating objects dynamically.
-class ComposeJSON(ABC):
+class JSONMiddleware(ABC):
     """Allows modifying the structure of the JSON entry."""
 
     @abstractmethod
-    def __call__(self, context: ComposeJSONContext) -> JSONEntry: ...
+    def __call__(self, context: JSONMiddlewareContext) -> JSONEntry: ...
 
 
-class AddTimestamp(ComposeJSON):
+class AddTimestamp(JSONMiddleware):
     def __init__(self, tz: str = "utc"):
         super().__init__()
         match tz.casefold().strip():
             case "utc":
-                self.tz = datetime.now(timezone.utc).tzinfo  # timezone.utc
+                # self.tz = datetime.now(timezone.utc).tzinfo  # timezone.utc
+                self.tz = timezone.utc
             case "local" | "lt":
-                self.tz = datetime.now(timezone.utc).astimezone().tzinfo
+                # self.tz = datetime.now(timezone.utc).astimezone().tzinfo
+                self.tz = None
             case _:
                 raise ValueError(f"Invalid timezone: {tz}. Only [utc|local] are supported.")
 
-    def __call__(self, context: ComposeJSONContext) -> JSONEntry:
+    def __call__(self, context: JSONMiddlewareContext) -> JSONEntry:
         return context.entry | {
             "timestamp": datetime.fromtimestamp(context.record.created, tz=self.tz)
         }
 
 
-class AddMessage(ComposeJSON):
+class AddMessage(JSONMiddleware):
 
-    def __call__(self, context: ComposeJSONContext) -> JSONEntry:
+    def __call__(self, context: JSONMiddlewareContext) -> JSONEntry:
         return context.entry | {
             "message": context.record.getMessage(),
             "level": context.record.levelname.lower(),
         }
 
 
-class AddSpan(ComposeJSON):
+class AddSpan(JSONMiddleware):
 
-    def __call__(self, context: ComposeJSONContext) -> JSONEntry:
+    def __call__(self, context: JSONMiddlewareContext) -> JSONEntry:
         if scope := context.scope:
 
             return context.entry | {
@@ -82,35 +84,39 @@ class AddSpan(ComposeJSON):
             }
 
 
-class AddSource(ComposeJSON):
+class AddSource(JSONMiddleware):
 
-    def __call__(self, context: ComposeJSONContext) -> JSONEntry:
-        if scope := context.scope:
-            return context.entry | {"source": scope["source"]}
-        else:
+    def __call__(self, context: JSONMiddlewareContext) -> JSONEntry:
+        if context.scope is None:
             return context.entry | {"source": {
                 "func": context.record.funcName,
                 "file": trim_path(context.record.filename),
                 "line": context.record.lineno,
             }}
+        else:
+            return context.entry
 
 
-class AddActivity(ComposeJSON):
+class AddActivity(JSONMiddleware):
 
-    def __call__(self, context: ComposeJSONContext) -> JSONEntry:
+    def __call__(self, context: JSONMiddlewareContext) -> JSONEntry:
         if scope := context.scope:
             return context.entry | {"activity": scope["activity"]}
         else:
-            return context.entry | {"activity": {}}
+            return context.entry | {"activity": {
+                "name": None,
+                "depth": None,
+                "status": None,
+                "elapsed_ms": None,
+                "logs_from": None,
+            }}
 
 
-class AddException(ComposeJSON):
+class AddException(JSONMiddleware):
 
-    def __call__(self, context: ComposeJSONContext) -> JSONEntry:
+    def __call__(self, context: JSONMiddlewareContext) -> JSONEntry:
         if context.record.exc_info and all(context.record.exc_info):
             exc_cls, exc, exc_tb = context.record.exc_info
-            # note: format_exception returns a list of lines. Join it a single sing or otherwise an array will be logged.
-            # entry["trace"]["event"] = exc_cls.__name__
             return context.entry | {"exception": {
                 "message": str(exc),
                 "type": exc_cls.__name__,  # type: ignore
@@ -120,11 +126,21 @@ class AddException(ComposeJSON):
         return context.entry
 
 
-class AddEnvironmentVariables(ComposeJSON):
+class AddEnvironmentVariable(JSONMiddleware):
 
     def __init__(self, names: list[str]):
         self.names = names
 
-    def __call__(self, context: ComposeJSONContext) -> JSONEntry:
-        env = {k: os.environ.get(k) for k in self.names}
-        return context.entry | {"environment": env} if env else context.entry
+    def __call__(self, context: JSONMiddlewareContext) -> JSONEntry:
+        def resolve(name: str) -> str:
+            if name not in os.environ:
+                # core: The key was never set; typo or missing deployment var.
+                return "<key-not-found>"
+            value = os.environ[name]
+            if not value:
+                # core: The key exists but holds nothing.
+                return "<value-is-null>"
+            return value
+
+        environment = {name: resolve(name) for name in self.names}
+        return context.entry | {"environment": environment}
