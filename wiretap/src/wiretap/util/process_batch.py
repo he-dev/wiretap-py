@@ -68,6 +68,8 @@ class BatchStats:
         self.duration_ms = 0
         self.duration_ms_min: int | None = None
         self.duration_ms_max: int | None = None
+        self._duration_ms_mean = 0.0
+        self._duration_ms_m2 = 0.0
 
     def count(self, status: BatchItemStatus, duration_ms: int) -> None:
         # core: Each iteration contributes exactly one outcome to the batch summary.
@@ -75,6 +77,12 @@ class BatchStats:
         self.duration_ms += duration_ms
         self.duration_ms_min = duration_ms if self.duration_ms_min is None else min(self.duration_ms_min, duration_ms)
         self.duration_ms_max = duration_ms if self.duration_ms_max is None else max(self.duration_ms_max, duration_ms)
+
+        # util: Welford's algorithm tracks variance without storing each item duration.
+        delta = duration_ms - self._duration_ms_mean
+        self._duration_ms_mean += delta / self.total_count
+        delta2 = duration_ms - self._duration_ms_mean
+        self._duration_ms_m2 += delta * delta2
 
         match status:
             case "okay":
@@ -86,7 +94,11 @@ class BatchStats:
 
     @property
     def duration_ms_mean(self) -> float:
-        return self.duration_ms / self.total_count if self.total_count else 0.0
+        return self._duration_ms_mean
+
+    @property
+    def duration_ms_std_dev(self) -> float:
+        return (self._duration_ms_m2 / (self.total_count - 1)) ** 0.5 if self.total_count > 1 else 0.0
 
     @property
     def fail_rate(self) -> float:
@@ -113,6 +125,7 @@ class BatchStats:
         add("duration_ms_mean", self.duration_ms_mean)
         add("duration_ms_min", self.duration_ms_min)
         add("duration_ms_max", self.duration_ms_max)
+        add("duration_ms_std_dev", self.duration_ms_std_dev)
         add("okay_rate", self.okay_rate)
         add("fail_rate", self.fail_rate)
         add("void_rate", self.void_rate)
