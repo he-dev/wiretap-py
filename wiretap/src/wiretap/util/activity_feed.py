@@ -69,4 +69,3 @@ def get_message_parts(source: object, push: PushItem) -> None:
 class MessageHeaderFeed(MessagePartFeed):
     def message_parts(self, push: PushItem) -> None:
         push(None, "{activity[name]}[{activity[status]}]")
-        push("Duration", "{activity[duration_ms]} ms")

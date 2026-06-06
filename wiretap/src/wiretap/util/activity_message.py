@@ -1,4 +1,3 @@
-import abc
 from typing import Any, Protocol, runtime_checkable
 
 from wiretap.meta.logging.formatting import _Forgiving
@@ -7,7 +6,6 @@ from wiretap.util.activity_feed import MessageHeaderFeed, MessagePartFeed, get_m
 
 @runtime_checkable
 class ComposeMessage(Protocol):
-    @abc.abstractmethod
     def __call__(self, context: dict[str, Any], *feeds: Any) -> str: ...
 
 

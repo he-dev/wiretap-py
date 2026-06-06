@@ -12,7 +12,7 @@ from wiretap.core.activity_status import Fail, Noop, Void, Zero
 from wiretap.meta.caller import Caller
 from wiretap.util.activity import Activity, ActivityStatus, LastStatusCount
 from wiretap.util.activity_batch import BuzzBatch
-from wiretap.util.activity_feed import get_state_items, get_state_items_cascading
+from wiretap.util.activity_feed import PushItem, get_state_items, get_state_items_cascading
 from wiretap.util.activity_message import ComposeMessage, ComposeMessageByAppending
 from wiretap.util.path_of import PathOf
 from wiretap.util.stopwatch import Stopwatch
@@ -31,9 +31,6 @@ class ActivityScope[A: Activity]:
         self.scope_id: str = secrets.token_hex(8)  # note: python reserves id already.
         self.parent: ActivityScope[Any] | None = None  # core: This is going to be set on __enter__.
         self.caller = caller
-        self.stopwatch: Stopwatch = Stopwatch()
-        self._last_status = LastStatusCount()
-        self._buzz_batch = BuzzBatch()
         self._logger: logging.Logger = logging.getLogger(activity.name)
 
     def __iter__(self) -> Iterator[ActivityScope[Any]]:
@@ -56,7 +53,6 @@ class ActivityScope[A: Activity]:
                 "path": PathOf(reversed(list(self)), lambda a: a._activity.name),
                 "depth": self.depth,
                 "status": status.lower() if status else None,
-                "duration_ms": self.stopwatch.elapsed_ms,
                 "tags": self._activity.tags
             },
             "state": state,
@@ -64,7 +60,6 @@ class ActivityScope[A: Activity]:
         }
 
     def log_status(self, status: ActivityStatus[A]) -> ActivityScope[A]:
-        self._last_status.increment()
         return self._log(status)
 
     def _log(self, status: ActivityStatus[A]) -> ActivityScope[A]:
@@ -81,21 +76,16 @@ class ActivityScope[A: Activity]:
         for scope in scopes:
             get_state_items_cascading(scope._activity, set_state_item)
 
-        # core: Activity, buzz batch, and status each get a chance to fulfill the monitoring contract.
-        state_feeds: list[Any] = [self._activity, self._buzz_batch, status]
+        # core: Scope, activity, and status each get a chance to fulfill the monitoring contract.
+        feeds: list[Any] = [self, self._activity, status]
 
-        for state_feed in state_feeds:
-            get_state_items(state_feed, set_state_item)
+        for feed in feeds:
+            get_state_items(feed, set_state_item)
 
         extra: dict[str, Any] = self.to_extra(status.code, state)
 
-        message = self.compose_message(extra, *state_feeds)
+        message = self.compose_message(extra, *feeds)
         status_level = self.get_status_level_or_default(status)
-
-        # core: Special overflow handling for the last status.
-        if self._last_status.overflows:
-            status_level = logging.DEBUG
-            _logger.warning(f"Last status logged {self._last_status.value} times. This is a bug.")
 
         self._logger.log(status_level, message, extra={"wiretap": extra})
         return self
@@ -125,7 +115,34 @@ class ActivityScope[A: Activity]:
 
 
 class BuzzScope[A: Buzz](ActivityScope[A]):
+    def __init__(self, activity: A, trace_id: Any | None, caller: Caller | None = None) -> None:
+        super().__init__(activity, trace_id, caller)
+        self.stopwatch: Stopwatch = Stopwatch()
+        self._last_status = LastStatusCount()
+        self._buzz_batch = BuzzBatch()
+
+    def to_extra(self, status: str | None, state: dict[str, Any] | None) -> dict[str, Any]:
+        extra = super().to_extra(status, state)
+        extra["activity"]["duration_ms"] = self.stopwatch.elapsed_ms
+        return extra
+
+    def state_items(self, push: PushItem) -> None:
+        self._buzz_batch.state_items(push)
+
+    def message_parts(self, push: PushItem) -> None:
+        push("Duration", "{activity[duration_ms]} ms")
+        self._buzz_batch.message_parts(push)
+
+    def log_status(self, status: ActivityStatus[A]) -> ActivityScope[A]:
+        self._last_status.increment()
+        return super().log_status(status)
+
     def get_status_level_or_default(self, status: ActivityStatus[A]) -> int:
+        # core: Special overflow handling for the last status.
+        if self._last_status.overflows:
+            _logger.warning(f"Last status logged {self._last_status.value} times. This is a bug.")
+            return logging.DEBUG
+
         # core: Buzz lifecycle flags can promote automatic lifecycle statuses to core logs.
         match status:
             case Zero():
@@ -139,7 +156,7 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
 
     def begin_item[B: Activity](self, activity: B, frame_offset: int = 0) -> BuzzItemScope[B]:
         # core: Begins one item inside this buzz summary.
-        return BuzzItemScope(activity, self._buzz_batch, self.trace_id, Caller.from_current_frame(frame_offset + 1))
+        return BuzzItemScope(activity, self._buzz_batch, Caller.from_current_frame(frame_offset + 1))
 
     def __enter__(self) -> BuzzScope[A]:
         self._scope = self.push()
@@ -159,6 +176,9 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
 
 
 class SnapScope[A: Snap](ActivityScope[A]):
+    def message_parts(self, push: PushItem) -> None:
+        push("Duration", "N/A")
+
     def __enter__(self) -> SnapScope[A]:
         self._scope = self.push()
         self._scope.__enter__()
@@ -177,10 +197,14 @@ class BuzzItemStatus[A: Activity]:
 
 
 class BuzzItemScope[A: Activity](ActivityScope[A]):
-    def __init__(self, activity: A, batch: BuzzBatch, trace_id: Any | None, caller: Caller | None = None) -> None:
-        super().__init__(activity, trace_id, caller)
+    def __init__(self, activity: A, batch: BuzzBatch, caller: Caller | None = None) -> None:
+        super().__init__(activity, None, caller)
+        self.stopwatch: Stopwatch = Stopwatch()
         self._batch = batch
         self._status: ActivityStatus[A] | None = None
+
+    def message_parts(self, push: PushItem) -> None:
+        push("Duration", "N/A")
 
     def set_status(self, status: ActivityStatus[A]) -> BuzzItemStatus[A]:
         self._status = status
