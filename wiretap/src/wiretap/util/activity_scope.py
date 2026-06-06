@@ -214,6 +214,8 @@ def resolve_status_level[A: Activity](activity: Activity, status: ActivityStatus
                 return logging.INFO
             else:
                 return logging.DEBUG
+        case Noop():
+            return logging.DEBUG
         case Okay():
             return logging.INFO
         case Fail():
@@ -253,6 +255,79 @@ class Void[A: Activity](ActivityStatus[A]):
     reason: Annotated[str, StateItem(), MessagePart()]
 
 
+@dataclass  # (frozen=True)
+class Noop[A: Activity](ActivityStatus[A]):
+    pass
+
+
+class BuzzCounter:
+    """Internal accumulator used when a buzz counts repeated work."""
+
+    def __init__(self) -> None:
+        self.buzz_count = 0
+        self._status_counts: dict[str, int] = {}
+        self.duration_ms = 0
+        self.duration_ms_min: int | None = None
+        self.duration_ms_max: int | None = None
+        self._duration_ms_mean = 0.0
+        self._duration_ms_m2 = 0.0
+
+    def count(self, status: ActivityStatus[Any], duration_ms: int) -> None:
+        # core: Each counted buzz contributes exactly one outcome to the parent buzz summary.
+        self.buzz_count += 1
+        code = status.code.lower()
+        self._status_counts[code] = self._status_counts.get(code, 0) + 1
+        self.duration_ms += duration_ms
+        self.duration_ms_min = duration_ms if self.duration_ms_min is None else min(self.duration_ms_min, duration_ms)
+        self.duration_ms_max = duration_ms if self.duration_ms_max is None else max(self.duration_ms_max, duration_ms)
+
+        # util: Welford's algorithm tracks variance without storing each counted duration.
+        delta = duration_ms - self._duration_ms_mean
+        self._duration_ms_mean += delta / self.buzz_count
+        delta2 = duration_ms - self._duration_ms_mean
+        self._duration_ms_m2 += delta * delta2
+
+    def __bool__(self) -> bool:
+        # core: A counter only contributes telemetry after at least one buzz was counted.
+        return self.buzz_count > 0
+
+    @property
+    def duration_ms_mean(self) -> float:
+        return self._duration_ms_mean
+
+    @property
+    def duration_ms_std_dev(self) -> float:
+        return (self._duration_ms_m2 / (self.buzz_count - 1)) ** 0.5 if self.buzz_count > 1 else 0.0
+
+    @property
+    def throughput_s(self) -> float:
+        return self.buzz_count / (self.duration_ms / 1000) if self.duration_ms else 0.0
+
+    def rate_of(self, code: str) -> float:
+        return self._status_counts[code] / self.buzz_count if self.buzz_count else 0.0
+
+    def state_items(self, add: AddStateItem) -> None:
+        if not self:
+            return
+        add("buzz_count", self.buzz_count)
+        for code, count in self._status_counts.items():
+            add(f"{code}_count", count)
+            add(f"{code}_rate", self.rate_of(code))
+        add("duration_ms", self.duration_ms)
+        add("duration_ms_mean", self.duration_ms_mean)
+        add("duration_ms_min", self.duration_ms_min)
+        add("duration_ms_max", self.duration_ms_max)
+        add("duration_ms_std_dev", self.duration_ms_std_dev)
+        add("throughput_s", self.throughput_s)
+
+    def message_parts(self, append: AppendMessagePart) -> None:
+        if not self:
+            return
+        for code in self._status_counts:
+            append(f"{code.capitalize()}: {{state[{code}_rate]:0.1%}} ({{state[{code}_count]}} of {{state[buzz_count]}})")
+        append("Throughput: {state[throughput_s]:0.1f}/s")
+
+
 class ActivityScope[A: Activity]:
     _stack: ClassVar[ContextVar[ActivityScope[Any] | None]] = ContextVar("current_activity", default=None)
     message_schema: ClassVar[MessageSchema] = CompactMessageSchema()
@@ -267,6 +342,7 @@ class ActivityScope[A: Activity]:
         self.stopwatch: Stopwatch = Stopwatch()
         self._last_count = LastCount()
         self._logger: logging.Logger = logging.getLogger(activity.name)
+        self._buzz_counter = BuzzCounter()
 
     def __iter__(self) -> Iterator[ActivityScope[Any]]:
         current: ActivityScope[Any] | None = self
@@ -299,9 +375,13 @@ class ActivityScope[A: Activity]:
             "state": state
         }
 
-    def log_status(self, status: Void[A] | Okay[A] | Fail[A]) -> ActivityScope[A]:
+    def log_status(self, status: ActivityStatus[A]) -> ActivityScope[A]:
         self._last_count.increment()
         return self._log(status)
+
+    def begin_item[B: Activity](self, activity: B, frame_offset: int = 0) -> "BuzzItemScope[B]":
+        # core: Begins one item inside this buzz summary.
+        return BuzzItemScope(activity, self._buzz_counter, self.trace_id, _create_caller(frame_offset + 1, True))
 
     def _log(self, status: ActivityStatus[A]) -> ActivityScope[A]:
 
@@ -316,13 +396,15 @@ class ActivityScope[A: Activity]:
         for item in reversed(list(islice(iter(self), 1, None))):
             get_state_items_all(item._activity, set_state_item)
 
-        # core: Activity, scope, and status each get a chance to fulfill the monitoring contract.
-        for item in [self._activity, self, status]:
+        # core: Activity, buzz counter, and status each get a chance to fulfill the monitoring contract.
+        sources: list[object] = [self._activity, self._buzz_counter, status]
+
+        for item in sources:
             get_state_items(item, set_state_item)
 
         extra: dict[str, Any] = self.to_extra(status.code, state)
 
-        message = self.message_schema.compose(extra, self.message_prefix, self._activity, self, status)
+        message = self.message_schema.compose(extra, self.message_prefix, *sources)
         status_level = resolve_status_level(self._activity, status)
 
         # core: Special overflow handling for the last status.
@@ -366,17 +448,55 @@ class ActivityScope[A: Activity]:
             self.parent = None
 
 
-FRAME_INDEX_SELF = 0
+class BuzzItemStatus[A: Activity]:
+    def __init__(self, log: Callable[[], None]) -> None:
+        self._log = log
+
+    def log(self) -> None:
+        self._log()
+
+
+class BuzzItemScope[A: Activity](ActivityScope[A]):
+    def __init__(self, activity: A, counter: BuzzCounter, trace_id: Any | None, caller: Caller | None = None) -> None:
+        super().__init__(activity, trace_id, caller)
+        self._counter = counter
+        self._status: ActivityStatus[A] | None = None
+
+    def set_status(self, status: ActivityStatus[A]) -> BuzzItemStatus[A]:
+        self._status = status
+
+        def log() -> None:
+            self.log_status(status)
+
+        return BuzzItemStatus(log)
+
+    def log_status(self, status: ActivityStatus[A]) -> "BuzzItemScope[A]":
+        self._status = status
+        super().log_status(status)
+        return self
+
+    def __enter__(self) -> "BuzzItemScope[A]":
+        if parent := ActivityScope._stack.get():
+            self.parent = parent
+            # core: Buzz items still belong to the same trace as the parent buzz.
+            self.trace_id = parent.trace_id
+
+        self._token = ActivityScope._stack.set(self)
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        try:
+            # core: A buzz item without an explicit status is intentionally inconclusive.
+            self._counter.count(self._status or Noop(), self.stopwatch.elapsed_ms)
+        finally:
+            ActivityScope._stack.reset(self._token)
+            self.parent = None
+
+
 FRAME_INDEX_CALLER = 1
 
 
-@runtime_checkable
-class ActivityScopeFactory[A: Activity](Protocol):
-    # core: Allows an activity contract to choose its runtime scope implementation.
-    def create_scope(self, trace_id: Any | None, caller: Caller | None) -> ActivityScope[A]: ...
-
-
-def begin_buzz[A: Activity](activity: A, trace_id: Any | None = None, frame_offset: int = 0, with_caller_info: bool = True) -> ActivityScope[A]:
+def _create_caller(frame_offset: int, with_caller_info: bool) -> Caller | None:
     if with_caller_info:
         frame = inspect.currentframe()
         try:
@@ -394,24 +514,28 @@ def begin_buzz[A: Activity](activity: A, trace_id: Any | None = None, frame_offs
         finally:
             del frame
     else:
-        caller = None
+        return None
 
-    if isinstance(activity, ActivityScopeFactory):
-        return activity.create_scope(trace_id, caller)
+    return caller
 
+
+def begin_buzz[A: Buzz](activity: A, trace_id: Any | None = None, frame_offset: int = 0, with_caller_info: bool = True) -> ActivityScope[A]:
+    if not isinstance(activity, Buzz):
+        raise TypeError(f"{type(activity).__qualname__} cannot begin because it is not a Buzz activity.")
+    caller = _create_caller(frame_offset, with_caller_info)
     return ActivityScope(activity, trace_id, caller)
 
 
 def begin_snap[A: Snap](activity: A, trace_id: Any | None = None, frame_offset: int = 0) -> ActivityScope[A]:
-    return begin_buzz(activity, trace_id, frame_offset)
+    return ActivityScope(activity, trace_id, _create_caller(frame_offset, True))
 
 
 @dataclass
-class Prototype(Activity):
+class PrototypeBuzz(Buzz):
     """
-    A prototype activity for testing and development purposes.
+    A prototype buzz activity for testing and development purposes.
     """
-    tags = ["prototype"]
+    tags = ["prototype-buzz"]
 
     def __init__(self, name: str, message: str | None = None, **kwargs) -> None:
         self._name = name
@@ -430,7 +554,7 @@ class Prototype(Activity):
         append(self._message)
 
     @dataclass
-    class Void(Void):
+    class Void(Void["PrototypeBuzz"]):
         def __init__(self, message: str | None = None, **kwargs) -> None:
             self._message = message
             self._state = kwargs
@@ -443,7 +567,7 @@ class Prototype(Activity):
             append(self._message)
 
     @dataclass
-    class Okay(Okay):
+    class Okay(Okay["PrototypeBuzz"]):
         def __init__(self, message: str | None = None, **kwargs) -> None:
             self._message = message
             self._state = kwargs
@@ -456,7 +580,7 @@ class Prototype(Activity):
             append(self._message)
 
     @dataclass
-    class Fail(Fail):
+    class Fail(Fail["PrototypeBuzz"]):
         def __init__(self, message: str | None = None, **kwargs) -> None:
             self._message = message
             self._state = kwargs
@@ -469,6 +593,43 @@ class Prototype(Activity):
             append(self._message)
 
 
-def log_status[A: Snap](snap: Snap, flag: Okay[A]) -> None:
-    with begin_snap(snap, frame_offset=2) as snap:
-        snap.log_status(flag)
+@dataclass
+class PrototypeSnap(Snap):
+    """
+    A prototype snap activity for testing and development purposes.
+    """
+    tags = ["prototype-snap"]
+
+    def __init__(self, name: str, message: str | None = None, **kwargs) -> None:
+        self._name = name
+        self._message = message
+        self._state = kwargs
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def state_items(self, add: AddStateItem) -> None:
+        for key, value in self._state.items():
+            add(key, value)
+
+    def message_parts(self, append: AppendMessagePart) -> None:
+        append(self._message)
+
+    @dataclass
+    class Okay(Okay["PrototypeSnap"]):
+        def __init__(self, message: str | None = None, **kwargs) -> None:
+            self._message = message
+            self._state = kwargs
+
+        def state_items(self, add: AddStateItem) -> None:
+            for key, value in self._state.items():
+                add(key, value)
+
+        def message_parts(self, append: AppendMessagePart) -> None:
+            append(self._message)
+
+
+def log_status[A: Snap](snap: A, flag: ActivityStatus[A]) -> None:
+    with begin_snap(snap, frame_offset=2) as scope:
+        scope.log_status(flag)

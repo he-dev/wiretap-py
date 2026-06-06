@@ -39,28 +39,40 @@ class DeleteFile(wiretap.Snap):
         pass
 
 
+@dataclass
+class DeleteFiles(wiretap.Buzz):
+    @dataclass
+    class Okay(wiretap.Okay["DeleteFiles"]):
+        pass
+
+    @dataclass
+    class Fail(wiretap.Fail["DeleteFiles"]):
+        pass
+
+    @dataclass
+    class Void(wiretap.Void["DeleteFiles"]):
+        pass
+
+
 def scenarios():
     logging.info("This is a log message outside of any activity.")
 
-    with wiretap.begin_buzz(wiretap.ProcessBatch(batch_name="DeleteFiles")) as batch:
+    with wiretap.begin_buzz(DeleteFiles()) as batch:
         for path in [
             "/path/to/one.txt",
             "/path/to/two.txt",
             "/path/to/archive.tmp",
         ]:
-            with batch.item() as item:
-                try:
-                    logging.info("Deleting file.")
+            try:
+                with batch.begin_item(DeleteFile(path=path)) as item:
                     if path.endswith(".tmp"):
                         raise ValueError("Temporary files are not deleted by this workflow.")
 
-                    wiretap.log_status(DeleteFile(path=path), DeleteFile.Okay())
-                    item.okay()
-                except Exception as e:
-                    item.fail()
-                    logging.error("Unable to delete file.", exc_info=True)
+                    item.set_status(DeleteFile.Okay()).log()
+            except Exception as e:
+                pass
 
-        batch.log_status(wiretap.ProcessBatch.Okay())
+        batch.log_status(DeleteFiles.Okay())
 
     with wiretap.begin_buzz(Workflow.ExecuteStep(step_index=1)) as scope:
         try:
@@ -73,13 +85,13 @@ def scenarios():
         except Exception as e:
             scope.log_status(Workflow.ExecuteStep.Fail(exception=e))
 
-    with wiretap.begin_buzz(wiretap.Prototype(name="Testing", foo="bar")) as scope:
+    with wiretap.begin_buzz(wiretap.PrototypeBuzz(name="Testing", foo="bar")) as scope:
         # wiretap.log_note("This is a beep.")
 
-        with wiretap.begin_buzz(wiretap.Prototype(name="Nested")) as nested:
-            nested.log_status(wiretap.Prototype.Okay(message="This is an okay."))
+        with wiretap.begin_buzz(wiretap.PrototypeBuzz(name="Nested")) as nested:
+            nested.log_status(wiretap.PrototypeBuzz.Okay(message="This is an okay."))
 
-        scope.log_status(wiretap.Prototype.Okay(message="This is an okay.", bar="baz"))
+        scope.log_status(wiretap.PrototypeBuzz.Okay(message="This is an okay.", bar="baz"))
         pass
         # scope.log_status(wiretap.Prototyping.Okay(message="This is an okay."))
         # scope.log_status(Prototyping.Fail(message="This is a fail.", exception=None))
