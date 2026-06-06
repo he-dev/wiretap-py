@@ -31,8 +31,8 @@ class DeleteFile(wiretap.Snap):
     #    set("Path", self.path)
 
     # case: Shadows MessagePart annotation that causes a warning.
-    def message_parts(self, append: wiretap.AppendMessagePart) -> None:
-        append("Path: {path}")
+    def message_parts(self, push: wiretap.PushMessagePart) -> None:
+        push("Path: {path}")
 
     @dataclass#(frozen=True)
     class Okay(wiretap.Okay["DeleteFile"]):

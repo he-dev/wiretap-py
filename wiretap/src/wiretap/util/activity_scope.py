@@ -53,34 +53,37 @@ def _warn_if_protocol_shadows_annotations(cls: type, protocol: type, annotation:
         )
 
 
-def get_state_items(source: object, add: AddStateItem) -> None:
+def get_state_items(source: object, push_state_item: PushStateItem) -> None:
     annotations = _annotated_fields(type(source)).get(StateItem, {})
-    if isinstance(source, WithStateItems):
-        source.state_items(add)
-        _warn_if_protocol_shadows_annotations(type(source), WithStateItems, StateItem)
+    if isinstance(source, StateItemFeed):
+        source.state_items(push_state_item)
+        _warn_if_protocol_shadows_annotations(type(source), StateItemFeed, StateItem)
     else:
         for name, annotation in annotations.items():
             state_item: StateItem = annotation
-            add(name, getattr(source, name, state_item.default_value))
+            push_state_item(name, getattr(source, name, state_item.default_value))
 
 
-def get_state_items_all(source: object, add: AddStateItem) -> None:
+def get_state_items_all(source: object, push: PushStateItem) -> None:
     annotations = _annotated_fields(type(source)).get(StateItem, {})
     for name, annotation in annotations.items():
         state_item: StateItem = annotation
         if state_item.cascade:
-            add(name, getattr(source, name, state_item.default_value))
+            push(name, getattr(source, name, state_item.default_value))
 
 
-def get_message_parts(source: object, append: AppendMessagePart) -> None:
+def get_message_parts(source: object, push: PushMessagePart) -> None:
     annotations = _annotated_fields(type(source)).get(MessagePart, {})
-    if isinstance(source, WithMessageParts):
-        source.message_parts(append)
-        _warn_if_protocol_shadows_annotations(type(source), WithMessageParts, MessagePart)
+    if isinstance(source, MessagePartFeed):
+        source.message_parts(push)
+        _warn_if_protocol_shadows_annotations(type(source), MessagePartFeed, MessagePart)
     else:
         for name, annotation in annotations.items():
             message_part: MessagePart = annotation
-            append(f"{message_part.label or name.capitalize()}: {getattr(source, name, None)}")
+            push(f"{message_part.label or name.capitalize()}: {getattr(source, name, None)}")
+
+
+FRAME_INDEX_CALLER = 1
 
 
 @dataclass(frozen=True)
@@ -89,8 +92,27 @@ class Caller:
     file: str
     line: int
 
+    @staticmethod
+    def from_current_frame(frame_offset: int) -> "Caller":
+        # meta: Uses Python frame inspection to capture where the public API was called.
+        frame = inspect.currentframe()
+        try:
+            steps = FRAME_INDEX_CALLER + frame_offset
+            for _ in range(steps):
+                if frame is None:
+                    break
+                frame = frame.f_back
 
-class LastCount:
+            return Caller(
+                func=frame.f_code.co_name if frame is not None else "<unknown>",
+                file=trim_path(frame.f_code.co_filename) if frame is not None else "<unknown>",
+                line=frame.f_lineno if frame is not None else 0
+            )
+        finally:
+            del frame
+
+
+class LastStatusCount:
     def __init__(self) -> None:
         self._value = 0
 
@@ -110,27 +132,26 @@ class LastCount:
         return self._value == 0
 
 
-# meta: mirror of the C# delegates; structured-template + args, and key/value.
-type AppendMessagePart = Callable[[str | None], None]
-type AddStateItem = Callable[[str, Any], None]
+type PushMessagePart = Callable[[str | None], None]
+type PushStateItem = Callable[[str, Any], None]
 
 
 @runtime_checkable
-class WithStateItems(Protocol):
-    # core: contributes structured fields to the log scope.
-    def state_items(self, add: AddStateItem) -> None: ...
+class StateItemFeed(Protocol):
+    # core: Feeds structured fields to the log scope.
+    def state_items(self, push: PushStateItem) -> None: ...
 
 
 @runtime_checkable
-class WithMessageParts(Protocol):
-    # core: contributes human-readable parts to the rendered message.
-    def message_parts(self, append: AppendMessagePart) -> None: ...
+class MessagePartFeed(Protocol):
+    # core: Feeds human-readable parts to the rendered message.
+    def message_parts(self, push: PushMessagePart) -> None: ...
 
 
 @runtime_checkable
-class MessageSchema(Protocol):
+class ComposeMessage(Protocol):
     @abc.abstractmethod
-    def compose(self, state_items: dict[str, Any], *sources: Any) -> str: ...
+    def __call__(self, state_items: dict[str, Any], *sources: Any) -> str: ...
 
 
 class _Forgiving(dict):
@@ -138,17 +159,25 @@ class _Forgiving(dict):
         return "{" + key + "}"  # core: leave the hole visible rather than raise.
 
 
-class CompactMessageSchema(MessageSchema):
-    def __init__(self, separator: str = "; ") -> None:
+class MessageHeaderFeed(MessagePartFeed):
+    def message_parts(self, push: PushMessagePart) -> None:
+        push("{activity[name]}[{activity[status]}]")
+        push("Elapsed: {activity[elapsed_ms]} ms")
+
+
+class ComposeMessageByAppending(ComposeMessage):
+    def __init__(self, header: MessagePartFeed = MessageHeaderFeed(), separator: str = "; ") -> None:
+        self._header = header
         self._separator = separator
 
-    def compose(self, state_items: dict[str, Any], *sources: Any) -> str:
+    def __call__(self, state_items: dict[str, Any], *sources: Any) -> str:
         parts: list[str] = []
 
         def append(part: str | None) -> None:
             if part is not None:
                 parts.append(part)
 
+        get_message_parts(self._header, append)
         for item in sources:
             get_message_parts(item, append)
 
@@ -156,21 +185,9 @@ class CompactMessageSchema(MessageSchema):
         return template.format_map(_Forgiving(state_items))
 
 
-class CompactMessagePrefix(WithMessageParts):
-    def message_parts(self, append: AppendMessagePart) -> None:
-        append("{activity[name]}[{activity[status]}]")
-        append("Elapsed: {activity[elapsed_ms]} ms")
-
-
-class WithCompactMessageSchema:
-    message_schema: ClassVar[MessageSchema] = CompactMessageSchema()
-
-
 @dataclass  # (frozen=True)
 class Activity:
     tags: ClassVar[list[Any] | None] = None
-    must_log_zero: ClassVar[bool] = False
-    can_log_void: ClassVar[bool] = False
 
     @property
     def name(self) -> str:
@@ -179,7 +196,8 @@ class Activity:
 
 @dataclass  # (frozen=True)
 class Buzz(Activity):
-    pass
+    must_log_zero: ClassVar[bool] = False
+    can_log_void: ClassVar[bool] = False
 
 
 @dataclass  # (frozen=True)
@@ -192,6 +210,7 @@ class ActivityStatus[A: Activity]:
     # core: the phantom A binds a status to one activity type. It is consumed by
     # ActivityScope[A].log_status, which is what makes the type checker reject
     # logging activity X's status into a scope opened for activity Y.
+    level: ClassVar[int] = logging.INFO
 
     @property
     def code(self) -> str:
@@ -203,62 +222,38 @@ class ActivityStatus[A: Activity]:
         raise TypeError(f"Activity status code not found because {type(self).__qualname__} does not inherit : must inherit from {ActivityStatus.__qualname__}.")
 
 
-def resolve_status_level[A: Activity](activity: Activity, status: ActivityStatus[A]) -> int:
-    match status:
-        case Zero():
-            if activity.must_log_zero:
-                return logging.INFO
-            else:
-                return logging.DEBUG
-        case Void():
-            if activity.can_log_void:
-                return logging.INFO
-            else:
-                return logging.DEBUG
-        case Noop():
-            return logging.DEBUG
-        case Okay():
-            return logging.INFO
-        case Fail():
-            # if logged_on_exit := type(status) is Fail:
-            #    return logging.DEBUG
-            # else:
-            #    return logging.ERROR
-            return logging.ERROR
-        case _:
-            return logging.INFO
-
-
 # core: everything went according to plan.
 @dataclass  # (frozen=True)
 class Okay[A: Activity](ActivityStatus[A]):
-    pass
+    level: ClassVar[int] = logging.INFO
 
 
 # core: an error occurred.
 @dataclass  # (frozen=True)
 class Fail[A: Activity](ActivityStatus[A]):
+    level: ClassVar[int] = logging.ERROR
     exception: Exception | None
 
-    def message_parts(self, append: AppendMessagePart) -> None:
+    def message_parts(self, push: PushMessagePart) -> None:
         if self.exception is not None:
-            append(f"Exception: {str(self.exception)}")
+            push(f"Exception: {str(self.exception)}")
 
 
 # note: the very first status. Its previous name was "First".
 @dataclass  # (frozen=True)
 class Zero[A: Activity](ActivityStatus[A]):
-    pass
+    level: ClassVar[int] = logging.DEBUG
 
 
 @dataclass  # (frozen=True)
 class Void[A: Activity](ActivityStatus[A]):
+    level: ClassVar[int] = logging.DEBUG
     reason: Annotated[str, StateItem(), MessagePart()]
 
 
 @dataclass  # (frozen=True)
 class Noop[A: Activity](ActivityStatus[A]):
-    pass
+    level: ClassVar[int] = logging.DEBUG
 
 
 class BuzzBatch:
@@ -307,32 +302,31 @@ class BuzzBatch:
     def rate_of(self, code: str) -> float:
         return self._status_counts[code] / self.item_count if self.item_count else 0.0
 
-    def state_items(self, add: AddStateItem) -> None:
+    def state_items(self, push: PushStateItem) -> None:
         if not self:
             return
-        add("item_count", self.item_count)
+        push("item_count", self.item_count)
         for code, count in self._status_counts.items():
-            add(f"{code}_count", count)
-            add(f"{code}_rate", self.rate_of(code))
-        add("duration_ms", self.duration_ms)
-        add("duration_ms_mean", self.duration_ms_mean)
-        add("duration_ms_min", self.duration_ms_min)
-        add("duration_ms_max", self.duration_ms_max)
-        add("duration_ms_std_dev", self.duration_ms_std_dev)
-        add("throughput_s", self.throughput_s)
+            push(f"{code}_count", count)
+            push(f"{code}_rate", self.rate_of(code))
+        push("duration_ms", self.duration_ms)
+        push("duration_ms_mean", self.duration_ms_mean)
+        push("duration_ms_min", self.duration_ms_min)
+        push("duration_ms_max", self.duration_ms_max)
+        push("duration_ms_std_dev", self.duration_ms_std_dev)
+        push("throughput_s", self.throughput_s)
 
-    def message_parts(self, append: AppendMessagePart) -> None:
+    def message_parts(self, push: PushMessagePart) -> None:
         if not self:
             return
         for code in self._status_counts:
-            append(f"{code.capitalize()}: {{state[{code}_rate]:0.1%}} ({{state[{code}_count]}} of {{state[item_count]}})")
-        append("Throughput: {state[throughput_s]:0.1f}/s")
+            push(f"{code.capitalize()}: {{state[{code}_rate]:0.1%}} ({{state[{code}_count]}} of {{state[item_count]}})")
+        push("Throughput: {state[throughput_s]:0.1f}/s")
 
 
 class ActivityScope[A: Activity]:
     _stack: ClassVar[ContextVar[ActivityScope[Any] | None]] = ContextVar("current_activity", default=None)
-    message_schema: ClassVar[MessageSchema] = CompactMessageSchema()
-    message_prefix: ClassVar[WithMessageParts] = CompactMessagePrefix()
+    compose_message: ClassVar[ComposeMessage] = ComposeMessageByAppending()
 
     def __init__(self, activity: A, trace_id: Any | None, caller: Caller | None = None) -> None:
         self._activity = activity
@@ -341,9 +335,9 @@ class ActivityScope[A: Activity]:
         self.parent: ActivityScope[Any] | None = None  # core: This is going to be set on __enter__.
         self.caller = caller
         self.stopwatch: Stopwatch = Stopwatch()
-        self._last_count = LastCount()
-        self._logger: logging.Logger = logging.getLogger(activity.name)
+        self._last_status = LastStatusCount()
         self._buzz_batch = BuzzBatch()
+        self._logger: logging.Logger = logging.getLogger(activity.name)
 
     def __iter__(self) -> Iterator[ActivityScope[Any]]:
         current: ActivityScope[Any] | None = self
@@ -377,7 +371,7 @@ class ActivityScope[A: Activity]:
         }
 
     def log_status(self, status: ActivityStatus[A]) -> ActivityScope[A]:
-        self._last_count.increment()
+        self._last_status.increment()
         return self._log(status)
 
     def _log(self, status: ActivityStatus[A]) -> ActivityScope[A]:
@@ -401,16 +395,20 @@ class ActivityScope[A: Activity]:
 
         extra: dict[str, Any] = self.to_extra(status.code, state)
 
-        message = self.message_schema.compose(extra, self.message_prefix, *sources)
-        status_level = resolve_status_level(self._activity, status)
+        message = self.compose_message(extra, *sources)
+        status_level = self.get_status_level_or_default(status)
 
         # core: Special overflow handling for the last status.
-        if self._last_count.overflows:
+        if self._last_status.overflows:
             status_level = logging.DEBUG
-            _logger.warning(f"Last status logged {self._last_count.value} times. This is a bug.")
+            _logger.warning(f"Last status logged {self._last_status.value} times. This is a bug.")
 
         self._logger.log(status_level, message, extra={"wiretap": extra})
         return self
+
+    def get_status_level_or_default(self, status: ActivityStatus[A]) -> int:
+        # util: Concrete scopes can adjust lifecycle statuses without a global resolver.
+        return status.level
 
     @classmethod
     def current(cls) -> ActivityScope[Any] | None:
@@ -433,9 +431,21 @@ class ActivityScope[A: Activity]:
 
 
 class BuzzScope[A: Buzz](ActivityScope[A]):
+    def get_status_level_or_default(self, status: ActivityStatus[A]) -> int:
+        # core: Buzz lifecycle flags can promote automatic lifecycle statuses to core logs.
+        match status:
+            case Zero():
+                if self._activity.must_log_zero:
+                    return logging.INFO
+            case Void():
+                if self._activity.can_log_void:
+                    return logging.INFO
+
+        return super().get_status_level_or_default(status)
+
     def begin_item[B: Activity](self, activity: B, frame_offset: int = 0) -> "BuzzItemScope[B]":
         # core: Begins one item inside this buzz summary.
-        return BuzzItemScope(activity, self._buzz_batch, self.trace_id, _create_caller(frame_offset + 1, True))
+        return BuzzItemScope(activity, self._buzz_batch, self.trace_id, Caller.from_current_frame(frame_offset + 1))
 
     def __enter__(self) -> "BuzzScope[A]":
         self._scope = self.push()
@@ -445,7 +455,7 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
 
     def __exit__(self, exc_type, exc, tb) -> None:
         try:
-            if self._last_count.is_zero:
+            if self._last_status.is_zero:
                 if exc_type is not None:
                     self._log(Fail(exception=exc))
                 else:
@@ -504,41 +514,11 @@ class BuzzItemScope[A: Activity](ActivityScope[A]):
             self._scope.__exit__(exc_type, exc, tb)
 
 
-FRAME_INDEX_CALLER = 1
-
-
-def _create_caller(frame_offset: int, with_caller_info: bool) -> Caller | None:
-    if with_caller_info:
-        frame = inspect.currentframe()
-        try:
-            steps = FRAME_INDEX_CALLER + frame_offset
-            for _ in range(steps):
-                if frame is None:
-                    break
-                frame = frame.f_back
-
-            caller = Caller(
-                func=frame.f_code.co_name if frame is not None else "<unknown>",
-                file=trim_path(frame.f_code.co_filename) if frame is not None else "<unknown>",
-                line=frame.f_lineno if frame is not None else 0
-            )
-        finally:
-            del frame
-    else:
-        return None
-
-    return caller
-
-
 def begin_buzz[A: Buzz](activity: A, trace_id: Any | None = None, frame_offset: int = 0, with_caller_info: bool = True) -> BuzzScope[A]:
     if not isinstance(activity, Buzz):
         raise TypeError(f"{type(activity).__qualname__} cannot begin because it is not a Buzz activity.")
-    caller = _create_caller(frame_offset, with_caller_info)
+    caller = Caller.from_current_frame(frame_offset) if with_caller_info else None
     return BuzzScope(activity, trace_id, caller)
-
-
-def begin_snap[A: Snap](activity: A, trace_id: Any | None = None, frame_offset: int = 0) -> SnapScope[A]:
-    return SnapScope(activity, trace_id, _create_caller(frame_offset, True))
 
 
 @dataclass
@@ -557,12 +537,12 @@ class PrototypeBuzz(Buzz):
     def name(self) -> str:
         return self._name
 
-    def state_items(self, add: AddStateItem) -> None:
+    def state_items(self, push: PushStateItem) -> None:
         for key, value in self._state.items():
-            add(key, value)
+            push(key, value)
 
-    def message_parts(self, append: AppendMessagePart) -> None:
-        append(self._message)
+    def message_parts(self, push: PushMessagePart) -> None:
+        push(self._message)
 
     @dataclass
     class Void(Void["PrototypeBuzz"]):
@@ -570,12 +550,12 @@ class PrototypeBuzz(Buzz):
             self._message = message
             self._state = kwargs
 
-        def state_items(self, add: AddStateItem) -> None:
+        def state_items(self, push: PushStateItem) -> None:
             for key, value in self._state.items():
-                add(key, value)
+                push(key, value)
 
-        def message_parts(self, append: AppendMessagePart) -> None:
-            append(self._message)
+        def message_parts(self, push: PushMessagePart) -> None:
+            push(self._message)
 
     @dataclass
     class Okay(Okay["PrototypeBuzz"]):
@@ -583,12 +563,12 @@ class PrototypeBuzz(Buzz):
             self._message = message
             self._state = kwargs
 
-        def state_items(self, add: AddStateItem) -> None:
+        def state_items(self, push: PushStateItem) -> None:
             for key, value in self._state.items():
-                add(key, value)
+                push(key, value)
 
-        def message_parts(self, append: AppendMessagePart) -> None:
-            append(self._message)
+        def message_parts(self, push: PushMessagePart) -> None:
+            push(self._message)
 
     @dataclass
     class Fail(Fail["PrototypeBuzz"]):
@@ -596,12 +576,12 @@ class PrototypeBuzz(Buzz):
             self._message = message
             self._state = kwargs
 
-        def state_items(self, add: AddStateItem) -> None:
+        def state_items(self, push: PushStateItem) -> None:
             for key, value in self._state.items():
-                add(key, value)
+                push(key, value)
 
-        def message_parts(self, append: AppendMessagePart) -> None:
-            append(self._message)
+        def message_parts(self, push: PushMessagePart) -> None:
+            push(self._message)
 
 
 @dataclass
@@ -620,12 +600,12 @@ class PrototypeSnap(Snap):
     def name(self) -> str:
         return self._name
 
-    def state_items(self, add: AddStateItem) -> None:
+    def state_items(self, push: PushStateItem) -> None:
         for key, value in self._state.items():
-            add(key, value)
+            push(key, value)
 
-    def message_parts(self, append: AppendMessagePart) -> None:
-        append(self._message)
+    def message_parts(self, push: PushMessagePart) -> None:
+        push(self._message)
 
     @dataclass
     class Okay(Okay["PrototypeSnap"]):
@@ -633,14 +613,14 @@ class PrototypeSnap(Snap):
             self._message = message
             self._state = kwargs
 
-        def state_items(self, add: AddStateItem) -> None:
+        def state_items(self, push: PushStateItem) -> None:
             for key, value in self._state.items():
-                add(key, value)
+                push(key, value)
 
-        def message_parts(self, append: AppendMessagePart) -> None:
-            append(self._message)
+        def message_parts(self, push: PushMessagePart) -> None:
+            push(self._message)
 
 
-def log_status[A: Snap](snap: A, flag: ActivityStatus[A]) -> None:
-    with begin_snap(snap, frame_offset=2) as scope:
+def log_status[A: Snap](snap: A, flag: ActivityStatus[A], trace_id: Any | None = None) -> None:
+    with SnapScope(snap, trace_id, Caller.from_current_frame(2)) as scope:
         scope.log_status(flag)
