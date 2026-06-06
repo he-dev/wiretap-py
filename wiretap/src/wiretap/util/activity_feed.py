@@ -1,6 +1,6 @@
 import logging
 from functools import cache
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from wiretap.core.annotations import FeedToMessagePart, FeedToStateItem
 from wiretap.meta.annotations import _annotated_fields
@@ -8,20 +8,22 @@ from wiretap.meta.annotations import _annotated_fields
 # util: Internal logger.
 _logger = logging.getLogger("wiretap")
 
-type PushMessagePart = Callable[[str | None], None]
-type PushStateItem = Callable[[str, Any], None]
+
+class PushItem(Protocol):
+    # util: Common feed sink for both structured state items and message parts.
+    def __call__(self, label: str | None, value: Any) -> None: ...
 
 
 @runtime_checkable
 class StateItemFeed(Protocol):
     # core: Feeds structured fields to the log scope.
-    def state_items(self, push: PushStateItem) -> None: ...
+    def state_items(self, push: PushItem) -> None: ...
 
 
 @runtime_checkable
 class MessagePartFeed(Protocol):
     # core: Feeds human-readable parts to the rendered message.
-    def message_parts(self, push: PushMessagePart) -> None: ...
+    def message_parts(self, push: PushItem) -> None: ...
 
 
 # core: Warns about conflicting annotations between a class and a protocol.
@@ -34,7 +36,7 @@ def _warn_if_protocol_shadows_annotations(cls: type, protocol: type, annotation:
         )
 
 
-def get_state_items(source: object, push_state_item: PushStateItem) -> None:
+def get_state_items(source: object, push_state_item: PushItem) -> None:
     annotations = _annotated_fields(type(source)).get(FeedToStateItem, {})  # type: ignore[arg-type]
     if isinstance(source, StateItemFeed):
         source.state_items(push_state_item)
@@ -45,7 +47,7 @@ def get_state_items(source: object, push_state_item: PushStateItem) -> None:
             push_state_item(name, getattr(source, name, state_item.default_value))
 
 
-def get_state_items_cascading(source: object, push: PushStateItem) -> None:
+def get_state_items_cascading(source: object, push: PushItem) -> None:
     annotations = _annotated_fields(type(source)).get(FeedToStateItem, {})  # type: ignore[arg-type]
     for name, annotation in annotations.items():
         state_item: FeedToStateItem = annotation
@@ -53,7 +55,7 @@ def get_state_items_cascading(source: object, push: PushStateItem) -> None:
             push(name, getattr(source, name, state_item.default_value))
 
 
-def get_message_parts(source: object, push: PushMessagePart) -> None:
+def get_message_parts(source: object, push: PushItem) -> None:
     annotations = _annotated_fields(type(source)).get(FeedToMessagePart, {})  # type: ignore[arg-type]
     if isinstance(source, MessagePartFeed):
         source.message_parts(push)
@@ -61,10 +63,10 @@ def get_message_parts(source: object, push: PushMessagePart) -> None:
     else:
         for name, annotation in annotations.items():
             message_part: FeedToMessagePart = annotation
-            push(f"{message_part.label or name.capitalize()}: {getattr(source, name, None)}")
+            push(message_part.label or name.capitalize(), getattr(source, name, None))
 
 
 class MessageHeaderFeed(MessagePartFeed):
-    def message_parts(self, push: PushMessagePart) -> None:
-        push("{activity[name]}[{activity[status]}]")
-        push("Elapsed: {activity[elapsed_ms]} ms")
+    def message_parts(self, push: PushItem) -> None:
+        push(None, "{activity[name]}[{activity[status]}]")
+        push("Duration", "{activity[duration_ms]} ms")

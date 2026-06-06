@@ -56,7 +56,7 @@ class ActivityScope[A: Activity]:
                 "path": PathOf(reversed(list(self)), lambda a: a._activity.name),
                 "depth": self.depth,
                 "status": status.lower() if status else None,
-                "elapsed_ms": self.stopwatch.elapsed_ms,
+                "duration_ms": self.stopwatch.elapsed_ms,
                 "logs_from": {
                     "func": self.caller.func,
                     "file": self.caller.file,
@@ -75,8 +75,8 @@ class ActivityScope[A: Activity]:
 
         state: dict[str, Any] = {}
 
-        def set_state_item(key: str, value: Any) -> None:
-            if value is not None:
+        def set_state_item(key: str | None, value: Any) -> None:
+            if key is not None and value is not None:
                 state[key] = value
 
         # core: Get cascading state items from the parent scopes.

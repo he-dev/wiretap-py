@@ -4,7 +4,7 @@ from typing import Annotated, ClassVar
 
 from wiretap.core.annotations import FeedToMessagePart, FeedToStateItem
 from wiretap.util.activity import Activity, ActivityStatus
-from wiretap.util.activity_feed import PushMessagePart
+from wiretap.util.activity_feed import PushItem
 
 
 # core: everything went according to plan.
@@ -19,9 +19,9 @@ class Fail[A: Activity](ActivityStatus[A]):
     level: ClassVar[int] = logging.ERROR
     exception: Exception | None
 
-    def message_parts(self, push: PushMessagePart) -> None:
+    def message_parts(self, push: PushItem) -> None:
         if self.exception is not None:
-            push(f"Exception: {str(self.exception)}")
+            push("Exception", str(self.exception))
 
 
 # note: the very first status. Its previous name was "First".

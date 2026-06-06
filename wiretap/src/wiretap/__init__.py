@@ -4,7 +4,7 @@ from .core.activity import Buzz, PrototypeBuzz, PrototypeSnap, Snap
 from .core.activity_status import Fail, Noop, Okay, Void, Zero
 from .core.annotations import FeedToMessagePart, FeedToStateItem
 from .util.activity import ActivityStatus
-from .util.activity_feed import PushMessagePart, PushStateItem
+from .util.activity_feed import PushItem
 
 # core: Star import for convenience.
 __all__ = [
@@ -22,7 +22,6 @@ __all__ = [
     "configure",
     "FeedToStateItem",
     "FeedToMessagePart",
-    "PushMessagePart",
-    "PushStateItem",
+    "PushItem",
     "log_status"
 ]

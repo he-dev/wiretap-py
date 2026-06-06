@@ -19,9 +19,11 @@ class ComposeMessageByAppending(ComposeMessage):
     def __call__(self, state_items: dict[str, Any], *sources: Any) -> str:
         parts: list[str] = []
 
-        def append(part: str | None) -> None:
-            if part is not None:
-                parts.append(part)
+        def append(label: str | None, value: Any) -> None:
+            if value is None:
+                return
+            text = str(value)
+            parts.append(f"{label}: {text}" if label else text)
 
         get_message_parts(self._header, append)
         for item in sources:

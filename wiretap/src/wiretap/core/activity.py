@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from typing import Any, ClassVar
 
-from wiretap.core.activity_status import Fail, Okay, Void
 from wiretap.util.activity import Activity
-from wiretap.util.activity_feed import PushMessagePart, PushStateItem
+from wiretap.util.activity_feed import PushItem
+import wiretap.core.activity_status as status
 
 
 @dataclass  # (frozen=True)
@@ -33,51 +33,51 @@ class PrototypeBuzz(Buzz):
     def name(self) -> str:
         return self._name
 
-    def state_items(self, push: PushStateItem) -> None:
+    def state_items(self, push: PushItem) -> None:
         for key, value in self._state.items():
             push(key, value)
 
-    def message_parts(self, push: PushMessagePart) -> None:
-        push(self._message)
+    def message_parts(self, push: PushItem) -> None:
+        push(None, self._message)
 
     @dataclass
-    class Void(Void["PrototypeBuzz"]):
+    class Void(status.Void["PrototypeBuzz"]):
         def __init__(self, message: str | None = None, **kwargs: Any) -> None:
             self._message = message
             self._state = kwargs
 
-        def state_items(self, push: PushStateItem) -> None:
+        def state_items(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
-        def message_parts(self, push: PushMessagePart) -> None:
-            push(self._message)
+        def message_parts(self, push: PushItem) -> None:
+            push(None, self._message)
 
     @dataclass
-    class Okay(Okay["PrototypeBuzz"]):
+    class Okay(status.Okay["PrototypeBuzz"]):
         def __init__(self, message: str | None = None, **kwargs: Any) -> None:
             self._message = message
             self._state = kwargs
 
-        def state_items(self, push: PushStateItem) -> None:
+        def state_items(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
-        def message_parts(self, push: PushMessagePart) -> None:
-            push(self._message)
+        def message_parts(self, push: PushItem) -> None:
+            push(None, self._message)
 
     @dataclass
-    class Fail(Fail["PrototypeBuzz"]):
+    class Fail(status.Fail["PrototypeBuzz"]):
         def __init__(self, message: str | None = None, **kwargs: Any) -> None:
             self._message = message
             self._state = kwargs
 
-        def state_items(self, push: PushStateItem) -> None:
+        def state_items(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
-        def message_parts(self, push: PushMessagePart) -> None:
-            push(self._message)
+        def message_parts(self, push: PushItem) -> None:
+            push(None, self._message)
 
 
 @dataclass
@@ -96,22 +96,22 @@ class PrototypeSnap(Snap):
     def name(self) -> str:
         return self._name
 
-    def state_items(self, push: PushStateItem) -> None:
+    def state_items(self, push: PushItem) -> None:
         for key, value in self._state.items():
             push(key, value)
 
-    def message_parts(self, push: PushMessagePart) -> None:
-        push(self._message)
+    def message_parts(self, push: PushItem) -> None:
+        push(None, self._message)
 
     @dataclass
-    class Okay(Okay["PrototypeSnap"]):
+    class Okay(status.Okay["PrototypeSnap"]):
         def __init__(self, message: str | None = None, **kwargs: Any) -> None:
             self._message = message
             self._state = kwargs
 
-        def state_items(self, push: PushStateItem) -> None:
+        def state_items(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
-        def message_parts(self, push: PushMessagePart) -> None:
-            push(self._message)
+        def message_parts(self, push: PushItem) -> None:
+            push(None, self._message)
