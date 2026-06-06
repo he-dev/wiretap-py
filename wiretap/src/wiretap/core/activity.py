@@ -38,7 +38,7 @@ class PrototypeBuzz(Buzz):
             push(key, value)
 
     def message_parts(self, push: PushItem) -> None:
-        push(None, self._message)
+        push("Message", self._message, {"label": False})
 
     @dataclass
     class Void(status.Void["PrototypeBuzz"]):
@@ -51,7 +51,7 @@ class PrototypeBuzz(Buzz):
                 push(key, value)
 
         def message_parts(self, push: PushItem) -> None:
-            push(None, self._message)
+            push("Message", self._message, {"label": False})
 
     @dataclass
     class Okay(status.Okay["PrototypeBuzz"]):
@@ -64,7 +64,7 @@ class PrototypeBuzz(Buzz):
                 push(key, value)
 
         def message_parts(self, push: PushItem) -> None:
-            push(None, self._message)
+            push("Message", self._message, {"label": False})
 
     @dataclass
     class Fail(status.Fail["PrototypeBuzz"]):
@@ -77,7 +77,7 @@ class PrototypeBuzz(Buzz):
                 push(key, value)
 
         def message_parts(self, push: PushItem) -> None:
-            push(None, self._message)
+            push("Message", self._message, {"label": False})
 
 
 @dataclass
@@ -101,7 +101,7 @@ class PrototypeSnap(Snap):
             push(key, value)
 
     def message_parts(self, push: PushItem) -> None:
-        push(None, self._message)
+        push("Message", self._message, {"label": False})
 
     @dataclass
     class Okay(status.Okay["PrototypeSnap"]):
@@ -114,4 +114,4 @@ class PrototypeSnap(Snap):
                 push(key, value)
 
         def message_parts(self, push: PushItem) -> None:
-            push(None, self._message)
+            push("Message", self._message, {"label": False})

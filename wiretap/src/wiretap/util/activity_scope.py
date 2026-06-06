@@ -66,8 +66,8 @@ class ActivityScope[A: Activity]:
 
         state: dict[str, Any] = {}
 
-        def set_state_item(key: str | None, value: Any) -> None:
-            if key is not None and value is not None:
+        def set_state_item(key: str, value: Any, options: dict[str, Any] | None = None) -> None:
+            if value is not None:
                 state[key] = value
 
         # core: Get cascading state items from the parent scopes.

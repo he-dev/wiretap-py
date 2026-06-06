@@ -8,10 +8,12 @@ from wiretap.meta.annotations import _annotated_fields
 # util: Internal logger.
 _logger = logging.getLogger("wiretap")
 
+type PushItemOptions = dict[str, Any]
+
 
 class PushItem(Protocol):
     # util: Common feed sink for both structured state items and message parts.
-    def __call__(self, label: str | None, value: Any) -> None: ...
+    def __call__(self, label: str, value: Any, options: PushItemOptions | None = None) -> None: ...
 
 
 @runtime_checkable
@@ -68,4 +70,4 @@ def get_message_parts(source: object, push: PushItem) -> None:
 
 class MessageHeaderFeed(MessagePartFeed):
     def message_parts(self, push: PushItem) -> None:
-        push(None, "{activity[name]}[{activity[status]}]")
+        push("", "{activity[name]}[{activity[status]}]", {"label": False})
