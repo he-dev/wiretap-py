@@ -66,8 +66,3 @@ def get_message_parts(source: object, push: PushItem) -> None:
         for name, annotation in annotations.items():
             message_part: FeedToMessagePart = annotation
             push(message_part.label or name.capitalize(), getattr(source, name, None))
-
-
-class MessageHeaderFeed(MessagePartFeed):
-    def message_parts(self, push: PushItem) -> None:
-        push("", "{activity[name]}[{activity[status]}]", {"label": False})

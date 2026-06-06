@@ -62,6 +62,9 @@ class ActivityScope[A: Activity]:
     def log_status(self, status: ActivityStatus[A]) -> ActivityScope[A]:
         return self._log(status)
 
+    def message_parts(self, push: PushItem) -> None:
+        push("{activity[name]}", "[{activity[status]}]", {"separator": None})
+
     def _log(self, status: ActivityStatus[A]) -> ActivityScope[A]:
 
         state: dict[str, Any] = {}
@@ -130,6 +133,7 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
         self._buzz_batch.state_items(push)
 
     def message_parts(self, push: PushItem) -> None:
+        super().message_parts(push)
         push("Duration", "{activity[duration_ms]} ms")
         self._buzz_batch.message_parts(push)
 
@@ -177,6 +181,7 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
 
 class SnapScope[A: Snap](ActivityScope[A]):
     def message_parts(self, push: PushItem) -> None:
+        super().message_parts(push)
         push("Duration", "N/A")
 
     def __enter__(self) -> SnapScope[A]:
@@ -204,6 +209,7 @@ class BuzzItemScope[A: Activity](ActivityScope[A]):
         self._status: ActivityStatus[A] | None = None
 
     def message_parts(self, push: PushItem) -> None:
+        super().message_parts(push)
         push("Duration", "N/A")
 
     def set_status(self, status: ActivityStatus[A]) -> BuzzItemStatus[A]:
