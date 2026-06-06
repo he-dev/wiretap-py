@@ -57,7 +57,7 @@ class ActivityScope[A: Activity]:
                 "depth": self.depth,
                 "status": status.lower() if status else None,
                 "duration_ms": self.stopwatch.elapsed_ms,
-                "logs_from": {
+                "site": {
                     "func": self.caller.func,
                     "file": self.caller.file,
                     "line": self.caller.line,

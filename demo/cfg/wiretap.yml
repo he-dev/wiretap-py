@@ -6,7 +6,7 @@ formatters:
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       {asctime}.{msecs:03.0f} [{levelname:7s}]
-      {indent}{message}; tags: {activity[tags]}; logs_from: {activity[logs_from]}; state: {state}; span: {span}; source={source}
+      {indent}{message}; tags: {activity[tags]}; site: {activity[site]}; state: {state}; span: {span}; source={source}
   console_lite:
     (): wiretap.util.logging.TextFormatter
     style: "{"
@@ -27,7 +27,7 @@ formatters:
       - wiretap.util.logging.AddTimestamp
       - wiretap.util.logging.AddMessage
       - wiretap.util.logging.AddActivity
-      - wiretap.util.logging.AddSpan
+      - wiretap.util.logging.AddTraceContext
       - wiretap.util.logging.AddSource
       - wiretap.util.logging.AddException
       - (): wiretap.util.logging.AddEnvironmentVariable

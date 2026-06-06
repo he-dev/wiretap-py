@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from wiretap.meta import trim_path
-from wiretap.util.activity_scope import ActivityScope
 
 # util: Type alias for convenience
 JSONEntry = dict[str, Any]
@@ -16,18 +15,8 @@ JSONEntry = dict[str, Any]
 @dataclasses.dataclass
 class JSONMiddlewareContext:
     record: logging.LogRecord
-
-    @property
-    def scope(self) -> dict[str, Any] | None:
-        if data := getattr(self.record, "wiretap", None):
-            return data
-
-        if scope := ActivityScope.current():
-            return scope.to_extra(status=None, state=None)
-
-        return None
-
     entry: JSONEntry
+    activity_extra: dict[str, Any] | None
 
 
 # meta: Using ABC because we're creating objects dynamically.
@@ -83,15 +72,14 @@ class AddMessage(JSONMiddleware):
         }
 
 
-class AddSpan(JSONMiddleware):
+class AddTraceContext(JSONMiddleware):
 
     def __call__(self, context: JSONMiddlewareContext) -> JSONEntry:
-        if scope := context.scope:
-
+        if extra := context.activity_extra:
             return context.entry | {
-                "trace_id": scope["trace_id"],
-                "span_id": scope["span_id"],
-                "parent_id": scope["parent_id"],
+                "trace_id": extra["trace_id"],
+                "span_id": extra["span_id"],
+                "parent_id": extra["parent_id"],
             }
         else:
             return context.entry | {
@@ -104,7 +92,7 @@ class AddSpan(JSONMiddleware):
 class AddSource(JSONMiddleware):
 
     def __call__(self, context: JSONMiddlewareContext) -> JSONEntry:
-        if context.scope is None:
+        if context.activity_extra is None:
             return context.entry | {"source": {
                 "func": context.record.funcName,
                 "file": trim_path(context.record.filename),
@@ -117,15 +105,15 @@ class AddSource(JSONMiddleware):
 class AddActivity(JSONMiddleware):
 
     def __call__(self, context: JSONMiddlewareContext) -> JSONEntry:
-        if scope := context.scope:
-            return context.entry | {"activity": scope["activity"]}
+        if extra := context.activity_extra:
+            return context.entry | {"activity": extra["activity"]}
         else:
             return context.entry | {"activity": {
                 "name": None,
                 "depth": None,
                 "status": None,
-                "elapsed_ms": None,
-                "logs_from": None,
+                "duration_ms": None,
+                "site": None,
             }}
 
 
@@ -156,7 +144,7 @@ class AddEnvironmentVariable(JSONMiddleware):
             value = os.environ[name]
             if not value:
                 # core: The key exists but holds nothing.
-                return "<value-is-null>"
+                return "<value-is-empty>"
             return value
 
         environment = {name: resolve(name) for name in self.names}

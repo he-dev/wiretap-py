@@ -40,7 +40,7 @@ class TextFormatter(logging.Formatter):
             "name": None,
             "tags": None,
             "elapsed_ms": None,
-            "logs_from": None,
+            "site": None,
         }
         record.span = None
         record.state = None
