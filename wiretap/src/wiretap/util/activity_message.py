@@ -8,7 +8,7 @@ from wiretap.util.activity_feed import MessageHeaderFeed, MessagePartFeed, get_m
 @runtime_checkable
 class ComposeMessage(Protocol):
     @abc.abstractmethod
-    def __call__(self, state_items: dict[str, Any], *sources: Any) -> str: ...
+    def __call__(self, context: dict[str, Any], *feeds: Any) -> str: ...
 
 
 class ComposeMessageByAppending(ComposeMessage):
@@ -16,7 +16,7 @@ class ComposeMessageByAppending(ComposeMessage):
         self._header = header
         self._separator = separator
 
-    def __call__(self, state_items: dict[str, Any], *sources: Any) -> str:
+    def __call__(self, context: dict[str, Any], *feeds: Any) -> str:
         parts: list[str] = []
 
         def append(label: str | None, value: Any) -> None:
@@ -25,9 +25,8 @@ class ComposeMessageByAppending(ComposeMessage):
             text = str(value)
             parts.append(f"{label}: {text}" if label else text)
 
-        get_message_parts(self._header, append)
-        for item in sources:
-            get_message_parts(item, append)
+        for feed in (self._header, *feeds):
+            get_message_parts(feed, append)
 
         template = self._separator.join(part for part in parts)
-        return template.format_map(_Forgiving(state_items))
+        return template.format_map(_Forgiving(context))

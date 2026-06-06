@@ -1,8 +1,8 @@
 import inspect
 from dataclasses import dataclass
+from typing import Any
 
 from wiretap.meta import trim_path
-
 
 FRAME_INDEX_CALLER = 1
 
@@ -12,6 +12,13 @@ class Caller:
     func: str
     file: str
     line: int
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "func": self.func,
+            "file": self.file,
+            "line": self.line,
+        }
 
     @staticmethod
     def from_current_frame(frame_offset: int) -> "Caller":

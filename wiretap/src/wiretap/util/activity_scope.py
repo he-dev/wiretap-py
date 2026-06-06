@@ -57,14 +57,10 @@ class ActivityScope[A: Activity]:
                 "depth": self.depth,
                 "status": status.lower() if status else None,
                 "duration_ms": self.stopwatch.elapsed_ms,
-                "site": {
-                    "func": self.caller.func,
-                    "file": self.caller.file,
-                    "line": self.caller.line,
-                } if self.caller else None,
                 "tags": self._activity.tags
             },
-            "state": state
+            "state": state,
+            "source": self.caller.to_dict() if self.caller else None,
         }
 
     def log_status(self, status: ActivityStatus[A]) -> ActivityScope[A]:
@@ -81,18 +77,19 @@ class ActivityScope[A: Activity]:
 
         # core: Get cascading state items from the parent scopes.
         # note: Collect state items from top to bottom so that the last status wins.
-        for item in reversed(list(islice(iter(self), 1, None))):
-            get_state_items_cascading(item._activity, set_state_item)
+        scopes: Iterator[ActivityScope[Any]] = reversed(list(islice(iter(self), 1, None)))
+        for scope in scopes:
+            get_state_items_cascading(scope._activity, set_state_item)
 
         # core: Activity, buzz batch, and status each get a chance to fulfill the monitoring contract.
-        sources: list[Any] = [self._activity, self._buzz_batch, status]
+        state_feeds: list[Any] = [self._activity, self._buzz_batch, status]
 
-        for item in sources:
-            get_state_items(item, set_state_item)
+        for state_feed in state_feeds:
+            get_state_items(state_feed, set_state_item)
 
         extra: dict[str, Any] = self.to_extra(status.code, state)
 
-        message = self.compose_message(extra, *sources)
+        message = self.compose_message(extra, *state_feeds)
         status_level = self.get_status_level_or_default(status)
 
         # core: Special overflow handling for the last status.
@@ -140,11 +137,11 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
 
         return super().get_status_level_or_default(status)
 
-    def begin_item[B: Activity](self, activity: B, frame_offset: int = 0) -> "BuzzItemScope[B]":
+    def begin_item[B: Activity](self, activity: B, frame_offset: int = 0) -> BuzzItemScope[B]:
         # core: Begins one item inside this buzz summary.
         return BuzzItemScope(activity, self._buzz_batch, self.trace_id, Caller.from_current_frame(frame_offset + 1))
 
-    def __enter__(self) -> "BuzzScope[A]":
+    def __enter__(self) -> BuzzScope[A]:
         self._scope = self.push()
         self._scope.__enter__()
         self._log(Zero())
@@ -162,7 +159,7 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
 
 
 class SnapScope[A: Snap](ActivityScope[A]):
-    def __enter__(self) -> "SnapScope[A]":
+    def __enter__(self) -> SnapScope[A]:
         self._scope = self.push()
         self._scope.__enter__()
         return self
@@ -194,11 +191,11 @@ class BuzzItemScope[A: Activity](ActivityScope[A]):
 
         return BuzzItemStatus(log)
 
-    def log_status(self, status: ActivityStatus[A]) -> "BuzzItemScope[A]":
+    def log_status(self, status: ActivityStatus[A]) -> BuzzItemScope[A]:
         super().log_status(status)
         return self
 
-    def __enter__(self) -> "BuzzItemScope[A]":
+    def __enter__(self) -> BuzzItemScope[A]:
         self._scope = self.push()
         self._scope.__enter__()
         return self

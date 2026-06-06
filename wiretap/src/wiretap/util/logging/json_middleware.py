@@ -92,14 +92,14 @@ class AddTraceContext(JSONMiddleware):
 class AddSource(JSONMiddleware):
 
     def __call__(self, context: JSONMiddlewareContext) -> JSONEntry:
-        if context.activity_extra is None:
+        if (extra := context.activity_extra) is None:
             return context.entry | {"source": {
                 "func": context.record.funcName,
                 "file": trim_path(context.record.filename),
                 "line": context.record.lineno,
             }}
         else:
-            return context.entry
+            return context.entry | {"source": extra["source"]}
 
 
 class AddActivity(JSONMiddleware):
@@ -112,8 +112,7 @@ class AddActivity(JSONMiddleware):
                 "name": None,
                 "depth": None,
                 "status": None,
-                "duration_ms": None,
-                "site": None,
+                "duration_ms": None
             }}
 
 

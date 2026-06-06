@@ -22,7 +22,7 @@ class TextFormatter(logging.Formatter):
         # note: There is a scope!
         if scope:
             record.indent = self.indent * scope["activity"]["depth"]
-            record.message = record.msg
+            record.message = record.getMessage()
             record.activity = scope.get("activity", None)
             record.span = {
                 "trace_id": scope.get("trace_id", None),
@@ -30,7 +30,7 @@ class TextFormatter(logging.Formatter):
                 "parent_id": scope.get("parent_id", None),
             }
             record.state = scope["state"]
-            record.source = None
+            record.source = scope["source"]
             return super().format(record)
 
         # core: This is a native logging record outside a wiretap's span.
@@ -39,8 +39,7 @@ class TextFormatter(logging.Formatter):
         record.activity = {
             "name": None,
             "tags": None,
-            "elapsed_ms": None,
-            "site": None,
+            "duration_ms": None,
         }
         record.span = None
         record.state = None
