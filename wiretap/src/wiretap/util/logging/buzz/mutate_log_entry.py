@@ -4,7 +4,7 @@ import os
 import traceback
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 from wiretap.meta import trim_path
 from wiretap.util.activity_scope import ActivityScope
@@ -38,22 +38,39 @@ class JSONMiddleware(ABC):
     def __call__(self, context: JSONMiddlewareContext) -> JSONEntry: ...
 
 
-class AddTimestamp(JSONMiddleware):
+class GetTimestamp:
+    _get: Callable[[float], datetime]
+
     def __init__(self, tz: str = "utc"):
-        super().__init__()
         match tz.casefold().strip():
             case "utc":
-                # self.tz = datetime.now(timezone.utc).tzinfo  # timezone.utc
-                self.tz = timezone.utc
+                self._get = self._utc
             case "local" | "lt":
-                # self.tz = datetime.now(timezone.utc).astimezone().tzinfo
-                self.tz = None
+                self._get = self._local
             case _:
                 raise ValueError(f"Invalid timezone: {tz}. Only [utc|local] are supported.")
 
+    def __call__(self, created: float) -> datetime:
+        return self._get(created)
+
+    @staticmethod
+    def _utc(created: float) -> datetime:
+        return datetime.fromtimestamp(created, tz=timezone.utc)
+
+    @staticmethod
+    def _local(created: float) -> datetime:
+        # util: Convert from an explicit UTC instant instead of relying on tz=None as a local-time sentinel.
+        return datetime.fromtimestamp(created, tz=timezone.utc).astimezone()
+
+
+class AddTimestamp(JSONMiddleware):
+    def __init__(self, tz: str = "utc"):
+        super().__init__()
+        self.get_timestamp = GetTimestamp(tz)
+
     def __call__(self, context: JSONMiddlewareContext) -> JSONEntry:
         return context.entry | {
-            "timestamp": datetime.fromtimestamp(context.record.created, tz=self.tz)
+            "timestamp": self.get_timestamp(context.record.created)
         }
 
 

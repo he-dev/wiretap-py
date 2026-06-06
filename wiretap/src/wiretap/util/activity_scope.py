@@ -7,7 +7,7 @@ import secrets
 from contextlib import contextmanager
 from contextvars import ContextVar  # noqa: built-in module
 from dataclasses import dataclass, field
-from functools import lru_cache
+from functools import lru_cache, cache
 from itertools import islice
 from typing import Any, Iterator, ClassVar, runtime_checkable, Protocol, Callable, Annotated, get_type_hints
 
@@ -20,19 +20,19 @@ _logger = logging.getLogger("wiretap")
 
 
 @dataclass(frozen=True)
-class StateItem:
+class FeedToStateItem:
     # core: When True, the value cascades to all activities down the stack.
     cascade: bool = field(default=False)
     default_value: Any = field(default=None)
 
 
 @dataclass(frozen=True)
-class MessagePart:
+class FeedToMessagePart:
     label: str | None = None
 
 
 # core: Reads and caches annotated fields for status classes because they use [Annotated] fields.
-@lru_cache(maxsize=None)
+@cache
 def _annotated_fields(cls: type) -> dict[type, dict[str, Any]]:
     # note: The index structure is: {channel_type: {field_name: annotation}} resolved once per class.
     index: dict[type, dict[str, Any]] = {}
@@ -44,7 +44,7 @@ def _annotated_fields(cls: type) -> dict[type, dict[str, Any]]:
 
 
 # core: Warns about conflicting annotations between a class and a protocol.
-@lru_cache(maxsize=None)
+@cache
 def _warn_if_protocol_shadows_annotations(cls: type, protocol: type, annotation: type) -> None:
     if _annotated_fields(cls).get(annotation):
         _logger.warning(
@@ -54,32 +54,32 @@ def _warn_if_protocol_shadows_annotations(cls: type, protocol: type, annotation:
 
 
 def get_state_items(source: object, push_state_item: PushStateItem) -> None:
-    annotations = _annotated_fields(type(source)).get(StateItem, {})
+    annotations = _annotated_fields(type(source)).get(FeedToStateItem, {})  # type: ignore[arg-type]
     if isinstance(source, StateItemFeed):
         source.state_items(push_state_item)
-        _warn_if_protocol_shadows_annotations(type(source), StateItemFeed, StateItem)
+        _warn_if_protocol_shadows_annotations(type(source), StateItemFeed, FeedToStateItem)
     else:
         for name, annotation in annotations.items():
-            state_item: StateItem = annotation
+            state_item: FeedToStateItem = annotation
             push_state_item(name, getattr(source, name, state_item.default_value))
 
 
-def get_state_items_all(source: object, push: PushStateItem) -> None:
-    annotations = _annotated_fields(type(source)).get(StateItem, {})
+def get_state_items_cascading(source: object, push: PushStateItem) -> None:
+    annotations = _annotated_fields(type(source)).get(FeedToStateItem, {})  # type: ignore[arg-type]
     for name, annotation in annotations.items():
-        state_item: StateItem = annotation
+        state_item: FeedToStateItem = annotation
         if state_item.cascade:
             push(name, getattr(source, name, state_item.default_value))
 
 
 def get_message_parts(source: object, push: PushMessagePart) -> None:
-    annotations = _annotated_fields(type(source)).get(MessagePart, {})
+    annotations = _annotated_fields(type(source)).get(FeedToMessagePart, {})  # type: ignore[arg-type]
     if isinstance(source, MessagePartFeed):
         source.message_parts(push)
-        _warn_if_protocol_shadows_annotations(type(source), MessagePartFeed, MessagePart)
+        _warn_if_protocol_shadows_annotations(type(source), MessagePartFeed, FeedToMessagePart)
     else:
         for name, annotation in annotations.items():
-            message_part: MessagePart = annotation
+            message_part: FeedToMessagePart = annotation
             push(f"{message_part.label or name.capitalize()}: {getattr(source, name, None)}")
 
 
@@ -248,7 +248,7 @@ class Zero[A: Activity](ActivityStatus[A]):
 @dataclass  # (frozen=True)
 class Void[A: Activity](ActivityStatus[A]):
     level: ClassVar[int] = logging.DEBUG
-    reason: Annotated[str, StateItem(), MessagePart()]
+    reason: Annotated[str, FeedToStateItem(), FeedToMessagePart()]
 
 
 @dataclass  # (frozen=True)
@@ -385,10 +385,10 @@ class ActivityScope[A: Activity]:
         # core: Get cascading state items from the parent scopes.
         # note: Collect state items from top to bottom so that the last status wins.
         for item in reversed(list(islice(iter(self), 1, None))):
-            get_state_items_all(item._activity, set_state_item)
+            get_state_items_cascading(item._activity, set_state_item)
 
         # core: Activity, buzz batch, and status each get a chance to fulfill the monitoring contract.
-        sources: list[object] = [self._activity, self._buzz_batch, status]
+        sources: list[Any] = [self._activity, self._buzz_batch, status]
 
         for item in sources:
             get_state_items(item, set_state_item)

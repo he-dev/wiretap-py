@@ -10,11 +10,11 @@ import wiretap
 class Workflow:
     @dataclass#(frozen=True)
     class ExecuteStep(wiretap.Buzz):
-        step_index: Annotated[int, wiretap.StateItem(cascade=True)]
+        step_index: Annotated[int, wiretap.FeedToStateItem(cascade=True)]
 
         @dataclass#(frozen=True)
         class Okay(wiretap.Okay["Workflow.ExecuteStep"]):
-            items_processed: Annotated[int, wiretap.StateItem()]
+            items_processed: Annotated[int, wiretap.FeedToStateItem()]
 
         @dataclass#(frozen=True)
         class Fail(wiretap.Fail["Workflow.ExecuteStep"]):
@@ -24,13 +24,13 @@ class Workflow:
 @dataclass#(frozen=True)
 class DeleteFile(wiretap.Snap):
     tags = ["io"]
-    path: Annotated[str, wiretap.StateItem(), wiretap.MessagePart()]
+    path: Annotated[str, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart()]
 
-    # note: Handled by StateItem annotation.
-    # def state_item(self, set: wiretap.SetStateItem) -> None:
-    #    set("Path", self.path)
+    # note: Handled by FeedToStateItem annotation.
+    # def state_item(self, push: wiretap.PushStateItem) -> None:
+    #    push("Path", self.path)
 
-    # case: Shadows MessagePart annotation that causes a warning.
+    # case: Shadows FeedToMessagePart annotation that causes a warning.
     def message_parts(self, push: wiretap.PushMessagePart) -> None:
         push("Path: {path}")
 

@@ -1,7 +1,7 @@
 from .util.logging.buzz import configure
 from .util.activity_scope import (
     begin_buzz, PrototypeBuzz, PrototypeSnap, Buzz, Snap, ActivityStatus,
-    Okay, Fail, Void, Noop, StateItem, MessagePart,
+    Okay, Fail, Void, Noop, FeedToStateItem, FeedToMessagePart,
     PushStateItem, PushMessagePart, log_status
 )
 
@@ -18,8 +18,8 @@ __all__ = [
     "PrototypeBuzz",
     "PrototypeSnap",
     "configure",
-    "StateItem",
-    "MessagePart",
+    "FeedToStateItem",
+    "FeedToMessagePart",
     "PushMessagePart",
     "PushStateItem",
     "log_status"
