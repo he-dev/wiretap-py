@@ -261,8 +261,8 @@ class Noop[A: Activity](ActivityStatus[A]):
     pass
 
 
-class BuzzCounter:
-    """Internal accumulator used when a buzz counts repeated work."""
+class BuzzBatch:
+    """Internal accumulator used when a buzz processes repeated items."""
 
     def __init__(self) -> None:
         self.item_count = 0
@@ -289,7 +289,7 @@ class BuzzCounter:
         self._duration_ms_m2 += delta * delta2
 
     def __bool__(self) -> bool:
-        # core: A counter only contributes telemetry after at least one buzz item was completed.
+        # core: A batch only contributes telemetry after at least one buzz item was completed.
         return self.item_count > 0
 
     @property
@@ -343,7 +343,7 @@ class ActivityScope[A: Activity]:
         self.stopwatch: Stopwatch = Stopwatch()
         self._last_count = LastCount()
         self._logger: logging.Logger = logging.getLogger(activity.name)
-        self._buzz_counter = BuzzCounter()
+        self._buzz_batch = BuzzBatch()
 
     def __iter__(self) -> Iterator[ActivityScope[Any]]:
         current: ActivityScope[Any] | None = self
@@ -393,8 +393,8 @@ class ActivityScope[A: Activity]:
         for item in reversed(list(islice(iter(self), 1, None))):
             get_state_items_all(item._activity, set_state_item)
 
-        # core: Activity, buzz counter, and status each get a chance to fulfill the monitoring contract.
-        sources: list[object] = [self._activity, self._buzz_counter, status]
+        # core: Activity, buzz batch, and status each get a chance to fulfill the monitoring contract.
+        sources: list[object] = [self._activity, self._buzz_batch, status]
 
         for item in sources:
             get_state_items(item, set_state_item)
@@ -435,7 +435,7 @@ class ActivityScope[A: Activity]:
 class BuzzScope[A: Buzz](ActivityScope[A]):
     def begin_item[B: Activity](self, activity: B, frame_offset: int = 0) -> "BuzzItemScope[B]":
         # core: Begins one item inside this buzz summary.
-        return BuzzItemScope(activity, self._buzz_counter, self.trace_id, _create_caller(frame_offset + 1, True))
+        return BuzzItemScope(activity, self._buzz_batch, self.trace_id, _create_caller(frame_offset + 1, True))
 
     def __enter__(self) -> "BuzzScope[A]":
         self._scope = self.push()
@@ -473,9 +473,9 @@ class BuzzItemStatus[A: Activity]:
 
 
 class BuzzItemScope[A: Activity](ActivityScope[A]):
-    def __init__(self, activity: A, counter: BuzzCounter, trace_id: Any | None, caller: Caller | None = None) -> None:
+    def __init__(self, activity: A, batch: BuzzBatch, trace_id: Any | None, caller: Caller | None = None) -> None:
         super().__init__(activity, trace_id, caller)
-        self._counter = counter
+        self._batch = batch
         self._status: ActivityStatus[A] | None = None
 
     def set_status(self, status: ActivityStatus[A]) -> BuzzItemStatus[A]:
@@ -499,7 +499,7 @@ class BuzzItemScope[A: Activity](ActivityScope[A]):
     def __exit__(self, exc_type, exc, tb) -> None:
         try:
             # core: A buzz item without an explicit status is intentionally inconclusive.
-            self._counter.count(self._status or Noop(), self.stopwatch.elapsed_ms)
+            self._batch.count(self._status or Noop(), self.stopwatch.elapsed_ms)
         finally:
             self._scope.__exit__(exc_type, exc, tb)
 
