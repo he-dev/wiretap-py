@@ -4,8 +4,8 @@ import logging
 from json import JSONEncoder
 from typing import Any
 
-from wiretap.util.logging.buzz.encode_log_entry import DefaultEncode
-from wiretap.util.logging.buzz.mutate_log_entry import JSONMiddleware, JSONMiddlewareContext
+from wiretap.util.logging.json_encoding import DefaultEncode
+from wiretap.util.logging.json_middleware import JSONMiddleware, JSONMiddlewareContext
 from wiretap.meta.type_factory import create_instance
 
 

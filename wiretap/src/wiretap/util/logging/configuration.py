@@ -1,6 +1,6 @@
 # meta: These imports are required for the dynamic type resolution.
-from .encode_log_entry import *
-from .mutate_log_entry import *
+from .json_encoding import *
+from .json_middleware import *
 
 
 def configure(config: dict):

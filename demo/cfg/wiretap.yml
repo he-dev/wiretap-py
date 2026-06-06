@@ -17,20 +17,20 @@ formatters:
   elastic_json:
     (): wiretap.util.logging.JSONFormatter
     encoders:
-      - wiretap.util.logging.buzz.EncodeDateTime
-      - wiretap.util.logging.buzz.EncodeUUID
-      - wiretap.util.logging.buzz.EncodeSet
-      - wiretap.util.logging.buzz.EncodePath
-      - wiretap.util.logging.buzz.EncodePathOf
-      - wiretap.util.logging.buzz.EncodeToDict
+      - wiretap.util.logging.EncodeDateTime
+      - wiretap.util.logging.EncodeUUID
+      - wiretap.util.logging.EncodeSet
+      - wiretap.util.logging.EncodePath
+      - wiretap.util.logging.EncodePathOf
+      - wiretap.util.logging.EncodeToDict
     middleware:
-      - wiretap.util.logging.buzz.AddTimestamp
-      - wiretap.util.logging.buzz.AddMessage
-      - wiretap.util.logging.buzz.AddActivity
-      - wiretap.util.logging.buzz.AddSpan
-      - wiretap.util.logging.buzz.AddSource
-      - wiretap.util.logging.buzz.AddException
-      - (): wiretap.util.logging.buzz.AddEnvironmentVariable
+      - wiretap.util.logging.AddTimestamp
+      - wiretap.util.logging.AddMessage
+      - wiretap.util.logging.AddActivity
+      - wiretap.util.logging.AddSpan
+      - wiretap.util.logging.AddSource
+      - wiretap.util.logging.AddException
+      - (): wiretap.util.logging.AddEnvironmentVariable
         names:
           - OpenJDK_21
 handlers:

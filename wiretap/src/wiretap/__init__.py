@@ -1,4 +1,4 @@
-from .util.logging.buzz import configure
+from .util.logging.configuration import configure
 from .core import begin_buzz, log_status
 from .core.activity import Buzz, PrototypeBuzz, PrototypeSnap, Snap
 from .core.activity_status import Fail, Noop, Okay, Void, Zero
