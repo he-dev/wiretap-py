@@ -158,8 +158,10 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
 
         return super().get_status_level_or_default(status)
 
-    def begin_item[B: Activity](self, activity: B, frame_offset: int = 0) -> BuzzItemScope[B]:
+    def begin_item[B: Buzz](self, activity: B, frame_offset: int = 0) -> BuzzItemScope[B]:
         # core: Begins one item inside this buzz summary.
+        if not isinstance(activity, Buzz):
+            raise TypeError(f"{type(activity).__qualname__} cannot begin as a batch item because it is not a Buzz activity.")
         return BuzzItemScope(activity, self._buzz_batch, Caller.from_current_frame(frame_offset + 1))
 
     def __enter__(self) -> BuzzScope[A]:
@@ -172,9 +174,9 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
         try:
             if self._last_status.is_zero:
                 if exc_type is not None:
-                    self._log(Fail(exception=exc))
+                    self.log_status(Fail(exception=exc))
                 else:
-                    self._log(Void(reason="Last status not specified and automatically logged."))
+                    self.log_status(Void(reason="Last status not specified and automatically logged."))
         finally:
             self._scope.__exit__(exc_type, exc, tb)
 
@@ -193,7 +195,7 @@ class SnapScope[A: Snap](ActivityScope[A]):
         self._scope.__exit__(exc_type, exc, tb)
 
 
-class BuzzItemStatus[A: Activity]:
+class BuzzItemStatus[A: Buzz]:
     def __init__(self, log: Callable[[], None]) -> None:
         self._log = log
 
@@ -201,20 +203,13 @@ class BuzzItemStatus[A: Activity]:
         self._log()
 
 
-class BuzzItemScope[A: Activity](ActivityScope[A]):
+class BuzzItemScope[A: Buzz](BuzzScope[A]):
     def __init__(self, activity: A, batch: BuzzBatch, caller: Caller | None = None) -> None:
         super().__init__(activity, None, caller)
-        self.stopwatch: Stopwatch = Stopwatch()
-        self._batch = batch
+        self._parent_batch = batch
         self._status: ActivityStatus[A] | None = None
 
-    def message_parts(self, push: PushItem) -> None:
-        super().message_parts(push)
-        push("Duration", "N/A")
-
     def set_status(self, status: ActivityStatus[A]) -> BuzzItemStatus[A]:
-        self._status = status
-
         # util: Adapts log_status, which returns the scope, into a terminal status action.
         def log() -> None:
             self.log_status(status)
@@ -222,20 +217,20 @@ class BuzzItemScope[A: Activity](ActivityScope[A]):
         return BuzzItemStatus(log)
 
     def log_status(self, status: ActivityStatus[A]) -> BuzzItemScope[A]:
+        self._status = status
         super().log_status(status)
         return self
 
     def __enter__(self) -> BuzzItemScope[A]:
-        self._scope = self.push()
-        self._scope.__enter__()
+        super().__enter__()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
         try:
-            # core: A buzz item without an explicit status is intentionally inconclusive.
-            self._batch.count(self._status or Noop(), self.stopwatch.elapsed_ms)
+            super().__exit__(exc_type, exc, tb)
         finally:
-            self._scope.__exit__(exc_type, exc, tb)
+            # core: Each buzz item contributes the final status observed by its own buzz lifecycle.
+            self._parent_batch.count(self._status or Noop(), self.stopwatch.elapsed_ms)
 
 
 def begin_buzz[A: Buzz](activity: A, trace_id: Any | None = None, frame_offset: int = 0, with_caller_info: bool = True) -> BuzzScope[A]:
