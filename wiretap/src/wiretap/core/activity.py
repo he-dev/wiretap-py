@@ -5,14 +5,25 @@ from wiretap.util.activity import Activity
 from wiretap.util.activity_feed import PushItem
 import wiretap.core.activity_status as status
 
+_WITH_ZERO_STATUS = "__wiretap_with_zero_status__"
 
-@dataclass  # (frozen=True)
+
+def with_zero_status[A: type](activity_type: A) -> A:
+    setattr(activity_type, _WITH_ZERO_STATUS, True)
+    return activity_type
+
+
+def has_zero_status(activity: object) -> bool:
+    return bool(getattr(type(activity), _WITH_ZERO_STATUS, False))
+
+
+@dataclass
 class Buzz(Activity):
-    must_log_zero: ClassVar[bool] = False
-    can_log_void: ClassVar[bool] = False
+    # must_log_zero: ClassVar[bool] = False
+    pass
 
 
-@dataclass  # (frozen=True)
+@dataclass
 class Snap(Activity):
     pass
 
@@ -20,7 +31,13 @@ class Snap(Activity):
 @dataclass
 class PrototypeBuzz(Buzz):
     """
-    A prototype buzz activity for testing and development purposes.
+    A buzz activity for sketching telemetry before a dedicated contract exists.
+
+    Prototype activities are useful while exploring what an operation should
+    report. They let callers choose an activity name, optional message, and
+    arbitrary state items without defining a custom activity/status type first.
+    Once the telemetry shape is understood, the prototype can be replaced by a
+    named Buzz contract with explicit fields and statuses.
     """
     tags = ["prototype-buzz"]
 
@@ -42,6 +59,10 @@ class PrototypeBuzz(Buzz):
 
     @dataclass
     class Void(status.Void["PrototypeBuzz"]):
+        """
+        Prototype final status for a buzz whose outcome is intentionally unknown.
+        """
+
         def __init__(self, message: str | None = None, **kwargs: Any) -> None:
             self._message = message
             self._state = kwargs
@@ -55,6 +76,10 @@ class PrototypeBuzz(Buzz):
 
     @dataclass
     class Okay(status.Okay["PrototypeBuzz"]):
+        """
+        Prototype final status for a buzz that completed on an expected path.
+        """
+
         def __init__(self, message: str | None = None, **kwargs: Any) -> None:
             self._message = message
             self._state = kwargs
@@ -68,6 +93,10 @@ class PrototypeBuzz(Buzz):
 
     @dataclass
     class Fail(status.Fail["PrototypeBuzz"]):
+        """
+        Prototype final status for a buzz that failed.
+        """
+
         def __init__(self, message: str | None = None, **kwargs: Any) -> None:
             self._message = message
             self._state = kwargs
@@ -83,7 +112,12 @@ class PrototypeBuzz(Buzz):
 @dataclass
 class PrototypeSnap(Snap):
     """
-    A prototype snap activity for testing and development purposes.
+    A snap activity for sketching instantaneous telemetry events.
+
+    Prototype snaps are the lightweight counterpart to PrototypeBuzz. They are
+    intended for early telemetry design, probes, and proof-of-concept usage
+    where defining a dedicated Snap contract would add noise before the event's
+    shape is known.
     """
     tags = ["prototype-snap"]
 
@@ -105,6 +139,10 @@ class PrototypeSnap(Snap):
 
     @dataclass
     class Okay(status.Okay["PrototypeSnap"]):
+        """
+        Prototype status for a snap that records an expected event.
+        """
+
         def __init__(self, message: str | None = None, **kwargs: Any) -> None:
             self._message = message
             self._state = kwargs

@@ -73,7 +73,7 @@ def scenario_document_import():
                     records_saved += 1
                     item.set_status(ValidateRecord.Okay()).log()
 
-            parse.log_status(ParseDocument.Okay(records_parsed=3))
+            # parse.log_status(ParseDocument.Okay(records_parsed=3))
 
         document.log_status(ImportDocument.Okay(records_saved=records_saved))
 
@@ -109,8 +109,8 @@ def scenarios():
 
 
 if __name__ == "__main__":
-    with open(r"..\..\cfg\wiretap.yml", "r") as file:
-        config = yaml.safe_load(file)
-        # config["handlers"]["elastic_file"]["filename"] = rf"c:\temp\elastic-v8.0.0-{datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d')}.log"
-        wiretap.configure(config)
+    wiretap.Configure.Logging.from_yaml(r"..\..\cfg\wiretap.yml")
     scenarios()
+    # wiretap.util.activity_scope
+    #wiretap.util.activity_scope.ActivityScope.compose_message = None
+

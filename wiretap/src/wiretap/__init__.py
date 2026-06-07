@@ -1,7 +1,7 @@
-from .util.logging.configuration import configure
 from .core import begin_buzz, log_status
-from .core.activity import Buzz, PrototypeBuzz, PrototypeSnap, Snap
-from .core.activity_status import Fail, Noop, Okay, Void, Zero
+from .core.configure import Configure
+from .core.activity import Buzz, PrototypeBuzz, PrototypeSnap, Snap, with_zero_status
+from .core.activity_status import Zero, Noop, Okay, Fail
 from .core.annotations import FeedToMessagePart, FeedToStateItem
 from .util.activity import ActivityStatus
 from .util.activity_feed import PushItem
@@ -12,16 +12,16 @@ __all__ = [
     "Buzz",
     "Snap",
     "ActivityStatus",
-    "Void",
+    "Zero",
     "Noop",
     "Okay",
     "Fail",
-    "Zero",
     "PrototypeBuzz",
     "PrototypeSnap",
-    "configure",
+    "Configure",
     "FeedToStateItem",
     "FeedToMessagePart",
     "PushItem",
-    "log_status"
+    "log_status",
+    "with_zero_status",
 ]

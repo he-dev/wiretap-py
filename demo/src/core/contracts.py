@@ -5,6 +5,7 @@ import wiretap
 
 
 class Workflow:
+    @wiretap.with_zero_status
     @dataclass
     class ExecuteStep(wiretap.Buzz):
         step_index: Annotated[int, wiretap.FeedToStateItem(cascade=True)]
@@ -34,9 +35,6 @@ class DeleteFile(wiretap.Snap):
 
 @dataclass
 class DeleteFiles(wiretap.Buzz):
-    # core: Allows the framework-emitted Void status to become an information log.
-    can_log_void = True
-
     @dataclass
     class Okay(wiretap.Okay["DeleteFiles"]):
         pass
@@ -46,7 +44,7 @@ class DeleteFiles(wiretap.Buzz):
         pass
 
     @dataclass
-    class Void(wiretap.Void["DeleteFiles"]):
+    class Void(wiretap.Noop["DeleteFiles"]):
         pass
 
 
@@ -66,6 +64,7 @@ class DeleteFileItem(wiretap.Buzz):
         pass
 
 
+@wiretap.with_zero_status
 @dataclass
 class ImportDocument(wiretap.Buzz):
     tags = ["import"]
@@ -90,7 +89,7 @@ class ImportDocument(wiretap.Buzz):
         pass
 
     @dataclass
-    class Void(wiretap.Void["ImportDocument"]):
+    class Void(wiretap.Noop["ImportDocument"]):
         # core: Uses the inherited Void.reason contract; this status exists to show a permitted inconclusive import.
         pass
 
@@ -151,8 +150,6 @@ class DownloadFile(wiretap.Buzz):
 @dataclass
 class ParseDocument(wiretap.Buzz):
     tags = ["parse"]
-    # core: ParseDocument may legitimately emit Void when the document has no parseable records.
-    can_log_void = True
     document_type: Annotated[str, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Type")]
 
     @dataclass
@@ -164,7 +161,7 @@ class ParseDocument(wiretap.Buzz):
         pass
 
     @dataclass
-    class Void(wiretap.Void["ParseDocument"]):
+    class Void(wiretap.Noop["ParseDocument"]):
         # core: Keeps the inherited reason as the canonical explanation.
         pass
 

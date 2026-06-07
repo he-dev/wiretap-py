@@ -32,7 +32,7 @@ class Zero[A: Activity](ActivityStatus[A]):
 
 @dataclass  # (frozen=True)
 class Void[A: Activity](ActivityStatus[A]):
-    level: ClassVar[int] = logging.DEBUG
+    level: ClassVar[int] = logging.WARNING
     reason: Annotated[str, FeedToStateItem(), FeedToMessagePart()]
 
 

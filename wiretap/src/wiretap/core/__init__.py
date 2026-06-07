@@ -1,4 +1,7 @@
+import pathlib
 from typing import Any
+
+import yaml
 
 from .activity import Buzz, PrototypeBuzz, PrototypeSnap, Snap
 from .activity_status import Fail, Noop, Okay, Void, Zero
@@ -11,10 +14,10 @@ def begin_buzz(activity: Buzz, trace_id: Any | None = None, frame_offset: int = 
     return _begin_buzz(activity, trace_id, frame_offset, with_caller_info)
 
 
-def log_status(snap: Snap, flag, trace_id: Any | None = None) -> None:
+def log_status(snap: Snap, status, trace_id: Any | None = None) -> None:
     from wiretap.util.activity_scope import log_status as _log_status
 
-    _log_status(snap, flag, trace_id)
+    _log_status(snap, status, trace_id)
 
 
 __all__ = [

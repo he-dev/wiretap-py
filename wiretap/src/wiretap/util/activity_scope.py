@@ -7,7 +7,7 @@ from contextvars import ContextVar  # noqa: built-in module
 from itertools import islice
 from typing import Any, Callable, ClassVar, Iterator
 
-from wiretap.core.activity import Buzz, Snap
+from wiretap.core.activity import Buzz, Snap, has_zero_status
 from wiretap.core.activity_status import Fail, Noop, Void, Zero
 from wiretap.meta.caller import Caller
 from wiretap.util.activity import Activity, ActivityStatus, LastStatusCount
@@ -149,20 +149,16 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
 
         # core: Buzz lifecycle flags can promote automatic lifecycle statuses to core logs.
         match status:
-            case Zero():
-                if self._activity.must_log_zero:
-                    return logging.INFO
-            case Void():
-                if self._activity.can_log_void:
-                    return logging.INFO
+            case Zero() if has_zero_status(self._activity):
+                return logging.INFO
 
         return super().get_status_level_or_default(status)
 
-    def begin_item[B: Buzz](self, activity: B, frame_offset: int = 0) -> BuzzItemScope[B]:
+    def begin_item[B: Buzz](self, activity: B, frame_offset: int = 0) -> ItemScope[B]:
         # core: Begins one item inside this buzz summary.
         if not isinstance(activity, Buzz):
             raise TypeError(f"{type(activity).__qualname__} cannot begin as a batch item because it is not a Buzz activity.")
-        return BuzzItemScope(activity, self._buzz_batch, Caller.from_current_frame(frame_offset + 1))
+        return ItemScope(activity, self._buzz_batch, Caller.from_current_frame(frame_offset + 1))
 
     def __enter__(self) -> BuzzScope[A]:
         self._scope = self.push()
@@ -195,7 +191,7 @@ class SnapScope[A: Snap](ActivityScope[A]):
         self._scope.__exit__(exc_type, exc, tb)
 
 
-class BuzzItemStatus[A: Buzz]:
+class ItemStatus[A: Buzz]:
     def __init__(self, log: Callable[[], None]) -> None:
         self._log = log
 
@@ -203,25 +199,25 @@ class BuzzItemStatus[A: Buzz]:
         self._log()
 
 
-class BuzzItemScope[A: Buzz](BuzzScope[A]):
+class ItemScope[A: Buzz](BuzzScope[A]):
     def __init__(self, activity: A, batch: BuzzBatch, caller: Caller | None = None) -> None:
         super().__init__(activity, None, caller)
         self._parent_batch = batch
         self._status: ActivityStatus[A] | None = None
 
-    def set_status(self, status: ActivityStatus[A]) -> BuzzItemStatus[A]:
+    def set_status(self, status: ActivityStatus[A]) -> ItemStatus[A]:
         # util: Adapts log_status, which returns the scope, into a terminal status action.
         def log() -> None:
             self.log_status(status)
 
-        return BuzzItemStatus(log)
+        return ItemStatus(log)
 
-    def log_status(self, status: ActivityStatus[A]) -> BuzzItemScope[A]:
+    def log_status(self, status: ActivityStatus[A]) -> ItemScope[A]:
         self._status = status
         super().log_status(status)
         return self
 
-    def __enter__(self) -> BuzzItemScope[A]:
+    def __enter__(self) -> ItemScope[A]:
         super().__enter__()
         return self
 
@@ -240,6 +236,6 @@ def begin_buzz[A: Buzz](activity: A, trace_id: Any | None = None, frame_offset: 
     return BuzzScope(activity, trace_id, caller)
 
 
-def log_status[A: Snap](snap: A, flag: ActivityStatus[A], trace_id: Any | None = None) -> None:
-    with SnapScope(snap, trace_id, Caller.from_current_frame(2)) as scope:
-        scope.log_status(flag)
+def log_status[A: Snap](activity: A, status: ActivityStatus[A], trace_id: Any | None = None) -> None:
+    with SnapScope(activity, trace_id, Caller.from_current_frame(2)) as scope:
+        scope.log_status(status)
