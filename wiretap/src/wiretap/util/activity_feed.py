@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass
 from functools import cache
 from typing import Any, Protocol, runtime_checkable
 
@@ -8,7 +9,11 @@ from wiretap.meta.annotations import _annotated_fields
 # util: Internal logger.
 _logger = logging.getLogger("wiretap")
 
-type PushItemOptions = dict[str, Any]
+
+@dataclass(frozen=True)
+class PushItemOptions:
+    label: bool = True
+    separator: str | None = ": "
 
 
 class PushItem(Protocol):

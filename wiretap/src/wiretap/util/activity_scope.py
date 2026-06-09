@@ -12,7 +12,7 @@ from wiretap.core.activity_status import Fail, Noop, Ready, Void
 from wiretap.meta.caller import Caller
 from wiretap.util.activity_status import Activity, ActivityStatus
 from wiretap.util.activity_batch import BuzzBatch
-from wiretap.util.activity_feed import PushItem, get_state_items, get_state_items_cascading
+from wiretap.util.activity_feed import PushItem, PushItemOptions, get_state_items, get_state_items_cascading
 from wiretap.util.activity_message import ComposeMessage, ComposeMessageByAppending
 from wiretap.util.path_of import PathOf
 from wiretap.util.stopwatch import Stopwatch
@@ -63,7 +63,9 @@ class ActivityScope[A: Activity]:
         return self._log(status)
 
     def message_parts(self, push: PushItem) -> None:
-        push("{activity[name]}", "[{activity[status][code]}]", {"separator": None})
+        # push("{activity[name]}", "[{activity[status][code]}:{activity[status][role]}]", PushItemOptions(separator=None))
+        push("{activity[name]}", "[{activity[status][code]}:{activity[status][role]}]", PushItemOptions(separator=None))
+        # push("{activity[name]}", "{activity[status][code]} ({activity[status][role]})", PushItemOptions())
 
     def _log(self, status: ActivityStatus[A], status_role: str | None = None) -> ActivityScope[A]:
 
@@ -155,6 +157,7 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
                 else:
                     self._last_status_queue.append(Void(reason="Last status not specified and automatically logged."))
 
+            # core: Log the last statuses and zombify all but the last one.
             last_index = len(self._last_status_queue) - 1
             for index, status in enumerate(self._last_status_queue):
                 self._log(status, None if index == last_index else "zombie")

@@ -76,6 +76,8 @@ def scenario_document_import():
             # parse.log_status(ParseDocument.Okay(records_parsed=3))
 
         document.log_status(ImportDocument.Okay(records_saved=records_saved))
+        # case: Logs another last status so the demo shows role=zombie for the superseded okay status.
+        document.log_status(ImportDocument.Fail(exception=RuntimeError("Late import failure discovered after summary.")))
 
 
 def scenario_lifecycle_variants():
@@ -113,4 +115,3 @@ if __name__ == "__main__":
     scenarios()
     # wiretap.util.activity_scope
     #wiretap.util.activity_scope.ActivityScope.compose_message = None
-

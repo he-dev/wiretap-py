@@ -20,15 +20,12 @@ class ComposeMessageByAppending(ComposeMessage):
             if value is None:
                 return
             text = str(value)
-            options = options or {}
-            if options.get("label", True) is False:
+            options = options or PushItemOptions()
+            if not options.label:
                 parts.append(text)
                 return
 
-            separator = options.get("separator", ": ")
-            if separator is None:
-                separator = ""
-            parts.append(f"{label}{separator}{text}")
+            parts.append(f"{label}{options.separator or ""}{text}")
 
         for feed in feeds:
             get_message_parts(feed, append)

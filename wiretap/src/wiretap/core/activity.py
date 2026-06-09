@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Any, ClassVar
 
 from wiretap.util.activity import Activity
-from wiretap.util.activity_feed import PushItem
+from wiretap.util.activity_feed import PushItem, PushItemOptions
 import wiretap.core.activity_status as status
 
 _WITH_ZERO_STATUS = "__wiretap_with_zero_status__"
@@ -55,7 +55,7 @@ class PrototypeBuzz(Buzz):
             push(key, value)
 
     def message_parts(self, push: PushItem) -> None:
-        push("Message", self._message, {"label": False})
+        push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
     class Void(status.Void["PrototypeBuzz"]):
@@ -72,7 +72,7 @@ class PrototypeBuzz(Buzz):
                 push(key, value)
 
         def message_parts(self, push: PushItem) -> None:
-            push("Message", self._message, {"label": False})
+            push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
     class Okay(status.Okay["PrototypeBuzz"]):
@@ -89,7 +89,7 @@ class PrototypeBuzz(Buzz):
                 push(key, value)
 
         def message_parts(self, push: PushItem) -> None:
-            push("Message", self._message, {"label": False})
+            push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
     class Fail(status.Fail["PrototypeBuzz"]):
@@ -106,7 +106,7 @@ class PrototypeBuzz(Buzz):
                 push(key, value)
 
         def message_parts(self, push: PushItem) -> None:
-            push("Message", self._message, {"label": False})
+            push("Message", self._message, PushItemOptions(label=False))
 
 
 @dataclass
@@ -135,7 +135,7 @@ class PrototypeSnap(Snap):
             push(key, value)
 
     def message_parts(self, push: PushItem) -> None:
-        push("Message", self._message, {"label": False})
+        push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
     class Okay(status.Okay["PrototypeSnap"]):
@@ -152,4 +152,4 @@ class PrototypeSnap(Snap):
                 push(key, value)
 
         def message_parts(self, push: PushItem) -> None:
-            push("Message", self._message, {"label": False})
+            push("Message", self._message, PushItemOptions(label=False))
