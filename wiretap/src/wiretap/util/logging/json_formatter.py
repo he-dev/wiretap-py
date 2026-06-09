@@ -53,6 +53,6 @@ class JSONFormatter(logging.Formatter):
 
         # core: Plain logs inside an activity inherit the nearest active scope.
         if scope := ActivityScope.current():
-            return scope.to_extra(status=None, state=None)
+            return scope.to_dict(status=None, state=None)
 
         return None

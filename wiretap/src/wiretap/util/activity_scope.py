@@ -7,10 +7,10 @@ from contextvars import ContextVar  # noqa: built-in module
 from itertools import islice
 from typing import Any, Callable, ClassVar, Iterator
 
-from wiretap.core.activity import Buzz, Snap, has_zero_status
-from wiretap.core.activity_status import Fail, Noop, Void, Zero
+from wiretap.core.activity import Buzz, Snap
+from wiretap.core.activity_status import Fail, Noop, Ready, Void
 from wiretap.meta.caller import Caller
-from wiretap.util.activity import Activity, ActivityStatus, LastStatusCount
+from wiretap.util.activity_status import Activity, ActivityStatus
 from wiretap.util.activity_batch import BuzzBatch
 from wiretap.util.activity_feed import PushItem, get_state_items, get_state_items_cascading
 from wiretap.util.activity_message import ComposeMessage, ComposeMessageByAppending
@@ -43,7 +43,7 @@ class ActivityScope[A: Activity]:
     def depth(self) -> int:
         return self.parent.depth + 1 if self.parent else 0
 
-    def to_extra(self, status: str | None, state: dict[str, Any] | None) -> dict[str, Any]:
+    def to_dict(self, status: dict[str, Any] | None, state: dict[str, Any] | None) -> dict[str, Any]:
         return {
             "trace_id": self.trace_id,
             "span_id": self.scope_id,
@@ -52,7 +52,7 @@ class ActivityScope[A: Activity]:
                 "name": self._activity.name,
                 "path": PathOf(reversed(list(self)), lambda a: a._activity.name),
                 "depth": self.depth,
-                "status": status.lower() if status else None,
+                "status": status,
                 "tags": self._activity.tags
             },
             "state": state,
@@ -63,9 +63,9 @@ class ActivityScope[A: Activity]:
         return self._log(status)
 
     def message_parts(self, push: PushItem) -> None:
-        push("{activity[name]}", "[{activity[status]}]", {"separator": None})
+        push("{activity[name]}", "[{activity[status][code]}]", {"separator": None})
 
-    def _log(self, status: ActivityStatus[A]) -> ActivityScope[A]:
+    def _log(self, status: ActivityStatus[A], status_role: str | None = None) -> ActivityScope[A]:
 
         state: dict[str, Any] = {}
 
@@ -85,17 +85,11 @@ class ActivityScope[A: Activity]:
         for feed in feeds:
             get_state_items(feed, set_state_item)
 
-        extra: dict[str, Any] = self.to_extra(status.code, state)
+        extra: dict[str, Any] = self.to_dict(status.to_dict(status_role), state)
 
         message = self.compose_message(extra, *feeds)
-        status_level = self.get_status_level_or_default(status)
-
-        self._logger.log(status_level, message, extra={"wiretap": extra})
+        self._logger.log(status.level, message, extra={"wiretap": extra})
         return self
-
-    def get_status_level_or_default(self, status: ActivityStatus[A]) -> int:
-        # util: Concrete scopes can adjust lifecycle statuses without a global resolver.
-        return status.level
 
     @classmethod
     def current(cls) -> ActivityScope[Any] | None:
@@ -121,11 +115,11 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
     def __init__(self, activity: A, trace_id: Any | None, caller: Caller | None = None) -> None:
         super().__init__(activity, trace_id, caller)
         self.stopwatch: Stopwatch = Stopwatch()
-        self._last_status = LastStatusCount()
+        self._last_status_queue: list[ActivityStatus[A]] = []
         self._buzz_batch = BuzzBatch()
 
-    def to_extra(self, status: str | None, state: dict[str, Any] | None) -> dict[str, Any]:
-        extra = super().to_extra(status, state)
+    def to_dict(self, status: dict[str, Any] | None, state: dict[str, Any] | None) -> dict[str, Any]:
+        extra = super().to_dict(status, state)
         extra["activity"]["duration_ms"] = self.stopwatch.elapsed_ms
         return extra
 
@@ -138,21 +132,8 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
         self._buzz_batch.message_parts(push)
 
     def log_status(self, status: ActivityStatus[A]) -> ActivityScope[A]:
-        self._last_status.increment()
-        return super().log_status(status)
-
-    def get_status_level_or_default(self, status: ActivityStatus[A]) -> int:
-        # core: Special overflow handling for the last status.
-        if self._last_status.overflows:
-            _logger.warning(f"Last status logged {self._last_status.value} times. This is a bug.")
-            return logging.DEBUG
-
-        # core: Buzz lifecycle flags can promote automatic lifecycle statuses to core logs.
-        match status:
-            case Zero() if has_zero_status(self._activity):
-                return logging.INFO
-
-        return super().get_status_level_or_default(status)
+        self._last_status_queue.append(status)
+        return self
 
     def begin_item[B: Buzz](self, activity: B, frame_offset: int = 0) -> ItemScope[B]:
         # core: Begins one item inside this buzz summary.
@@ -163,16 +144,20 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
     def __enter__(self) -> BuzzScope[A]:
         self._scope = self.push()
         self._scope.__enter__()
-        self._log(Zero())
+        self._log(Ready())
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
         try:
-            if self._last_status.is_zero:
+            if not self._last_status_queue:
                 if exc_type is not None:
-                    self.log_status(Fail(exception=exc))
+                    self._last_status_queue.append(Fail(exception=exc))
                 else:
-                    self.log_status(Void(reason="Last status not specified and automatically logged."))
+                    self._last_status_queue.append(Void(reason="Last status not specified and automatically logged."))
+
+            last_index = len(self._last_status_queue) - 1
+            for index, status in enumerate(self._last_status_queue):
+                self._log(status, None if index == last_index else "zombie")
         finally:
             self._scope.__exit__(exc_type, exc, tb)
 

@@ -4,7 +4,7 @@ from typing import Any
 import yaml
 
 from .activity import Buzz, PrototypeBuzz, PrototypeSnap, Snap
-from .activity_status import Fail, Noop, Okay, Void, Zero
+from .activity_status import Fail, Noop, Okay, Ready, Void
 from .annotations import FeedToMessagePart, FeedToStateItem
 
 
@@ -29,7 +29,7 @@ __all__ = [
     "PrototypeSnap",
     "Okay",
     "Fail",
-    "Zero",
+    "Ready",
     "Void",
     "Noop",
     "FeedToStateItem",

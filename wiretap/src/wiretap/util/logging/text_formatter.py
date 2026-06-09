@@ -17,7 +17,7 @@ class TextFormatter(logging.Formatter):
         if not scope:
             # core: Try native logging record inside a wiretap's activity'.
             if activity := ActivityScope.current():
-                scope = activity.to_extra(None, None)
+                scope = activity.to_dict(None, None)
 
         # note: There is a scope!
         if scope:

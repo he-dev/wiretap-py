@@ -1,6 +1,6 @@
 from typing import Any
 
-from wiretap.util.activity import ActivityStatus
+from wiretap.util.activity_status import ActivityStatus
 from wiretap.util.activity_feed import PushItem
 
 
