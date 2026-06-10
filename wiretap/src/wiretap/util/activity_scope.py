@@ -63,7 +63,6 @@ class ActivityScope[A: Activity]:
         push("{activity[name]}", "[{activity[status][code]}]", PushItemOptions(separator=None))
 
     def _log(self, status: ActivityStatus[A]) -> ActivityScope[A]:
-
         state: dict[str, Any] = {}
 
         def set_state_item(key: str, value: Any, options: PushItemOptions | None = None) -> None:
@@ -112,13 +111,22 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
     def __init__(self, activity: A, trace_id: Any | None, caller: Caller | None = None) -> None:
         super().__init__(activity, trace_id, caller)
         self.stopwatch: Stopwatch = Stopwatch()
-        self._last_status: ActivityStatus[A] | None = None
+        self._last_status: tuple[ActivityStatus[A], int] | None = None
+        self._duration_ms: int | None = None
         self._buzz_batch = BuzzBatch()
 
     def to_dict(self, status: dict[str, Any] | None, state: dict[str, Any] | None) -> dict[str, Any]:
         extra = super().to_dict(status, state)
-        extra["activity"]["duration_ms"] = self.stopwatch.elapsed_ms
+        extra["activity"]["duration_ms"] = self._duration_ms if self._duration_ms is not None else self.stopwatch.elapsed_ms
         return extra
+
+    def _log(self, status: ActivityStatus[A], duration_ms: int | None = None) -> BuzzScope[A]:
+        self._duration_ms = duration_ms
+        try:
+            super()._log(status)
+            return self
+        finally:
+            self._duration_ms = None
 
     def state_items(self, push: PushItem) -> None:
         self._buzz_batch.state_items(push)
@@ -134,11 +142,11 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
             _logger.warning(
                 "%s status changed from [%s] to [%s] before scope exit.",
                 self._activity.name,
-                self._last_status.code.lower(),
+                self._last_status[0].code.lower(),
                 status.code.lower(),
                 extra={"wiretap": extra},
             )
-        self._last_status = status
+        self._last_status = (status, self.stopwatch.elapsed_ms)
         return self
 
     def begin_item[B: Buzz](self, activity: B, frame_offset: int = 0) -> ItemScope[B]:
@@ -157,11 +165,12 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
         try:
             if self._last_status is None:
                 if exc_type is not None:
-                    self._last_status = Fail(exception=exc)
+                    self._log(Fail(exception=exc))
                 else:
-                    self._last_status = Void(reason="Last status not specified and automatically logged.")
-
-            self._log(self._last_status)
+                    self._log(Void(reason="Last status not specified and automatically logged."))
+            else:
+                status, duration_ms = self._last_status
+                self._log(status, duration_ms)
         finally:
             self._scope.__exit__(exc_type, exc, tb)
 
