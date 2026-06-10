@@ -5,7 +5,7 @@ import secrets
 from contextlib import contextmanager
 from contextvars import ContextVar  # noqa: built-in module
 from itertools import islice
-from typing import Any, Callable, ClassVar, Iterator
+from typing import Any, ClassVar, Iterator
 
 from wiretap.core.activity import Buzz, Snap
 from wiretap.core.activity_status import Fail, Noop, Ready, Void
@@ -59,19 +59,14 @@ class ActivityScope[A: Activity]:
             "source": self.caller.to_dict() if self.caller else None,
         }
 
-    def log_status(self, status: ActivityStatus[A]) -> ActivityScope[A]:
-        return self._log(status)
-
     def message_parts(self, push: PushItem) -> None:
-        # push("{activity[name]}", "[{activity[status][code]}:{activity[status][role]}]", PushItemOptions(separator=None))
-        push("{activity[name]}", "[{activity[status][code]}:{activity[status][role]}]", PushItemOptions(separator=None))
-        # push("{activity[name]}", "{activity[status][code]} ({activity[status][role]})", PushItemOptions())
+        push("{activity[name]}", "[{activity[status][code]}]", PushItemOptions(separator=None))
 
-    def _log(self, status: ActivityStatus[A], status_role: str | None = None) -> ActivityScope[A]:
+    def _log(self, status: ActivityStatus[A]) -> ActivityScope[A]:
 
         state: dict[str, Any] = {}
 
-        def set_state_item(key: str, value: Any, options: dict[str, Any] | None = None) -> None:
+        def set_state_item(key: str, value: Any, options: PushItemOptions | None = None) -> None:
             if value is not None:
                 state[key] = value
 
@@ -87,7 +82,7 @@ class ActivityScope[A: Activity]:
         for feed in feeds:
             get_state_items(feed, set_state_item)
 
-        extra: dict[str, Any] = self.to_dict(status.to_dict(status_role), state)
+        extra: dict[str, Any] = self.to_dict(status.to_dict(), state)
 
         message = self.compose_message(extra, *feeds)
         self._logger.log(status.level, message, extra={"wiretap": extra})
@@ -117,7 +112,7 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
     def __init__(self, activity: A, trace_id: Any | None, caller: Caller | None = None) -> None:
         super().__init__(activity, trace_id, caller)
         self.stopwatch: Stopwatch = Stopwatch()
-        self._last_status_queue: list[ActivityStatus[A]] = []
+        self._last_status: ActivityStatus[A] | None = None
         self._buzz_batch = BuzzBatch()
 
     def to_dict(self, status: dict[str, Any] | None, state: dict[str, Any] | None) -> dict[str, Any]:
@@ -133,8 +128,17 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
         push("Duration", "{activity[duration_ms]} ms")
         self._buzz_batch.message_parts(push)
 
-    def log_status(self, status: ActivityStatus[A]) -> ActivityScope[A]:
-        self._last_status_queue.append(status)
+    def set_status(self, status: ActivityStatus[A]) -> ActivityScope[A]:
+        if self._last_status is not None:
+            extra = self.to_dict(status.to_dict(), None)
+            _logger.warning(
+                "%s status changed from [%s] to [%s] before scope exit.",
+                self._activity.name,
+                self._last_status.code.lower(),
+                status.code.lower(),
+                extra={"wiretap": extra},
+            )
+        self._last_status = status
         return self
 
     def begin_item[B: Buzz](self, activity: B, frame_offset: int = 0) -> ItemScope[B]:
@@ -151,21 +155,22 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
 
     def __exit__(self, exc_type, exc, tb) -> None:
         try:
-            if not self._last_status_queue:
+            if self._last_status is None:
                 if exc_type is not None:
-                    self._last_status_queue.append(Fail(exception=exc))
+                    self._last_status = Fail(exception=exc)
                 else:
-                    self._last_status_queue.append(Void(reason="Last status not specified and automatically logged."))
+                    self._last_status = Void(reason="Last status not specified and automatically logged.")
 
-            # core: Log the last statuses and zombify all but the last one.
-            last_index = len(self._last_status_queue) - 1
-            for index, status in enumerate(self._last_status_queue):
-                self._log(status, None if index == last_index else "zombie")
+            self._log(self._last_status)
         finally:
             self._scope.__exit__(exc_type, exc, tb)
 
 
 class SnapScope[A: Snap](ActivityScope[A]):
+    def log_status(self, status: ActivityStatus[A]) -> SnapScope[A]:
+        self._log(status)
+        return self
+
     def message_parts(self, push: PushItem) -> None:
         super().message_parts(push)
         push("Duration", "N/A")
@@ -179,30 +184,15 @@ class SnapScope[A: Snap](ActivityScope[A]):
         self._scope.__exit__(exc_type, exc, tb)
 
 
-class ItemStatus[A: Buzz]:
-    def __init__(self, log: Callable[[], None]) -> None:
-        self._log = log
-
-    def log(self) -> None:
-        self._log()
-
-
 class ItemScope[A: Buzz](BuzzScope[A]):
     def __init__(self, activity: A, batch: BuzzBatch, caller: Caller | None = None) -> None:
         super().__init__(activity, None, caller)
         self._parent_batch = batch
         self._status: ActivityStatus[A] | None = None
 
-    def set_status(self, status: ActivityStatus[A]) -> ItemStatus[A]:
-        # util: Adapts log_status, which returns the scope, into a terminal status action.
-        def log() -> None:
-            self.log_status(status)
-
-        return ItemStatus(log)
-
-    def log_status(self, status: ActivityStatus[A]) -> ItemScope[A]:
+    def set_status(self, status: ActivityStatus[A]) -> ItemScope[A]:
         self._status = status
-        super().log_status(status)
+        super().set_status(status)
         return self
 
     def __enter__(self) -> ItemScope[A]:
@@ -224,6 +214,6 @@ def begin_buzz[A: Buzz](activity: A, trace_id: Any | None = None, frame_offset: 
     return BuzzScope(activity, trace_id, caller)
 
 
-def log_status[A: Snap](activity: A, status: ActivityStatus[A], trace_id: Any | None = None) -> None:
+def log_snap[A: Snap](activity: A, status: ActivityStatus[A], trace_id: Any | None = None) -> None:
     with SnapScope(activity, trace_id, Caller.from_current_frame(2)) as scope:
         scope.log_status(status)

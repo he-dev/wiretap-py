@@ -29,17 +29,15 @@ class Snap(Activity):
 
 
 @dataclass
-class PrototypeBuzz(Buzz):
+class QuickBuzz(Buzz):
     """
-    A buzz activity for sketching telemetry before a dedicated contract exists.
+    A low-ceremony buzz activity for runtime-shaped telemetry.
 
-    Prototype activities are useful while exploring what an operation should
-    report. They let callers choose an activity name, optional message, and
-    arbitrary state items without defining a custom activity/status type first.
-    Once the telemetry shape is understood, the prototype can be replaced by a
-    named Buzz contract with explicit fields and statuses.
+    Quick activities are soft contracts. They let callers choose an activity
+    name, optional message, and arbitrary state items without defining a hard
+    activity/status contract first.
     """
-    tags = ["prototype-buzz"]
+    tags = ["quick-buzz"]
 
     def __init__(self, name: str, message: str | None = None, **kwargs: Any) -> None:
         self._name = name
@@ -58,26 +56,9 @@ class PrototypeBuzz(Buzz):
         push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
-    class Void(status.Void["PrototypeBuzz"]):
+    class Void(status.Void["QuickBuzz"]):
         """
-        Prototype final status for a buzz whose outcome is intentionally unknown.
-        """
-
-        def __init__(self, message: str | None = None, **kwargs: Any) -> None:
-            self._message = message
-            self._state = kwargs
-
-        def state_items(self, push: PushItem) -> None:
-            for key, value in self._state.items():
-                push(key, value)
-
-        def message_parts(self, push: PushItem) -> None:
-            push("Message", self._message, PushItemOptions(label=False))
-
-    @dataclass
-    class Okay(status.Okay["PrototypeBuzz"]):
-        """
-        Prototype final status for a buzz that completed on an expected path.
+        Quick final status for a buzz whose outcome is intentionally unknown.
         """
 
         def __init__(self, message: str | None = None, **kwargs: Any) -> None:
@@ -92,9 +73,26 @@ class PrototypeBuzz(Buzz):
             push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
-    class Fail(status.Fail["PrototypeBuzz"]):
+    class Okay(status.Okay["QuickBuzz"]):
         """
-        Prototype final status for a buzz that failed.
+        Quick final status for a buzz that completed on an expected path.
+        """
+
+        def __init__(self, message: str | None = None, **kwargs: Any) -> None:
+            self._message = message
+            self._state = kwargs
+
+        def state_items(self, push: PushItem) -> None:
+            for key, value in self._state.items():
+                push(key, value)
+
+        def message_parts(self, push: PushItem) -> None:
+            push("Message", self._message, PushItemOptions(label=False))
+
+    @dataclass
+    class Fail(status.Fail["QuickBuzz"]):
+        """
+        Quick final status for a buzz that failed.
         """
 
         def __init__(self, message: str | None = None, **kwargs: Any) -> None:
@@ -110,16 +108,15 @@ class PrototypeBuzz(Buzz):
 
 
 @dataclass
-class PrototypeSnap(Snap):
+class QuickSnap(Snap):
     """
-    A snap activity for sketching instantaneous telemetry events.
+    A low-ceremony snap activity for runtime-shaped telemetry.
 
-    Prototype snaps are the lightweight counterpart to PrototypeBuzz. They are
-    intended for early telemetry design, probes, and proof-of-concept usage
-    where defining a dedicated Snap contract would add noise before the event's
-    shape is known.
+    Quick snaps are the instantaneous counterpart to QuickBuzz. They are useful
+    when a dedicated Snap contract would add noise before the event shape is
+    worth naming as a hard contract.
     """
-    tags = ["prototype-snap"]
+    tags = ["quick-snap"]
 
     def __init__(self, name: str, message: str | None = None, **kwargs: Any) -> None:
         self._name = name
@@ -138,9 +135,43 @@ class PrototypeSnap(Snap):
         push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
-    class Okay(status.Okay["PrototypeSnap"]):
+    class Okay(status.Okay["QuickSnap"]):
         """
-        Prototype status for a snap that records an expected event.
+        Quick status for a snap that records an expected event.
+        """
+
+        def __init__(self, message: str | None = None, **kwargs: Any) -> None:
+            self._message = message
+            self._state = kwargs
+
+        def state_items(self, push: PushItem) -> None:
+            for key, value in self._state.items():
+                push(key, value)
+
+        def message_parts(self, push: PushItem) -> None:
+            push("Message", self._message, PushItemOptions(label=False))
+
+    @dataclass
+    class Noop(status.Noop["QuickSnap"]):
+        """
+        Quick status for a snap that intentionally did nothing.
+        """
+
+        def __init__(self, message: str | None = None, **kwargs: Any) -> None:
+            self._message = message
+            self._state = kwargs
+
+        def state_items(self, push: PushItem) -> None:
+            for key, value in self._state.items():
+                push(key, value)
+
+        def message_parts(self, push: PushItem) -> None:
+            push("Message", self._message, PushItemOptions(label=False))
+
+    @dataclass
+    class Fail(status.Fail["QuickSnap"]):
+        """
+        Quick status for a snap that failed.
         """
 
         def __init__(self, message: str | None = None, **kwargs: Any) -> None:

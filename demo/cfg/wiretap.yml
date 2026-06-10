@@ -33,14 +33,27 @@ formatters:
       - (): wiretap.util.logging.AddEnvironmentVariable
         names:
           - OpenJDK_21
+filters:
+  exclude_by_status:
+    (): wiretap.util.logging.ExcludeByStatus
+    enabled: false
+    code_in: [ "ready" ]
+    role_in: [ "first" ]
+  include_by_status:
+    (): wiretap.util.logging.IncludeByStatus
+    enabled: false
+    code_in: [ "ready" ]
+    role_in: [ "first" ]
 handlers:
   console_full:
     class: logging.StreamHandler
     formatter: console_full
+    filters: [ "exclude_by_status", "include_by_status" ]
     #level: INFO
   console_lite:
     class: logging.StreamHandler
     formatter: console_lite
+    filters: [ "exclude_by_status", "include_by_status" ]
     #level: INFO
   console_file:
     class: "logging.handlers.TimedRotatingFileHandler"
@@ -48,11 +61,13 @@ handlers:
     interval: 1
     filename: "c:\\temp\\wiretap_console.log"
     formatter: console_full
+    filters: [ "exclude_by_status", "include_by_status" ]
     #level: TRACE
   elastic_file:
     class: "logging.FileHandler"
     filename: "c:\\temp\\wiretap_elastic.log"
     formatter: elastic_json
+    filters: [ "exclude_by_status", "include_by_status" ]
     #level: DEBUG
 loggers:
   root:

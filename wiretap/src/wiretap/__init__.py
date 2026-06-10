@@ -1,6 +1,6 @@
-from .core import begin_buzz, log_status
+from .core import begin_buzz, log_snap
 from .core.configure import Configure
-from .core.activity import Buzz, PrototypeBuzz, PrototypeSnap, Snap, with_zero_status
+from .core.activity import Buzz, QuickBuzz, QuickSnap, Snap, with_zero_status
 from .core.activity_status import ActivityStatus, Ready, Noop, Okay, Fail
 from .core.annotations import FeedToMessagePart, FeedToStateItem
 from .util.activity_feed import PushItem
@@ -14,12 +14,12 @@ __all__ = [
     "Noop",
     "Okay",
     "Fail",
-    "PrototypeBuzz",
-    "PrototypeSnap",
+    "QuickBuzz",
+    "QuickSnap",
     "Configure",
     "FeedToStateItem",
     "FeedToMessagePart",
     "PushItem",
-    "log_status",
+    "log_snap",
     "with_zero_status",
 ]

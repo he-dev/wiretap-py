@@ -20,8 +20,8 @@ class ActivityStatus[A: Activity]:
                 return cls.__name__
         raise TypeError(f"Activity status code not found because {type(self).__qualname__} does not inherit : must inherit from {ActivityStatus.__qualname__}.")
 
-    def to_dict(self, role: str | None = None) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "code": self.code.lower(),
-            "role": role or self.role,
+            "role": self.role,
         }
