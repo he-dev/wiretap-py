@@ -15,7 +15,7 @@ class _StatusFilter(logging.Filter):
         self._roles = {role.lower() for role in role_in} if role_in else None
 
     def matches(self, record: logging.LogRecord) -> bool:
-        data = getattr(record, "wiretap", {})
+        data = record.__dict__.get("wiretap", {})
         if not data:
             return False
 
