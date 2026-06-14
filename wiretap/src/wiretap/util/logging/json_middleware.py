@@ -77,9 +77,9 @@ class AddTraceContext(JSONMiddleware):
     def __call__(self, context: JSONMiddlewareContext) -> JSONEntry:
         if extra := context.activity_extra:
             return context.entry | {
-                "trace_id": extra["trace_id"],
-                "span_id": extra["span_id"],
-                "parent_id": extra["parent_id"],
+                "trace_id": extra.get("trace_id"),
+                "span_id": extra.get("span_id"),
+                "parent_id": extra.get("parent_id"),
             }
         else:
             return context.entry | {

@@ -7,23 +7,18 @@ from contextvars import ContextVar  # noqa: built-in module
 from itertools import islice
 from typing import Any, Callable, ClassVar, Iterator
 
-from wiretap.core.activity import Bulk, Buzz, Snap, StatusLogPolicy
-from wiretap.core.activity_status import Fail, Ready, Void
 from wiretap.meta.caller import Caller
-from wiretap.util.activity_status import Activity, ActivityStatus
+from wiretap.util.activity import Activity, Bulk, Buzz, Snap, StatusLogPolicy
+from wiretap.util.activity_status import ActivityStatus, Fail, Ready, Void
 from wiretap.util.activity_bulk import BulkMath
 from wiretap.util.activity_feed import PushItem, PushItemOptions, get_state_items, get_state_items_cascading
-from wiretap.util.activity_message import ComposeMessage, ComposeMessageByAppending
+from wiretap.util.configuration import Configuration
 from wiretap.util.path_of import PathOf
 from wiretap.util.stopwatch import Stopwatch
 
-# util: Internal logger.
-_logger = logging.getLogger("wiretap")
-
 
 class ActivityScope[A: Activity]:
-    _stack: ClassVar[ContextVar[ActivityScope[Any] | None]] = ContextVar("current_activity", default=None)
-    compose_message: ClassVar[ComposeMessage] = ComposeMessageByAppending()
+    _stack: ClassVar[ContextVar[ActivityScope[Any] | None]] = ContextVar("wiretap_activity", default=None)
 
     def __init__(self, activity: A, trace_id: Any | None, caller: Caller | None = None) -> None:
         self._activity = activity
@@ -44,10 +39,8 @@ class ActivityScope[A: Activity]:
         return self.parent.depth + 1 if self.parent else 0
 
     def to_dict(self, status: dict[str, Any] | None, state: dict[str, Any] | None) -> dict[str, Any]:
-        return {
-            "trace_id": self.trace_id,
-            "span_id": self.scope_id,
-            "parent_id": self.parent.scope_id if self.parent else None,
+        configuration = Configuration.current()
+        extra = {
             "activity": {
                 "name": self._activity.name,
                 "path": PathOf(reversed(list(self)), lambda a: a._activity.name),
@@ -58,6 +51,15 @@ class ActivityScope[A: Activity]:
             "state": state,
             "source": self.caller.to_dict() if self.caller else None,
         }
+
+        if configuration.attach_trace_context:
+            extra |= {
+                "trace_id": self.trace_id,
+                "span_id": self.scope_id,
+                "parent_id": self.parent.scope_id if self.parent else None,
+            }
+
+        return extra
 
     def message_parts(self, push: PushItem) -> None:
         push("{activity[name]}", "[{activity[status][code]}]", PushItemOptions(separator=None))
@@ -83,7 +85,7 @@ class ActivityScope[A: Activity]:
 
         extra: dict[str, Any] = self.to_dict(status.to_dict(), state)
 
-        message = self.compose_message(extra, *feeds)
+        message = Configuration.current().compose_message(extra, *feeds)
         self._logger.log(status.level, message, extra={"wiretap": extra})
         return self
 
@@ -143,7 +145,7 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
     def set_status(self, status: ActivityStatus[A]) -> ActivityScope[A]:
         if self._last_status is not None:
             extra = self.to_dict(status.to_dict(), None)
-            _logger.warning(
+            Configuration.current().internal_logger.warning(
                 "%s status changed from [%s] to [%s] before scope exit.",
                 self._activity.name,
                 self._last_status[0].code.lower(),
@@ -179,8 +181,8 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
             self._scope.__exit__(exc_type, exc, tb)
 
 
-class BulkScope[I: Buzz, A: Bulk[I]](BuzzScope[A]):
-    def __init__(self, activity: A, trace_id: Any | None, caller: Caller | None = None) -> None:
+class BulkScope[I: Buzz](BuzzScope[Bulk[I]]):
+    def __init__(self, activity: Bulk[I], trace_id: Any | None, caller: Caller | None = None) -> None:
         super().__init__(activity, trace_id, caller)
         self._bulk_math = BulkMath()
 
@@ -228,6 +230,7 @@ class ItemScope[A: Buzz](BuzzScope[A]):
         super().__enter__()
         return self
 
+
 def begin_buzz[A: Buzz](activity: A, trace_id: Any | None = None, frame_offset: int = 0, with_caller_info: bool = True) -> BuzzScope[A]:
     if not isinstance(activity, Buzz):
         raise TypeError(f"{type(activity).__qualname__} cannot begin because it is not a Buzz activity.")
@@ -235,7 +238,7 @@ def begin_buzz[A: Buzz](activity: A, trace_id: Any | None = None, frame_offset: 
     return BuzzScope(activity, trace_id, caller)
 
 
-def begin_bulk[I: Buzz, A: Bulk[I]](activity: A, trace_id: Any | None = None, frame_offset: int = 0, with_caller_info: bool = True) -> BulkScope[I, A]:
+def begin_bulk[I: Buzz](activity: Bulk[I], trace_id: Any | None = None, frame_offset: int = 0, with_caller_info: bool = True) -> BulkScope[I]:
     if not isinstance(activity, Bulk):
         raise TypeError(f"{type(activity).__qualname__} cannot begin as bulk because it is not a Bulk activity.")
     caller = Caller.from_current_frame(frame_offset) if with_caller_info else None

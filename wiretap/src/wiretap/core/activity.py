@@ -1,32 +1,9 @@
 from dataclasses import dataclass
-from enum import Flag, auto
-from typing import Any, ClassVar
+from typing import Any
 
-from wiretap.util.activity import Activity
+from wiretap.util.activity import Bulk, Buzz, Snap, StatusLogPolicy
 from wiretap.util.activity_feed import PushItem, PushItemOptions
 import wiretap.core.activity_status as status
-
-
-class StatusLogPolicy(Flag):
-    NONE = 0
-    FIRST = auto()
-    LAST = auto()
-    BOTH = FIRST | LAST
-
-
-@dataclass
-class Buzz(Activity):
-    pass
-
-
-@dataclass
-class Bulk[I: Buzz](Buzz):
-    item_status_log_policy: ClassVar[StatusLogPolicy] = StatusLogPolicy.BOTH
-
-
-@dataclass
-class Snap(Activity):
-    pass
 
 
 @dataclass
@@ -118,10 +95,17 @@ class QuickBulk(Bulk[QuickBuzz]):
     """
     tags = ["quick-bulk"]
 
-    def __init__(self, name: str, message: str | None = None, **kwargs: Any) -> None:
+    def __init__(
+            self,
+            name: str,
+            message: str | None = None,
+            item_status_log_policy: StatusLogPolicy = StatusLogPolicy.BOTH,
+            **kwargs: Any
+    ) -> None:
         self._name = name
         self._message = message
         self._state = kwargs
+        self.item_status_log_policy = item_status_log_policy
 
     @property
     def name(self) -> str:

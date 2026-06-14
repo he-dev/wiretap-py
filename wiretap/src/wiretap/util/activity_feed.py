@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from functools import cache
 from typing import Any, Protocol, runtime_checkable
 
-from wiretap.core.annotations import FeedToMessagePart, FeedToStateItem
 from wiretap.meta.annotations import _annotated_fields
+from wiretap.util.annotations import FeedToMessagePart, FeedToStateItem
 
 # util: Internal logger.
 _logger = logging.getLogger("wiretap")

@@ -1,8 +1,9 @@
 from typing import Any
 
-from wiretap.core.activity import Bulk, Buzz, QuickBulk, QuickBuzz, QuickSnap, Snap, StatusLogPolicy
+from wiretap.core.activity import QuickBulk, QuickBuzz, QuickSnap
 from wiretap.core.activity_status import Fail, Noop, Okay, Ready, Void
 from wiretap.core.annotations import FeedToMessagePart, FeedToStateItem
+from wiretap.util.activity import Bulk, Buzz, Snap, StatusLogPolicy
 from wiretap.util.activity_status import ActivityStatus
 
 

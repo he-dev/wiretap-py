@@ -25,10 +25,10 @@ class TextFormatter(logging.Formatter):
             record.message = record.getMessage()
             record.activity = scope.get("activity", None)
             record.span = {
-                "trace_id": scope.get("trace_id", None),
-                "span_id": scope.get("span_id", None),
-                "parent_id": scope.get("parent_id", None),
-            }
+                "trace_id": scope.get("trace_id"),
+                "span_id": scope.get("span_id"),
+                "parent_id": scope.get("parent_id"),
+            } if "trace_id" in scope else None
             record.state = scope["state"]
             record.source = scope["source"]
             return super().format(record)

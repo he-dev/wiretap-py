@@ -1,9 +1,11 @@
 from .core import begin_bulk, begin_buzz, log_snap
-from .core.configure import Configure
-from .core.activity import Bulk, Buzz, QuickBulk, QuickBuzz, QuickSnap, Snap, StatusLogPolicy
+from .core.configure import ConfigureLogging
+from .core.activity import QuickBulk, QuickBuzz, QuickSnap
 from .core.activity_status import ActivityStatus, Ready, Noop, Okay, Fail
 from .core.annotations import FeedToMessagePart, FeedToStateItem
+from .util.activity import Bulk, Buzz, Snap, StatusLogPolicy
 from .util.activity_feed import PushItem
+from .util.configuration import Configuration
 
 # core: Star import for convenience.
 __all__ = [
@@ -20,7 +22,8 @@ __all__ = [
     "QuickBuzz",
     "QuickSnap",
     "StatusLogPolicy",
-    "Configure",
+    "Configuration",
+    "ConfigureLogging",
     "FeedToStateItem",
     "FeedToMessagePart",
     "PushItem",
