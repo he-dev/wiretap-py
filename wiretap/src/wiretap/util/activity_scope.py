@@ -11,7 +11,7 @@ from wiretap.core.activity import Buzz, Snap
 from wiretap.core.activity_status import Fail, Noop, Ready, Void
 from wiretap.meta.caller import Caller
 from wiretap.util.activity_status import Activity, ActivityStatus
-from wiretap.util.activity_batch import BuzzBatch
+from wiretap.util.activity_bulk import BulkMath
 from wiretap.util.activity_feed import PushItem, PushItemOptions, get_state_items, get_state_items_cascading
 from wiretap.util.activity_message import ComposeMessage, ComposeMessageByAppending
 from wiretap.util.path_of import PathOf
@@ -113,7 +113,7 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
         self.stopwatch: Stopwatch = Stopwatch()
         self._last_status: tuple[ActivityStatus[A], int] | None = None
         self._duration_ms: int | None = None
-        self._buzz_batch = BuzzBatch()
+        self._bulk_math = BulkMath()
 
     def to_dict(self, status: dict[str, Any] | None, state: dict[str, Any] | None) -> dict[str, Any]:
         extra = super().to_dict(status, state)
@@ -129,12 +129,12 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
             self._duration_ms = None
 
     def state_items(self, push: PushItem) -> None:
-        self._buzz_batch.state_items(push)
+        self._bulk_math.state_items(push)
 
     def message_parts(self, push: PushItem) -> None:
         super().message_parts(push)
         push("Duration", "{activity[duration_ms]} ms")
-        self._buzz_batch.message_parts(push)
+        self._bulk_math.message_parts(push)
 
     def set_status(self, status: ActivityStatus[A]) -> ActivityScope[A]:
         if self._last_status is not None:
@@ -152,8 +152,8 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
     def begin_item[B: Buzz](self, activity: B, frame_offset: int = 0) -> ItemScope[B]:
         # core: Begins one item inside this buzz summary.
         if not isinstance(activity, Buzz):
-            raise TypeError(f"{type(activity).__qualname__} cannot begin as a batch item because it is not a Buzz activity.")
-        return ItemScope(activity, self._buzz_batch, Caller.from_current_frame(frame_offset + 1))
+            raise TypeError(f"{type(activity).__qualname__} cannot begin as a bulk item because it is not a Buzz activity.")
+        return ItemScope(activity, self._bulk_math, Caller.from_current_frame(frame_offset + 1))
 
     def __enter__(self) -> BuzzScope[A]:
         self._scope = self.push()
@@ -194,9 +194,9 @@ class SnapScope[A: Snap](ActivityScope[A]):
 
 
 class ItemScope[A: Buzz](BuzzScope[A]):
-    def __init__(self, activity: A, batch: BuzzBatch, caller: Caller | None = None) -> None:
+    def __init__(self, activity: A, bulk_math: BulkMath, caller: Caller | None = None) -> None:
         super().__init__(activity, None, caller)
-        self._parent_batch = batch
+        self._parent_bulk_math = bulk_math
         self._status: ActivityStatus[A] | None = None
 
     def set_status(self, status: ActivityStatus[A]) -> ItemScope[A]:
@@ -213,7 +213,7 @@ class ItemScope[A: Buzz](BuzzScope[A]):
             super().__exit__(exc_type, exc, tb)
         finally:
             # core: Each buzz item contributes the final status observed by its own buzz lifecycle.
-            self._parent_batch.count(self._status or Noop(), self.stopwatch.elapsed_ms)
+            self._parent_bulk_math.count(self._status or Noop(), self.stopwatch.elapsed_ms)
 
 
 def begin_buzz[A: Buzz](activity: A, trace_id: Any | None = None, frame_offset: int = 0, with_caller_info: bool = True) -> BuzzScope[A]:

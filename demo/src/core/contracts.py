@@ -5,7 +5,6 @@ import wiretap
 
 
 class Workflow:
-    @wiretap.with_zero_status
     @dataclass
     class ExecuteStep(wiretap.Buzz):
         step_index: Annotated[int, wiretap.FeedToStateItem(cascade=True)]
@@ -53,7 +52,7 @@ class DeleteFileItem(wiretap.Buzz):
     tags = ["io"]
     path: Annotated[str, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Path")]
 
-    # core: Batch items are Buzz activities because they have an item duration and contribute to a parent summary.
+    # core: Bulk items are Buzz activities because they have an item duration and contribute to a parent summary.
 
     @dataclass
     class Okay(wiretap.Okay["DeleteFileItem"]):
@@ -64,12 +63,10 @@ class DeleteFileItem(wiretap.Buzz):
         pass
 
 
-@wiretap.with_zero_status
 @dataclass
 class ImportDocument(wiretap.Buzz):
     tags = ["import"]
-    # core: Emits Zero at information level so a long-running import is visible as soon as it starts.
-    must_log_zero = True
+    # core: Emits Ready at information level so a long-running import is visible as soon as it starts.
     source: Annotated[str, wiretap.FeedToStateItem(cascade=True), wiretap.FeedToMessagePart("Source")]
 
     # case: Intentionally shadows FeedToMessagePart to show that explicit feeds win over annotations.
@@ -171,11 +168,11 @@ class ValidateRecord(wiretap.Buzz):
     tags = ["validation"]
     row_index: Annotated[int, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Row")]
 
-    # core: ValidateRecord is a Buzz because it is used as a counted batch item inside ParseDocument.
+    # core: ValidateRecord is a Buzz because it is used as a counted bulk item inside ParseDocument.
 
     @dataclass
     class Okay(wiretap.Okay["ValidateRecord"]):
-        # core: Marker-only status; useful for clean batch counts.
+        # core: Marker-only status; useful for clean bulk counts.
         pass
 
     @dataclass

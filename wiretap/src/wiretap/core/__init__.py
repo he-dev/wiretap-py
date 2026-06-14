@@ -1,9 +1,6 @@
-import pathlib
 from typing import Any
 
-import yaml
-
-from wiretap.core.activity import Buzz, QuickBuzz, QuickSnap, Snap
+from wiretap.core.activity import Buzz, QuickBulk, QuickBuzz, QuickSnap, Snap
 from wiretap.core.activity_status import Fail, Noop, Okay, Ready, Void
 from wiretap.core.annotations import FeedToMessagePart, FeedToStateItem
 from wiretap.util.activity_status import ActivityStatus
@@ -26,6 +23,7 @@ __all__ = [
     "log_snap",
     "Buzz",
     "Snap",
+    "QuickBulk",
     "QuickBuzz",
     "QuickSnap",
     "Okay",

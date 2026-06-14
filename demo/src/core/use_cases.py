@@ -18,17 +18,17 @@ from core.contracts import (
 )
 
 
-def scenario_batch():
+def scenario_bulk():
     logging.info("This is a log message outside of any activity.")
 
-    with wiretap.begin_buzz(DeleteFiles()) as batch:
+    with wiretap.begin_buzz(DeleteFiles()) as bulk:
         for path in [
             "/path/to/one.txt",
             "/path/to/two.txt",
             "/path/to/archive.tmp",
         ]:
             try:
-                with batch.begin_item(DeleteFileItem(path=path)) as item:
+                with bulk.begin_item(DeleteFileItem(path=path)) as item:
                     if path.endswith(".tmp"):
                         raise ValueError("Temporary files are not deleted by this workflow.")
 
@@ -36,7 +36,7 @@ def scenario_batch():
             except Exception as e:
                 pass
 
-        batch.set_status(DeleteFiles.Okay())
+        bulk.set_status(DeleteFiles.Okay())
 
 
 def scenario_scope():
@@ -104,9 +104,16 @@ def scenario_quick_activities():
     wiretap.log_snap(wiretap.QuickSnap(name="CacheLookup", key="customer-004"), wiretap.QuickSnap.Noop(message="No cached record."))
     wiretap.log_snap(wiretap.QuickSnap(name="WebhookSignature"), wiretap.QuickSnap.Fail(message="Invalid signature."))
 
+    with wiretap.begin_buzz(wiretap.QuickBulk(name="QuickImport", source="runtime.csv")) as bulk:
+        for row_index in range(1, 4):
+            with bulk.begin_item(wiretap.QuickBuzz(name="QuickValidateRow", row_index=row_index)) as item:
+                item.set_status(wiretap.QuickBuzz.Okay(message="row accepted"))
+
+        bulk.set_status(wiretap.QuickBulk.Okay(message="quick bulk complete"))
+
 
 def scenarios():
-    #scenario_batch()
+    #scenario_bulk()
     #scenario_scope()
     scenario_document_import()
     #scenario_lifecycle_variants()

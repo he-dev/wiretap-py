@@ -4,8 +4,8 @@ from wiretap.util.activity_status import ActivityStatus
 from wiretap.util.activity_feed import PushItem
 
 
-class BuzzBatch:
-    """Internal accumulator used when a buzz processes repeated items."""
+class BulkMath:
+    """Internal accumulator used when a buzz processes repeated bulk items."""
 
     def __init__(self) -> None:
         self.item_count = 0
@@ -17,7 +17,7 @@ class BuzzBatch:
         self._duration_ms_m2 = 0.0
 
     def count(self, status: ActivityStatus[Any], duration_ms: int) -> None:
-        # core: Each buzz item contributes exactly one outcome to the parent buzz summary.
+        # core: Each bulk item contributes exactly one outcome to the parent buzz summary.
         self.item_count += 1
         code = status.code.lower()
         self._status_counts[code] = self._status_counts.get(code, 0) + 1
@@ -32,7 +32,7 @@ class BuzzBatch:
         self._duration_ms_m2 += delta * delta2
 
     def __bool__(self) -> bool:
-        # core: A batch only contributes telemetry after at least one buzz item was completed.
+        # core: Bulk math only contributes telemetry after at least one item was completed.
         return self.item_count > 0
 
     @property

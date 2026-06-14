@@ -1,25 +1,13 @@
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import Any
 
 from wiretap.util.activity import Activity
 from wiretap.util.activity_feed import PushItem, PushItemOptions
 import wiretap.core.activity_status as status
 
-_WITH_ZERO_STATUS = "__wiretap_with_zero_status__"
-
-
-def with_zero_status[A: type](activity_type: A) -> A:
-    setattr(activity_type, _WITH_ZERO_STATUS, True)
-    return activity_type
-
-
-def has_zero_status(activity: object) -> bool:
-    return bool(getattr(type(activity), _WITH_ZERO_STATUS, False))
-
 
 @dataclass
 class Buzz(Activity):
-    # must_log_zero: ClassVar[bool] = False
     pass
 
 
@@ -93,6 +81,67 @@ class QuickBuzz(Buzz):
     class Fail(status.Fail["QuickBuzz"]):
         """
         Quick final status for a buzz that failed.
+        """
+
+        def __init__(self, message: str | None = None, **kwargs: Any) -> None:
+            self._message = message
+            self._state = kwargs
+
+        def state_items(self, push: PushItem) -> None:
+            for key, value in self._state.items():
+                push(key, value)
+
+        def message_parts(self, push: PushItem) -> None:
+            push("Message", self._message, PushItemOptions(label=False))
+
+
+@dataclass
+class QuickBulk(Buzz):
+    """
+    A low-ceremony buzz activity for counted bulk telemetry.
+
+    Quick bulk activities are soft contracts for loops and repeated work where
+    the parent summary matters more than a dedicated hard contract.
+    """
+    tags = ["quick-bulk"]
+
+    def __init__(self, name: str, message: str | None = None, **kwargs: Any) -> None:
+        self._name = name
+        self._message = message
+        self._state = kwargs
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def state_items(self, push: PushItem) -> None:
+        for key, value in self._state.items():
+            push(key, value)
+
+    def message_parts(self, push: PushItem) -> None:
+        push("Message", self._message, PushItemOptions(label=False))
+
+    @dataclass
+    class Okay(status.Okay["QuickBulk"]):
+        """
+        Quick final status for a bulk activity that completed on an expected path.
+        """
+
+        def __init__(self, message: str | None = None, **kwargs: Any) -> None:
+            self._message = message
+            self._state = kwargs
+
+        def state_items(self, push: PushItem) -> None:
+            for key, value in self._state.items():
+                push(key, value)
+
+        def message_parts(self, push: PushItem) -> None:
+            push("Message", self._message, PushItemOptions(label=False))
+
+    @dataclass
+    class Fail(status.Fail["QuickBulk"]):
+        """
+        Quick final status for a bulk activity that failed.
         """
 
         def __init__(self, message: str | None = None, **kwargs: Any) -> None:
