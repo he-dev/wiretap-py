@@ -5,10 +5,10 @@ import secrets
 from contextlib import contextmanager
 from contextvars import ContextVar  # noqa: built-in module
 from itertools import islice
-from typing import Any, ClassVar, Iterator
+from typing import Any, Callable, ClassVar, Iterator
 
-from wiretap.core.activity import Buzz, Snap
-from wiretap.core.activity_status import Fail, Noop, Ready, Void
+from wiretap.core.activity import Bulk, Buzz, Snap, StatusLogPolicy
+from wiretap.core.activity_status import Fail, Ready, Void
 from wiretap.meta.caller import Caller
 from wiretap.util.activity_status import Activity, ActivityStatus
 from wiretap.util.activity_bulk import BulkMath
@@ -108,12 +108,20 @@ class ActivityScope[A: Activity]:
 
 
 class BuzzScope[A: Buzz](ActivityScope[A]):
-    def __init__(self, activity: A, trace_id: Any | None, caller: Caller | None = None) -> None:
+    def __init__(
+            self,
+            activity: A,
+            trace_id: Any | None,
+            caller: Caller | None = None,
+            on_last_status: Callable[[ActivityStatus[A], int], None] | None = None,
+            status_log_policy: StatusLogPolicy = StatusLogPolicy.BOTH,
+    ) -> None:
         super().__init__(activity, trace_id, caller)
         self.stopwatch: Stopwatch = Stopwatch()
         self._last_status: tuple[ActivityStatus[A], int] | None = None
         self._duration_ms: int | None = None
-        self._bulk_math = BulkMath()
+        self._on_last_status = on_last_status
+        self._status_log_policy = status_log_policy
 
     def to_dict(self, status: dict[str, Any] | None, state: dict[str, Any] | None) -> dict[str, Any]:
         extra = super().to_dict(status, state)
@@ -128,13 +136,9 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
         finally:
             self._duration_ms = None
 
-    def state_items(self, push: PushItem) -> None:
-        self._bulk_math.state_items(push)
-
     def message_parts(self, push: PushItem) -> None:
         super().message_parts(push)
         push("Duration", "{activity[duration_ms]} ms")
-        self._bulk_math.message_parts(push)
 
     def set_status(self, status: ActivityStatus[A]) -> ActivityScope[A]:
         if self._last_status is not None:
@@ -149,30 +153,49 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
         self._last_status = (status, self.stopwatch.elapsed_ms)
         return self
 
-    def begin_item[B: Buzz](self, activity: B, frame_offset: int = 0) -> ItemScope[B]:
-        # core: Begins one item inside this buzz summary.
-        if not isinstance(activity, Buzz):
-            raise TypeError(f"{type(activity).__qualname__} cannot begin as a bulk item because it is not a Buzz activity.")
-        return ItemScope(activity, self._bulk_math, Caller.from_current_frame(frame_offset + 1))
-
     def __enter__(self) -> BuzzScope[A]:
         self._scope = self.push()
         self._scope.__enter__()
-        self._log(Ready())
+        if StatusLogPolicy.FIRST in self._status_log_policy:
+            self._log(Ready())
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
         try:
             if self._last_status is None:
+                duration_ms = self.stopwatch.elapsed_ms
                 if exc_type is not None:
-                    self._log(Fail(exception=exc))
+                    status = Fail(exception=exc)
                 else:
-                    self._log(Void(reason="Last status not specified and automatically logged."))
+                    status = Void(reason="Last status not specified and automatically logged.")
             else:
                 status, duration_ms = self._last_status
+
+            if StatusLogPolicy.LAST in self._status_log_policy:
                 self._log(status, duration_ms)
+            if self._on_last_status is not None:
+                self._on_last_status(status, duration_ms)
         finally:
             self._scope.__exit__(exc_type, exc, tb)
+
+
+class BulkScope[I: Buzz, A: Bulk[I]](BuzzScope[A]):
+    def __init__(self, activity: A, trace_id: Any | None, caller: Caller | None = None) -> None:
+        super().__init__(activity, trace_id, caller)
+        self._bulk_math = BulkMath()
+
+    def state_items(self, push: PushItem) -> None:
+        self._bulk_math.state_items(push)
+
+    def message_parts(self, push: PushItem) -> None:
+        super().message_parts(push)
+        self._bulk_math.message_parts(push)
+
+    def begin_item(self, activity: I, frame_offset: int = 0) -> ItemScope[I]:
+        # core: Begins one item inside this bulk summary.
+        if not isinstance(activity, Buzz):
+            raise TypeError(f"{type(activity).__qualname__} cannot begin as a bulk item because it is not a Buzz activity.")
+        return ItemScope(activity, self._bulk_math, self._activity.item_status_log_policy, Caller.from_current_frame(frame_offset + 1))
 
 
 class SnapScope[A: Snap](ActivityScope[A]):
@@ -194,13 +217,10 @@ class SnapScope[A: Snap](ActivityScope[A]):
 
 
 class ItemScope[A: Buzz](BuzzScope[A]):
-    def __init__(self, activity: A, bulk_math: BulkMath, caller: Caller | None = None) -> None:
-        super().__init__(activity, None, caller)
-        self._parent_bulk_math = bulk_math
-        self._status: ActivityStatus[A] | None = None
+    def __init__(self, activity: A, bulk_math: BulkMath, status_log_policy: StatusLogPolicy, caller: Caller | None = None) -> None:
+        super().__init__(activity, None, caller, bulk_math.count, status_log_policy)
 
     def set_status(self, status: ActivityStatus[A]) -> ItemScope[A]:
-        self._status = status
         super().set_status(status)
         return self
 
@@ -208,19 +228,18 @@ class ItemScope[A: Buzz](BuzzScope[A]):
         super().__enter__()
         return self
 
-    def __exit__(self, exc_type, exc, tb) -> None:
-        try:
-            super().__exit__(exc_type, exc, tb)
-        finally:
-            # core: Each buzz item contributes the final status observed by its own buzz lifecycle.
-            self._parent_bulk_math.count(self._status or Noop(), self.stopwatch.elapsed_ms)
-
-
 def begin_buzz[A: Buzz](activity: A, trace_id: Any | None = None, frame_offset: int = 0, with_caller_info: bool = True) -> BuzzScope[A]:
     if not isinstance(activity, Buzz):
         raise TypeError(f"{type(activity).__qualname__} cannot begin because it is not a Buzz activity.")
     caller = Caller.from_current_frame(frame_offset) if with_caller_info else None
     return BuzzScope(activity, trace_id, caller)
+
+
+def begin_bulk[I: Buzz, A: Bulk[I]](activity: A, trace_id: Any | None = None, frame_offset: int = 0, with_caller_info: bool = True) -> BulkScope[I, A]:
+    if not isinstance(activity, Bulk):
+        raise TypeError(f"{type(activity).__qualname__} cannot begin as bulk because it is not a Bulk activity.")
+    caller = Caller.from_current_frame(frame_offset) if with_caller_info else None
+    return BulkScope(activity, trace_id, caller)
 
 
 def log_snap[A: Snap](activity: A, status: ActivityStatus[A], trace_id: Any | None = None) -> None:

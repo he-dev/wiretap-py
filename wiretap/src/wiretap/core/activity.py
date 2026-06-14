@@ -1,14 +1,27 @@
 from dataclasses import dataclass
-from typing import Any
+from enum import Flag, auto
+from typing import Any, ClassVar
 
 from wiretap.util.activity import Activity
 from wiretap.util.activity_feed import PushItem, PushItemOptions
 import wiretap.core.activity_status as status
 
 
+class StatusLogPolicy(Flag):
+    NONE = 0
+    FIRST = auto()
+    LAST = auto()
+    BOTH = FIRST | LAST
+
+
 @dataclass
 class Buzz(Activity):
     pass
+
+
+@dataclass
+class Bulk[I: Buzz](Buzz):
+    item_status_log_policy: ClassVar[StatusLogPolicy] = StatusLogPolicy.BOTH
 
 
 @dataclass
@@ -96,7 +109,7 @@ class QuickBuzz(Buzz):
 
 
 @dataclass
-class QuickBulk(Buzz):
+class QuickBulk(Bulk[QuickBuzz]):
     """
     A low-ceremony buzz activity for counted bulk telemetry.
 

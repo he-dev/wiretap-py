@@ -19,10 +19,11 @@ class Workflow:
 
 
 @dataclass
-class DeleteFile(wiretap.Snap):
+class DeleteFile(wiretap.Buzz):
     tags = ["io"]
-    path: Annotated[str, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart()]
+    path: Annotated[str, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Path")]
 
+    # core: Bulk items are Buzz activities because they have an item duration and contribute to a parent summary.
     # case: Shadows FeedToMessagePart annotation that causes a warning.
     def message_parts(self, push: wiretap.PushItem) -> None:
         push("Path", "{state[path]}")
@@ -31,9 +32,13 @@ class DeleteFile(wiretap.Snap):
     class Okay(wiretap.Okay["DeleteFile"]):
         pass
 
+    @dataclass
+    class Fail(wiretap.Fail["DeleteFile"]):
+        pass
+
 
 @dataclass
-class DeleteFiles(wiretap.Buzz):
+class DeleteFiles(wiretap.Bulk[DeleteFile]):
     @dataclass
     class Okay(wiretap.Okay["DeleteFiles"]):
         pass
@@ -44,22 +49,6 @@ class DeleteFiles(wiretap.Buzz):
 
     @dataclass
     class Void(wiretap.Noop["DeleteFiles"]):
-        pass
-
-
-@dataclass
-class DeleteFileItem(wiretap.Buzz):
-    tags = ["io"]
-    path: Annotated[str, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Path")]
-
-    # core: Bulk items are Buzz activities because they have an item duration and contribute to a parent summary.
-
-    @dataclass
-    class Okay(wiretap.Okay["DeleteFileItem"]):
-        pass
-
-    @dataclass
-    class Fail(wiretap.Fail["DeleteFileItem"]):
         pass
 
 
@@ -145,25 +134,6 @@ class DownloadFile(wiretap.Buzz):
 
 
 @dataclass
-class ParseDocument(wiretap.Buzz):
-    tags = ["parse"]
-    document_type: Annotated[str, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Type")]
-
-    @dataclass
-    class Okay(wiretap.Okay["ParseDocument"]):
-        records_parsed: Annotated[int, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Records")]
-
-    @dataclass
-    class Fail(wiretap.Fail["ParseDocument"]):
-        pass
-
-    @dataclass
-    class Void(wiretap.Noop["ParseDocument"]):
-        # core: Keeps the inherited reason as the canonical explanation.
-        pass
-
-
-@dataclass
 class ValidateRecord(wiretap.Buzz):
     tags = ["validation"]
     row_index: Annotated[int, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Row")]
@@ -183,6 +153,27 @@ class ValidateRecord(wiretap.Buzz):
         def message_parts(self, push: wiretap.PushItem) -> None:
             push("Invalid field", "{state[field_name]}")
             super().message_parts(push)
+
+
+@dataclass
+class ParseDocument(wiretap.Bulk[ValidateRecord]):
+    tags = ["parse"]
+    # core: Bulk item statuses are still counted, but item Ready logs are suppressed to reduce noise.
+    item_status_log_policy = wiretap.StatusLogPolicy.LAST
+    document_type: Annotated[str, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Type")]
+
+    @dataclass
+    class Okay(wiretap.Okay["ParseDocument"]):
+        records_parsed: Annotated[int, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Records")]
+
+    @dataclass
+    class Fail(wiretap.Fail["ParseDocument"]):
+        pass
+
+    @dataclass
+    class Void(wiretap.Noop["ParseDocument"]):
+        # core: Keeps the inherited reason as the canonical explanation.
+        pass
 
 
 @dataclass
