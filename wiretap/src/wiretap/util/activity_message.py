@@ -16,7 +16,7 @@ class ComposeMessageByAppending(ComposeMessage):
     def __call__(self, context: dict[str, Any], *feeds: Any) -> str:
         parts: list[str] = []
 
-        def append(label: str, value: Any, options: PushItemOptions | None = None) -> None:
+        def append(name: str, value: Any, options: PushItemOptions | None = None) -> None:
             if value is None:
                 return
             text = str(value)
@@ -25,7 +25,7 @@ class ComposeMessageByAppending(ComposeMessage):
                 parts.append(text)
                 return
 
-            parts.append(f"{label}{options.separator or ""}{text}")
+            parts.append(f"{name}{options.separator or ""}{text}")
 
         for feed in feeds:
             get_message_parts(feed, append)

@@ -40,7 +40,7 @@ class ActivityScope[A: Activity]:
 
     def to_dict(self, status: dict[str, Any] | None, state: dict[str, Any] | None) -> dict[str, Any]:
         configuration = Configuration.current()
-        extra = {
+        extra: dict[str, Any] = {
             "activity": {
                 "name": self._activity.name,
                 "path": PathOf(reversed(list(self)), lambda a: a._activity.name),
@@ -56,7 +56,7 @@ class ActivityScope[A: Activity]:
             extra |= {
                 "trace_id": self.trace_id,
                 "span_id": self.scope_id,
-                "parent_id": self.parent.scope_id if self.parent else None,
+                "parent_id": self.parent.scope_id if self.parent is not None else None,
             }
 
         return extra
@@ -67,9 +67,9 @@ class ActivityScope[A: Activity]:
     def _log(self, status: ActivityStatus[A]) -> ActivityScope[A]:
         state: dict[str, Any] = {}
 
-        def set_state_item(key: str, value: Any, options: PushItemOptions | None = None) -> None:
+        def set_state_item(name: str, value: Any, options: PushItemOptions | None = None) -> None:
             if value is not None:
-                state[key] = value
+                state[name] = value
 
         # core: Get cascading state items from the parent scopes.
         # note: Collect state items from top to bottom so that the last status wins.
@@ -163,6 +163,7 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
+        status: ActivityStatus[A]
         try:
             if self._last_status is None:
                 duration_ms = self.stopwatch.elapsed_ms

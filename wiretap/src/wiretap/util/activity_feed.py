@@ -18,7 +18,7 @@ class PushItemOptions:
 
 class PushItem(Protocol):
     # util: Common feed sink for both structured state items and message parts.
-    def __call__(self, label: str, value: Any, options: PushItemOptions | None = None) -> None: ...
+    def __call__(self, name: str, value: Any, options: PushItemOptions | None = None) -> None: ...
 
 
 @runtime_checkable
