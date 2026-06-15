@@ -108,6 +108,11 @@ class DownloadFile(wiretap.Buzz):
         # core: Models a download that intentionally did no transfer work.
         pass
 
+    @dataclass
+    class NoChange(wiretap.Okay["DownloadFile"]):
+        # case: Intentionally invalid custom status name; only canonical names are logged.
+        pass
+
 
 @dataclass
 class ValidateRecord(wiretap.Buzz):

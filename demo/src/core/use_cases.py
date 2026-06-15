@@ -152,6 +152,13 @@ def scenario_status_overwrite_warning() -> None:
         document.set_status(ImportDocument.Fail(exception=RuntimeError("Late import failure discovered after summary.")))
 
 
+def scenario_custom_status_name_warning() -> None:
+    with wiretap.begin_buzz(DownloadFile(url="https://example.test/customers.csv", target_path="/data/in/customers.csv")) as download:
+        pause()
+        # case: Intentionally uses a custom status name to show the internal warning.
+        download.set_status(DownloadFile.NoChange())
+
+
 def scenario_document_import() -> None:
     with wiretap.begin_buzz(ReadFile(path="/data/in/customers.csv")) as read:
         pause()
@@ -197,6 +204,7 @@ def scenarios() -> None:
     scenario_quick_snap()
     scenario_quick_bulk()
     scenario_status_overwrite_warning()
+    scenario_custom_status_name_warning()
     scenario_document_import()
 
 

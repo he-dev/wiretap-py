@@ -4,6 +4,7 @@ import logging
 import secrets
 from contextlib import contextmanager
 from contextvars import ContextVar  # noqa: built-in module
+from functools import cache
 from itertools import islice
 from typing import Any, Callable, ClassVar, Iterator
 
@@ -15,6 +16,23 @@ from wiretap.util.activity_feed import PushItem, PushItemOptions, get_state_item
 from wiretap.util.configuration import Configuration
 from wiretap.util.path_of import PathOf
 from wiretap.util.stopwatch import Stopwatch
+
+
+@cache
+def _warn_if_custom_status_name(activity_type: type[Activity], status_type: type[ActivityStatus[Any]], status_code: str) -> None:
+    if status_type.__name__ == status_code:
+        return
+
+    status_name = f"{activity_type.__qualname__}.{status_type.__name__}"
+    canonical_name = f"{activity_type.__qualname__}.{status_code}"
+    Configuration.current().internal_logger.warning(
+        "%s will be logged as %s because only canonical status names are allowed. "
+        "Rename %s to %s to get rid of this warning.",
+        status_name,
+        canonical_name,
+        status_name,
+        canonical_name,
+    )
 
 
 class ActivityScope[A: Activity]:
@@ -66,6 +84,7 @@ class ActivityScope[A: Activity]:
 
     def _log(self, status: ActivityStatus[A]) -> ActivityScope[A]:
         state: dict[str, Any] = {}
+        _warn_if_custom_status_name(type(self._activity), type(status), status.code)
 
         def set_state_item(name: str, value: Any, options: PushItemOptions | None = None) -> None:
             if value is not None:
