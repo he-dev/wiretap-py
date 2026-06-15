@@ -43,14 +43,6 @@ class DeleteFiles(wiretap.Bulk[DeleteFile]):
     class Okay(wiretap.Okay["DeleteFiles"]):
         pass
 
-    @dataclass
-    class Fail(wiretap.Fail["DeleteFiles"]):
-        pass
-
-    @dataclass
-    class Void(wiretap.Noop["DeleteFiles"]):
-        pass
-
 
 @dataclass
 class ImportDocument(wiretap.Buzz):
@@ -74,11 +66,6 @@ class ImportDocument(wiretap.Buzz):
     class Fail(wiretap.Fail["ImportDocument"]):
         pass
 
-    @dataclass
-    class Void(wiretap.Noop["ImportDocument"]):
-        # core: Uses the inherited Void.reason contract; this status exists to show a permitted inconclusive import.
-        pass
-
 
 @dataclass
 class ReadFile(wiretap.Buzz):
@@ -96,11 +83,6 @@ class ReadFile(wiretap.Buzz):
         def message_parts(self, push: wiretap.PushItem) -> None:
             push("Read", "{state[line_count]} lines / {state[bytes_read]} bytes")
 
-    @dataclass
-    class Fail(wiretap.Fail["ReadFile"]):
-        # core: No custom fields; Fail.exception supplies the message part.
-        pass
-
 
 @dataclass
 class DownloadFile(wiretap.Buzz):
@@ -117,19 +99,13 @@ class DownloadFile(wiretap.Buzz):
         status_code: Annotated[int, wiretap.FeedToStateItem()]
         bytes_received: Annotated[int, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Bytes")]
 
-        # core: Status is annotation-only so state and message annotations can both be seen.
-
-    @dataclass
-    class NotModified(wiretap.Okay["DownloadFile"]):
-        status_code: Annotated[int, wiretap.FeedToStateItem()]
-
-        # core: Models an expected non-work outcome as Okay because nothing failed.
         def message_parts(self, push: wiretap.PushItem) -> None:
             push("Status", "{state[status_code]}")
-            push("Result", "remote file was not modified")
+            push("Bytes", "{state[bytes_received]}")
 
     @dataclass
-    class Fail(wiretap.Fail["DownloadFile"]):
+    class Noop(wiretap.Noop["DownloadFile"]):
+        # core: Models a download that intentionally did no transfer work.
         pass
 
 
@@ -166,15 +142,6 @@ class ParseDocument(wiretap.Bulk[ValidateRecord]):
     class Okay(wiretap.Okay["ParseDocument"]):
         records_parsed: Annotated[int, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Records")]
 
-    @dataclass
-    class Fail(wiretap.Fail["ParseDocument"]):
-        pass
-
-    @dataclass
-    class Void(wiretap.Noop["ParseDocument"]):
-        # core: Keeps the inherited reason as the canonical explanation.
-        pass
-
 
 @dataclass
 class SaveRecord(wiretap.Snap):
@@ -191,6 +158,12 @@ class SaveRecord(wiretap.Snap):
         # core: SaveRecord only exposes Okay/Fail, showing a strict snap contract without Void.
         pass
 
+
+@dataclass
+class UpdateFile(wiretap.Snap):
+    tags = ["io"]
+    path: Annotated[str, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Path")]
+
     @dataclass
-    class Fail(wiretap.Fail["SaveRecord"]):
-        pass
+    class Noop(wiretap.Noop["UpdateFile"]):
+        reason: Annotated[str, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Reason")]
