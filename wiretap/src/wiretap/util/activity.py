@@ -12,7 +12,7 @@ class Activity:
         return type(self).__qualname__
 
 
-class StatusLogPolicy(Flag):
+class StatusLogOptions(Flag):
     NONE = 0
     FIRST = auto()
     LAST = auto()
@@ -26,18 +26,18 @@ class Buzz(Activity):
 
 @dataclass
 class Bulk[I: Buzz](Buzz):
-    _item_status_log_policy: ClassVar[StatusLogPolicy] = StatusLogPolicy.BOTH
-    _item_status_log_policy_override: StatusLogPolicy | None = field(default=None, init=False, repr=False)
+    _item_status_log_policy: ClassVar[StatusLogOptions] = StatusLogOptions.BOTH
+    _item_status_log_policy_override: StatusLogOptions | None = field(default=None, init=False, repr=False)
 
     @property
-    def item_status_log_policy(self) -> StatusLogPolicy:
+    def item_status_log_policy(self) -> StatusLogOptions:
         if self._item_status_log_policy_override is not None:
             return self._item_status_log_policy_override
 
         return type(self)._item_status_log_policy
 
     @item_status_log_policy.setter
-    def item_status_log_policy(self, value: StatusLogPolicy) -> None:
+    def item_status_log_policy(self, value: StatusLogOptions) -> None:
         self._item_status_log_policy_override = value
 
 

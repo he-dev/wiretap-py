@@ -13,7 +13,7 @@ from core.contracts import (
     ValidateRecord,
     Workflow,
 )
-from wiretap import StatusLogPolicy
+from wiretap import StatusLogOptions
 
 
 def scenario_bulk():
@@ -75,7 +75,7 @@ def scenario_document_import():
             # parse.set_status(ParseDocument.Okay(records_parsed=3))
 
         document.set_status(ImportDocument.Okay(records_saved=records_saved))
-        # case: Intentionally overwrites the final status so the internal logger shows the anomaly.
+        # case: Intentionally overwrites the final status, so the internal logger shows the anomaly.
         document.set_status(ImportDocument.Fail(exception=RuntimeError("Late import failure discovered after summary.")))
 
 
@@ -103,7 +103,7 @@ def scenario_quick_activities():
     wiretap.log_snap(wiretap.QuickSnap(name="CacheLookup", key="customer-004"), wiretap.QuickSnap.Noop(message="No cached record."))
     wiretap.log_snap(wiretap.QuickSnap(name="WebhookSignature"), wiretap.QuickSnap.Fail(message="Invalid signature."))
 
-    with wiretap.begin_bulk(wiretap.QuickBulk(name="QuickImport", source="runtime.csv", item_status_log_policy=StatusLogPolicy.LAST)) as bulk:
+    with wiretap.begin_bulk(wiretap.QuickBulk(name="QuickImport", source="runtime.csv", item_status_log_policy=StatusLogOptions.LAST)) as bulk:
         for row_index in range(1, 4):
             with bulk.begin_item(wiretap.QuickBuzz(name="QuickValidateRow", row_index=row_index)) as item:
                 item.set_status(wiretap.QuickBuzz.Okay(message="row accepted"))

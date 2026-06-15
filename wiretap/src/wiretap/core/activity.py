@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from wiretap.util.activity import Bulk, Buzz, Snap, StatusLogPolicy
+from wiretap.util.activity import Bulk, Buzz, Snap, StatusLogOptions
 from wiretap.util.activity_feed import PushItem, PushItemOptions
 import wiretap.core.activity_status as status
 
@@ -99,7 +99,7 @@ class QuickBulk(Bulk[QuickBuzz]):
             self,
             name: str,
             message: str | None = None,
-            item_status_log_policy: StatusLogPolicy = StatusLogPolicy.BOTH,
+            item_status_log_policy: StatusLogOptions = StatusLogOptions.BOTH,
             **kwargs: Any
     ) -> None:
         self._name = name

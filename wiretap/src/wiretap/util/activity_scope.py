@@ -8,7 +8,7 @@ from itertools import islice
 from typing import Any, Callable, ClassVar, Iterator
 
 from wiretap.meta.caller import Caller
-from wiretap.util.activity import Activity, Bulk, Buzz, Snap, StatusLogPolicy
+from wiretap.util.activity import Activity, Bulk, Buzz, Snap, StatusLogOptions
 from wiretap.util.activity_status import ActivityStatus, Fail, Ready, Void
 from wiretap.util.activity_bulk import BulkMath
 from wiretap.util.activity_feed import PushItem, PushItemOptions, get_state_items, get_state_items_cascading
@@ -116,7 +116,7 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
             trace_id: Any | None,
             caller: Caller | None = None,
             on_last_status: Callable[[ActivityStatus[A], int], None] | None = None,
-            status_log_policy: StatusLogPolicy = StatusLogPolicy.BOTH,
+            status_log_policy: StatusLogOptions = StatusLogOptions.BOTH,
     ) -> None:
         super().__init__(activity, trace_id, caller)
         self.stopwatch: Stopwatch = Stopwatch()
@@ -158,7 +158,7 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
     def __enter__(self) -> BuzzScope[A]:
         self._scope = self.push()
         self._scope.__enter__()
-        if StatusLogPolicy.FIRST in self._status_log_policy:
+        if StatusLogOptions.FIRST in self._status_log_policy:
             self._log(Ready())
         return self
 
@@ -174,7 +174,7 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
             else:
                 status, duration_ms = self._last_status
 
-            if StatusLogPolicy.LAST in self._status_log_policy:
+            if StatusLogOptions.LAST in self._status_log_policy:
                 self._log(status, duration_ms)
             if self._on_last_status is not None:
                 self._on_last_status(status, duration_ms)
@@ -220,7 +220,7 @@ class SnapScope[A: Snap](ActivityScope[A]):
 
 
 class ItemScope[A: Buzz](BuzzScope[A]):
-    def __init__(self, activity: A, bulk_math: BulkMath, status_log_policy: StatusLogPolicy, caller: Caller | None = None) -> None:
+    def __init__(self, activity: A, bulk_math: BulkMath, status_log_policy: StatusLogOptions, caller: Caller | None = None) -> None:
         super().__init__(activity, None, caller, bulk_math.count, status_log_policy)
 
     def set_status(self, status: ActivityStatus[A]) -> ItemScope[A]:

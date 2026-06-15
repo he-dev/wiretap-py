@@ -159,7 +159,7 @@ class ValidateRecord(wiretap.Buzz):
 class ParseDocument(wiretap.Bulk[ValidateRecord]):
     tags = ["parse"]
     # core: Bulk item statuses are still counted, but item Ready logs are suppressed to reduce noise.
-    _item_status_log_policy = wiretap.StatusLogPolicy.LAST
+    _item_status_log_policy = wiretap.StatusLogOptions.LAST
     document_type: Annotated[str, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Type")]
 
     @dataclass

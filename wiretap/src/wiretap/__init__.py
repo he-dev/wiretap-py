@@ -3,7 +3,7 @@ from .core.configure import ConfigureLogging
 from .core.activity import QuickBulk, QuickBuzz, QuickSnap
 from .core.activity_status import ActivityStatus, Ready, Noop, Okay, Fail
 from .core.annotations import FeedToMessagePart, FeedToStateItem
-from .util.activity import Bulk, Buzz, Snap, StatusLogPolicy
+from .util.activity import Bulk, Buzz, Snap, StatusLogOptions
 from .util.activity_feed import PushItem
 from .util.configuration import Configuration
 
@@ -21,7 +21,7 @@ __all__ = [
     "QuickBulk",
     "QuickBuzz",
     "QuickSnap",
-    "StatusLogPolicy",
+    "StatusLogOptions",
     "Configuration",
     "ConfigureLogging",
     "FeedToStateItem",

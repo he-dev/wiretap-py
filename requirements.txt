@@ -1,5 +1,0 @@
-pytest~=9.0.3
-setuptools>=80.0.0
-SQLAlchemy~=2.0.15
-PyYAML~=6.0.1
-cachetools>=5.5.2
