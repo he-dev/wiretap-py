@@ -50,7 +50,7 @@ class BulkMath:
     def rate_of(self, code: str) -> float:
         return self._status_counts[code] / self.item_count if self.item_count else 0.0
 
-    def state_items(self, push: PushItem) -> None:
+    def log_properties(self, push: PushItem) -> None:
         if not self:
             return
         push("item_count", self.item_count)

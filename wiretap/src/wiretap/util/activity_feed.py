@@ -21,10 +21,15 @@ class PushItem(Protocol):
     def __call__(self, name: str, value: Any, options: PushItemOptions | None = None) -> None: ...
 
 
+class PushLogProperty(PushItem, Protocol):
+    # core: Feeds structured log properties.
+    pass
+
+
 @runtime_checkable
-class StateItemFeed(Protocol):
-    # core: Feeds structured fields to the log scope.
-    def state_items(self, push: PushItem) -> None: ...
+class LogPropertyFeed(Protocol):
+    # core: Feeds structured properties to the log scope.
+    def log_properties(self, push: PushLogProperty) -> None: ...
 
 
 @runtime_checkable
@@ -43,18 +48,18 @@ def _warn_if_protocol_shadows_annotations(cls: type, protocol: type, annotation:
         )
 
 
-def get_state_items(source: object, push_state_item: PushItem) -> None:
+def get_log_properties(source: object, push_log_property: PushLogProperty) -> None:
     annotations = _annotated_fields(type(source)).get(FeedToStateItem, {})  # type: ignore[arg-type]
-    if isinstance(source, StateItemFeed):
-        source.state_items(push_state_item)
-        _warn_if_protocol_shadows_annotations(type(source), StateItemFeed, FeedToStateItem)
+    if isinstance(source, LogPropertyFeed):
+        source.log_properties(push_log_property)
+        _warn_if_protocol_shadows_annotations(type(source), LogPropertyFeed, FeedToStateItem)
     else:
         for name, annotation in annotations.items():
             state_item: FeedToStateItem = annotation
-            push_state_item(name, getattr(source, name, state_item.default_value))
+            push_log_property(name, getattr(source, name, state_item.default_value))
 
 
-def get_state_items_cascading(source: object, push: PushItem) -> None:
+def get_log_properties_cascading(source: object, push: PushLogProperty) -> None:
     annotations = _annotated_fields(type(source)).get(FeedToStateItem, {})  # type: ignore[arg-type]
     for name, annotation in annotations.items():
         state_item: FeedToStateItem = annotation

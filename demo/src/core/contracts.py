@@ -91,7 +91,7 @@ class DownloadFile(wiretap.Buzz):
     target_path: Annotated[str, wiretap.FeedToStateItem(), wiretap.FeedToMessagePart("Target")]
 
     # case: Intentionally shadows FeedToStateItem annotations; only selected fields enter state.
-    def state_items(self, push: wiretap.PushItem) -> None:
+    def log_properties(self, push: wiretap.PushLogProperty) -> None:
         push("download_url", self.url)
 
     @dataclass

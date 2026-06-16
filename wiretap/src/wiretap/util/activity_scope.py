@@ -12,7 +12,7 @@ from wiretap.meta.caller import Caller
 from wiretap.util.activity import Activity, Bulk, Buzz, Snap, StatusLogOptions
 from wiretap.util.activity_status import ActivityStatus, Fail, Ready, Void
 from wiretap.util.activity_bulk import BulkMath
-from wiretap.util.activity_feed import PushItem, PushItemOptions, get_state_items, get_state_items_cascading
+from wiretap.util.activity_feed import PushItem, PushItemOptions, get_log_properties, get_log_properties_cascading
 from wiretap.util.configuration import Configuration
 from wiretap.util.path_of import PathOf
 from wiretap.util.stopwatch import Stopwatch
@@ -86,7 +86,7 @@ class ActivityScope[A: Activity]:
         state: dict[str, Any] = {}
         _warn_if_custom_status_name(type(self._activity), type(status), status.code)
 
-        def set_state_item(name: str, value: Any, options: PushItemOptions | None = None) -> None:
+        def set_log_property(name: str, value: Any, options: PushItemOptions | None = None) -> None:
             if value is not None:
                 state[name] = value
 
@@ -94,13 +94,13 @@ class ActivityScope[A: Activity]:
         # note: Collect state items from top to bottom so that the last status wins.
         scopes: Iterator[ActivityScope[Any]] = reversed(list(islice(iter(self), 1, None)))
         for scope in scopes:
-            get_state_items_cascading(scope._activity, set_state_item)
+            get_log_properties_cascading(scope._activity, set_log_property)
 
         # core: Scope, activity, and status each get a chance to fulfill the monitoring contract.
         feeds: list[Any] = [self, self._activity, status]
 
         for feed in feeds:
-            get_state_items(feed, set_state_item)
+            get_log_properties(feed, set_log_property)
 
         extra: dict[str, Any] = self.to_dict(status.to_dict(), state)
 
@@ -206,8 +206,8 @@ class BulkScope[I: Buzz](BuzzScope[Bulk[I]]):
         super().__init__(activity, trace_id, caller)
         self._bulk_math = BulkMath()
 
-    def state_items(self, push: PushItem) -> None:
-        self._bulk_math.state_items(push)
+    def log_properties(self, push: PushItem) -> None:
+        self._bulk_math.log_properties(push)
 
     def message_parts(self, push: PushItem) -> None:
         super().message_parts(push)

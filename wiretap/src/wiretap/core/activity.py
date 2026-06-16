@@ -26,7 +26,7 @@ class QuickBuzz(Buzz):
     def name(self) -> str:
         return self._name
 
-    def state_items(self, push: PushItem) -> None:
+    def log_properties(self, push: PushItem) -> None:
         for key, value in self._state.items():
             push(key, value)
 
@@ -43,7 +43,7 @@ class QuickBuzz(Buzz):
             self._message = message
             self._state = kwargs
 
-        def state_items(self, push: PushItem) -> None:
+        def log_properties(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
@@ -60,7 +60,7 @@ class QuickBuzz(Buzz):
             self._message = message
             self._state = kwargs
 
-        def state_items(self, push: PushItem) -> None:
+        def log_properties(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
@@ -77,7 +77,7 @@ class QuickBuzz(Buzz):
             self._message = message
             self._state = kwargs
 
-        def state_items(self, push: PushItem) -> None:
+        def log_properties(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
@@ -111,7 +111,7 @@ class QuickBulk(Bulk[QuickBuzz]):
     def name(self) -> str:
         return self._name
 
-    def state_items(self, push: PushItem) -> None:
+    def log_properties(self, push: PushItem) -> None:
         for key, value in self._state.items():
             push(key, value)
 
@@ -128,7 +128,7 @@ class QuickBulk(Bulk[QuickBuzz]):
             self._message = message
             self._state = kwargs
 
-        def state_items(self, push: PushItem) -> None:
+        def log_properties(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
@@ -145,7 +145,7 @@ class QuickBulk(Bulk[QuickBuzz]):
             self._message = message
             self._state = kwargs
 
-        def state_items(self, push: PushItem) -> None:
+        def log_properties(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
@@ -173,7 +173,7 @@ class QuickSnap(Snap):
     def name(self) -> str:
         return self._name
 
-    def state_items(self, push: PushItem) -> None:
+    def log_properties(self, push: PushItem) -> None:
         for key, value in self._state.items():
             push(key, value)
 
@@ -190,7 +190,7 @@ class QuickSnap(Snap):
             self._message = message
             self._state = kwargs
 
-        def state_items(self, push: PushItem) -> None:
+        def log_properties(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
@@ -207,7 +207,7 @@ class QuickSnap(Snap):
             self._message = message
             self._state = kwargs
 
-        def state_items(self, push: PushItem) -> None:
+        def log_properties(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
@@ -224,7 +224,7 @@ class QuickSnap(Snap):
             self._message = message
             self._state = kwargs
 
-        def state_items(self, push: PushItem) -> None:
+        def log_properties(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
