@@ -1,7 +1,7 @@
 from typing import Any, Protocol, runtime_checkable
 
 from wiretap.meta.logging.formatting import _Forgiving
-from wiretap.util.activity_feed import PushItemOptions, get_message_parts
+from wiretap.util.activity_feed import PushItemOptions, collect_remarks
 
 
 @runtime_checkable
@@ -28,7 +28,7 @@ class ComposeMessageByAppending(ComposeMessage):
             parts.append(f"{name}{options.separator or ""}{text}")
 
         for feed in feeds:
-            get_message_parts(feed, append)
+            collect_remarks(feed, append)
 
         template = self._separator.join(part for part in parts)
         return template.format_map(_Forgiving(context))

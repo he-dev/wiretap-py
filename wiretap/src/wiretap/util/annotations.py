@@ -3,12 +3,12 @@ from typing import Any
 
 
 @dataclass(frozen=True)
-class FeedToStateItem:
+class Detail:
     # core: When True, the value cascades to all activities down the stack.
     cascade: bool = field(default=False)
     default_value: Any = field(default=None)
 
 
 @dataclass(frozen=True)
-class FeedToMessagePart:
+class Remark:
     label: str | None = None

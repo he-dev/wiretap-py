@@ -12,7 +12,7 @@ class QuickBuzz(Buzz):
     A low-ceremony buzz activity for runtime-shaped telemetry.
 
     Quick activities are soft contracts. They let callers choose an activity
-    name, optional message, and arbitrary state items without defining a hard
+    name, optional message, and arbitrary details without defining a hard
     activity/status contract first.
     """
     tags = ["quick-buzz"]
@@ -26,11 +26,11 @@ class QuickBuzz(Buzz):
     def name(self) -> str:
         return self._name
 
-    def log_properties(self, push: PushItem) -> None:
+    def details(self, push: PushItem) -> None:
         for key, value in self._state.items():
             push(key, value)
 
-    def message_parts(self, push: PushItem) -> None:
+    def remarks(self, push: PushItem) -> None:
         push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
@@ -43,11 +43,11 @@ class QuickBuzz(Buzz):
             self._message = message
             self._state = kwargs
 
-        def log_properties(self, push: PushItem) -> None:
+        def details(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
-        def message_parts(self, push: PushItem) -> None:
+        def remarks(self, push: PushItem) -> None:
             push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
@@ -60,11 +60,11 @@ class QuickBuzz(Buzz):
             self._message = message
             self._state = kwargs
 
-        def log_properties(self, push: PushItem) -> None:
+        def details(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
-        def message_parts(self, push: PushItem) -> None:
+        def remarks(self, push: PushItem) -> None:
             push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
@@ -77,11 +77,11 @@ class QuickBuzz(Buzz):
             self._message = message
             self._state = kwargs
 
-        def log_properties(self, push: PushItem) -> None:
+        def details(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
-        def message_parts(self, push: PushItem) -> None:
+        def remarks(self, push: PushItem) -> None:
             push("Message", self._message, PushItemOptions(label=False))
 
 
@@ -111,11 +111,11 @@ class QuickBulk(Bulk[QuickBuzz]):
     def name(self) -> str:
         return self._name
 
-    def log_properties(self, push: PushItem) -> None:
+    def details(self, push: PushItem) -> None:
         for key, value in self._state.items():
             push(key, value)
 
-    def message_parts(self, push: PushItem) -> None:
+    def remarks(self, push: PushItem) -> None:
         push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
@@ -128,11 +128,11 @@ class QuickBulk(Bulk[QuickBuzz]):
             self._message = message
             self._state = kwargs
 
-        def log_properties(self, push: PushItem) -> None:
+        def details(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
-        def message_parts(self, push: PushItem) -> None:
+        def remarks(self, push: PushItem) -> None:
             push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
@@ -145,11 +145,11 @@ class QuickBulk(Bulk[QuickBuzz]):
             self._message = message
             self._state = kwargs
 
-        def log_properties(self, push: PushItem) -> None:
+        def details(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
-        def message_parts(self, push: PushItem) -> None:
+        def remarks(self, push: PushItem) -> None:
             push("Message", self._message, PushItemOptions(label=False))
 
 
@@ -173,11 +173,11 @@ class QuickSnap(Snap):
     def name(self) -> str:
         return self._name
 
-    def log_properties(self, push: PushItem) -> None:
+    def details(self, push: PushItem) -> None:
         for key, value in self._state.items():
             push(key, value)
 
-    def message_parts(self, push: PushItem) -> None:
+    def remarks(self, push: PushItem) -> None:
         push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
@@ -190,11 +190,11 @@ class QuickSnap(Snap):
             self._message = message
             self._state = kwargs
 
-        def log_properties(self, push: PushItem) -> None:
+        def details(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
-        def message_parts(self, push: PushItem) -> None:
+        def remarks(self, push: PushItem) -> None:
             push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
@@ -207,11 +207,11 @@ class QuickSnap(Snap):
             self._message = message
             self._state = kwargs
 
-        def log_properties(self, push: PushItem) -> None:
+        def details(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
-        def message_parts(self, push: PushItem) -> None:
+        def remarks(self, push: PushItem) -> None:
             push("Message", self._message, PushItemOptions(label=False))
 
     @dataclass
@@ -224,9 +224,9 @@ class QuickSnap(Snap):
             self._message = message
             self._state = kwargs
 
-        def log_properties(self, push: PushItem) -> None:
+        def details(self, push: PushItem) -> None:
             for key, value in self._state.items():
                 push(key, value)
 
-        def message_parts(self, push: PushItem) -> None:
+        def remarks(self, push: PushItem) -> None:
             push("Message", self._message, PushItemOptions(label=False))

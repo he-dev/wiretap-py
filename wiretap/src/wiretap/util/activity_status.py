@@ -2,7 +2,7 @@ import logging
 from dataclasses import dataclass
 from typing import Annotated, Any, ClassVar
 
-from wiretap.util.annotations import FeedToMessagePart, FeedToStateItem
+from wiretap.util.annotations import Remark, Detail
 from wiretap.util.activity import Activity
 from wiretap.util.activity_feed import PushItem
 
@@ -50,7 +50,7 @@ class Fail[A: Activity](ActivityStatus[A]):
     role: ClassVar[str] = "last"
     exception: Exception | None
 
-    def message_parts(self, push: PushItem) -> None:
+    def remarks(self, push: PushItem) -> None:
         if self.exception is not None:
             push("Exception", str(self.exception))
 
@@ -59,7 +59,7 @@ class Fail[A: Activity](ActivityStatus[A]):
 class Void[A: Activity](ActivityStatus[A]):
     level: ClassVar[int] = logging.WARNING
     role: ClassVar[str] = "last"
-    reason: Annotated[str, FeedToStateItem(), FeedToMessagePart()]
+    reason: Annotated[str, Detail(), Remark()]
 
 
 @dataclass  # (frozen=True)

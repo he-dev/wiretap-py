@@ -1,7 +1,7 @@
-from wiretap.util.annotations import FeedToMessagePart, FeedToStateItem
+from wiretap.util.annotations import Remark, Detail
 
 
 __all__ = [
-    "FeedToMessagePart",
-    "FeedToStateItem",
+    "Remark",
+    "Detail",
 ]

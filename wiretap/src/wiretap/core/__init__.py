@@ -2,7 +2,7 @@ from typing import Any
 
 from wiretap.core.activity import QuickBulk, QuickBuzz, QuickSnap
 from wiretap.core.activity_status import Fail, Noop, Okay, Ready, Void
-from wiretap.core.annotations import FeedToMessagePart, FeedToStateItem
+from wiretap.core.annotations import Remark, Detail
 from wiretap.util.activity import Bulk, Buzz, Snap, StatusLogOptions
 from wiretap.util.activity_status import ActivityStatus
 
@@ -41,6 +41,6 @@ __all__ = [
     "Ready",
     "Void",
     "Noop",
-    "FeedToStateItem",
-    "FeedToMessagePart",
+    "Detail",
+    "Remark",
 ]

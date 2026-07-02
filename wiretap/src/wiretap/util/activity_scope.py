@@ -12,7 +12,7 @@ from wiretap.meta.caller import Caller
 from wiretap.util.activity import Activity, Bulk, Buzz, Snap, StatusLogOptions
 from wiretap.util.activity_status import ActivityStatus, Fail, Ready, Void
 from wiretap.util.activity_bulk import BulkMath
-from wiretap.util.activity_feed import PushItem, PushItemOptions, get_log_properties, get_log_properties_cascading
+from wiretap.util.activity_feed import PushItem, PushItemOptions, collect_details, collect_details_cascading
 from wiretap.util.configuration import Configuration
 from wiretap.util.path_of import PathOf
 from wiretap.util.stopwatch import Stopwatch
@@ -79,7 +79,7 @@ class ActivityScope[A: Activity]:
 
         return extra
 
-    def message_parts(self, push: PushItem) -> None:
+    def remarks(self, push: PushItem) -> None:
         push("{activity[name]}", "[{activity[status][code]}]", PushItemOptions(separator=None))
 
     def _log(self, status: ActivityStatus[A]) -> ActivityScope[A]:
@@ -90,17 +90,17 @@ class ActivityScope[A: Activity]:
             if value is not None:
                 state[name] = value
 
-        # core: Get cascading state items from the parent scopes.
-        # note: Collect state items from top to bottom so that the last status wins.
+        # core: Get cascading details from the parent scopes.
+        # note: Collect details from top to bottom so that the last status wins.
         scopes: Iterator[ActivityScope[Any]] = reversed(list(islice(iter(self), 1, None)))
         for scope in scopes:
-            get_log_properties_cascading(scope._activity, set_log_property)
+            collect_details_cascading(scope._activity, set_log_property)
 
         # core: Scope, activity, and status each get a chance to fulfill the monitoring contract.
         feeds: list[Any] = [self, self._activity, status]
 
         for feed in feeds:
-            get_log_properties(feed, set_log_property)
+            collect_details(feed, set_log_property)
 
         extra: dict[str, Any] = self.to_dict(status.to_dict(), state)
 
@@ -157,8 +157,8 @@ class BuzzScope[A: Buzz](ActivityScope[A]):
         finally:
             self._duration_ms = None
 
-    def message_parts(self, push: PushItem) -> None:
-        super().message_parts(push)
+    def remarks(self, push: PushItem) -> None:
+        super().remarks(push)
         push("Duration", "{activity[duration_ms]} ms")
 
     def set_status(self, status: ActivityStatus[A]) -> ActivityScope[A]:
@@ -206,12 +206,12 @@ class BulkScope[I: Buzz](BuzzScope[Bulk[I]]):
         super().__init__(activity, trace_id, caller)
         self._bulk_math = BulkMath()
 
-    def log_properties(self, push: PushItem) -> None:
-        self._bulk_math.log_properties(push)
+    def details(self, push: PushItem) -> None:
+        self._bulk_math.details(push)
 
-    def message_parts(self, push: PushItem) -> None:
-        super().message_parts(push)
-        self._bulk_math.message_parts(push)
+    def remarks(self, push: PushItem) -> None:
+        super().remarks(push)
+        self._bulk_math.remarks(push)
 
     def begin_item(self, activity: I, frame_offset: int = 0) -> ItemScope[I]:
         # core: Begins one item inside this bulk summary.
@@ -225,8 +225,8 @@ class SnapScope[A: Snap](ActivityScope[A]):
         self._log(status)
         return self
 
-    def message_parts(self, push: PushItem) -> None:
-        super().message_parts(push)
+    def remarks(self, push: PushItem) -> None:
+        super().remarks(push)
         push("Duration", "N/A")
 
     def __enter__(self) -> SnapScope[A]:
