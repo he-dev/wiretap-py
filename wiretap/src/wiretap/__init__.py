@@ -18,4 +18,5 @@ __all__ = [
     "LoopStats",
     "CountSpan",
     "LoopRates",
+    "configure"
 ]
