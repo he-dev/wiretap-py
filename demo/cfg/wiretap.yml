@@ -17,18 +17,19 @@ formatters:
   elastic_json:
     (): wiretap.util.logging.JsonFormatter
     encoders:
-      - wiretap.util.services.EncodeDateTime
-      - wiretap.util.services.EncodeUUID
-      - wiretap.util.services.EncodeSet
-      - wiretap.util.services.EncodePath
-      - wiretap.util.services.EncodeToDict
+      - wiretap.util.buzz.EncodeDateTime
+      - wiretap.util.buzz.EncodeUUID
+      - wiretap.util.buzz.EncodeSet
+      - wiretap.util.buzz.EncodePath
+      - wiretap.util.buzz.EncodeToDict
     properties:
-      - wiretap.util.services.AddTimestamp
-      - wiretap.util.services.AddMessage
-      - wiretap.util.services.AddProperties
-      - wiretap.util.services.AddSpan
-      - wiretap.util.services.AddSource
-      - wiretap.util.services.AddException
+      - wiretap.util.buzz.AddTimestamp
+      - wiretap.util.buzz.AddMessage
+      - wiretap.util.buzz.AddActivity
+      #- wiretap.util.buzz.AddProperties
+      #- wiretap.util.buzz.AddSpan
+      #- wiretap.util.buzz.AddSource
+      - wiretap.util.buzz.AddException
 #      - (): wiretap.util.logging.AddEnvironmentVariables
 #        names:
 #          - app_id
@@ -56,12 +57,12 @@ handlers:
 loggers:
   root:
     #handlers: [ "console", "file", "elastic_file" ]
-    # handlers: [ "console_full", "console_file", "elastic_file" ]
-    handlers: [ "console_lite", "console_file", "elastic_file" ]
-    # handlers: [ "console_lite", "elastic_file" ]
-    # handlers: [ "console" ]
+    #handlers: [ "console_full", "console_file", "elastic_file" ]
+    #handlers: [ "console_lite", "console_file", "elastic_file" ]
+    handlers: [ "elastic_file" ]
+    #handlers: [ "console" ]
     #level: "INFO"
-    #level: "DEBUG"
-    level: "TRACE"
+    level: "DEBUG"
+    #level: "TRACE"
   PIL:
     level: "WARNING"

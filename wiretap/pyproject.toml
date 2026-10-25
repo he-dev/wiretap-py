@@ -1,21 +1,29 @@
 [build-system]
-requires = ["setuptools>=65.3.0", "wheel"]
+requires = ["setuptools>=65.7.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+#[tool.setuptools]
+#package-dir = {"" = "str"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [project]
 name = "wiretap"
-version = "12.2.1"
-requires-python = ">=3.10"
+version = "13.0.0"
+requires-python = ">=3.14"
 authors = [{ name = "he-dev" }]
 description = "This package provides a context-oriented logger."
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Utilities"
 ]
 readme = { file = "README.md", content-type = "text/markdown" }
 
+[project.optional-dependencies]
+dev = ["pytest>=8", "mypy", "build", "twine"]
 
 [project.urls]
 "GitHub" = "https://github.com/he-dev/wiretap-py"

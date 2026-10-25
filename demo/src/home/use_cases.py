@@ -8,7 +8,7 @@ from datetime import date
 from enum import Enum
 from time import sleep
 
-from wiretap import *
+from wiretap import begin_scope, log_info
 
 
 # @wiretap.telemetry()
@@ -176,3 +176,13 @@ def log_child_method():
 
     with begin_span():
         child_method("This is a child method.")
+
+
+def log_v13():
+    log_info("Message without activity.")
+    with begin_scope(about="outer") as outer:
+        outer.zero.log_debug(None)
+        with begin_scope(about="inner") as inner:
+            inner.zero.log_debug(None)
+            inner.tick.log_info(None)
+            inner.last.log_info(None)

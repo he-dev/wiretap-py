@@ -9,9 +9,11 @@ import yaml
 # wiretap_src = project_root / "wiretap" / "src"
 # sys.path.insert(0, str(wiretap_src))
 
-import wiretap # pip install -e ./wiretap
+import wiretap  # pip install -e ./wiretap
 from use_cases import *
 
+#print(wiretap.__file__)
+#print(*sys.path, sep="\n")
 
 
 def demo():
@@ -47,4 +49,5 @@ if __name__ == "__main__":
 
         wiretap.configure(config)
 
-    demo()
+    # demo()
+    log_v13()

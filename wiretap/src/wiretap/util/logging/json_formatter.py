@@ -1,12 +1,11 @@
-import functools
 import json
 import logging
 from json import JSONEncoder
 from typing import Any
 
-from wiretap.util.services.encode_log_entry import DefaultEncode
-from wiretap.util.services.mutate_log_entry import MutateLogEntry, LogContext
 from wiretap.meta.type_factory import create_instance
+from wiretap.util.buzz.encode_json import DefaultEncode
+from wiretap.util.buzz.build_json import BuildJSON
 
 
 class JsonFormatter(logging.Formatter):
@@ -22,11 +21,13 @@ class JsonFormatter(logging.Formatter):
             self.default_encode = DefaultEncode([create_instance(e, JSONEncoder) for e in encoders])
 
         if properties is not None:
-            self.modifiers = [create_instance(p, MutateLogEntry) for p in properties]
+            self.builders = [create_instance(p, BuildJSON) for p in properties]
 
     def format(self, record: logging.LogRecord):
         # core: Apply each modifier.
-        entry: dict[str, Any] = functools.reduce(lambda current, modifier: modifier(LogContext(record, current)), self.modifiers, {})
+        entry: dict[str, Any] = {}
+        for build in self.builders:
+            entry = build(record, entry)
 
         return json.dumps(
             entry,

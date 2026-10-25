@@ -1,5 +1,5 @@
 from wiretap.core.services.log_messages import log_event
-from wiretap.util.span import Span, SpanStatus, LogLevelName
+from wiretap.util.span import ActivityScope, SpanStatus, LogLevelName
 
 
 class LogStatus:
@@ -15,7 +15,7 @@ class LogStatus:
 
         self.level = level
 
-    def __call__(self, span: Span) -> None:
+    def __call__(self, span: ActivityScope) -> None:
         # core: When passed to on_begin the UNSET status is handled, otherwise on_end the other one.
         if span.status == SpanStatus.UNSET:
             log_event(

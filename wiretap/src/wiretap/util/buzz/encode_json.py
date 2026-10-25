@@ -5,8 +5,6 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from wiretap.util.chain_path import ChainPath
-
 
 class DefaultEncode:
     def __init__(self, encoders: list[JSONEncoder]) -> None:
@@ -38,62 +36,62 @@ class DefaultEncode:
 class EncodeDateTime(JSONEncoder):
     """Supports: datetime -> ISO 8601 string"""
 
-    def default(self, obj: Any) -> Any:
-        if isinstance(obj, (datetime, date)):
-            return obj.isoformat()
+    def default(self, o: Any) -> Any:
+        if isinstance(o, (datetime, date)):
+            return o.isoformat()
         raise TypeError
 
 
 class EncodeUUID(JSONEncoder):
     """Supports: uuid.UUID -> string"""
 
-    def default(self, obj: Any) -> Any:
-        if isinstance(obj, UUID):
-            return str(obj)
+    def default(self, o: Any) -> Any:
+        if isinstance(o, UUID):
+            return str(o)
         raise TypeError
 
 
 class EncodePath(JSONEncoder):
     """Supports: pathlib.Path -> posix path string"""
 
-    def default(self, obj: Any) -> Any:
-        if isinstance(obj, Path):
-            return obj.as_posix()
+    def default(self, o: Any) -> Any:
+        if isinstance(o, Path):
+            return o.as_posix()
         raise TypeError
 
 
 class EncodeEnum(JSONEncoder):
     """Supports: enum.Enum -> string (via str(enum))"""
 
-    def default(self, obj: Any) -> Any:
-        if isinstance(obj, Enum):
-            return str(obj)
+    def default(self, o: Any) -> Any:
+        if isinstance(o, Enum):
+            return str(o)
         raise TypeError
 
 
 class EncodeSet(JSONEncoder):
     """Supports: set -> list"""
 
-    def default(self, obj: Any) -> Any:
-        if isinstance(obj, set):
-            return list(obj)
+    def default(self, o: Any) -> Any:
+        if isinstance(o, set):
+            return list(o)
         raise TypeError
 
 
 class EncodeChainPath(JSONEncoder):
     """Supports: ChainPath -> string"""
 
-    def default(self, obj: Any) -> Any:
-        if isinstance(obj, ChainPath):
-            return str(obj)
+    def default(self, o: Any) -> Any:
+        if isinstance(o, ChainPath):
+            return str(o)
         raise TypeError
 
 
 class EncodeToDict(JSONEncoder):
     """Supports: objects with .to_dict() -> dict-like"""
 
-    def default(self, obj: Any) -> Any:
-        to_dict = getattr(obj, "to_dict", None)
+    def default(self, o: Any) -> Any:
+        to_dict = getattr(o, "to_dict", None)
         if callable(to_dict):
             return to_dict()
         raise TypeError

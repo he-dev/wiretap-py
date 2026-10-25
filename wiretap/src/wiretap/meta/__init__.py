@@ -49,3 +49,26 @@ def trim_path(path: str) -> str:
         # core: 'path' is apparently a single name, so return the original one.
         return _path.as_posix()
 
+
+def flatten_dict_iterative(d: dict, sep: str = '.') -> dict:
+    result = {}
+
+    # The stack holds tuples of (prefix_key, dictionary_to_process)
+    stack = [('', d)]
+
+    while stack:
+        # core: Preserves the original top-to-bottom insertion (FIFO)
+        parent_key, current_dict = stack.pop(0)
+
+        for k, v in current_dict.items():
+            # Construct the new composite key
+            new_key = f"{parent_key}{sep}{k}" if parent_key else k
+
+            if isinstance(v, dict):
+                # If it's a dict, push it to the stack to process later
+                stack.append((new_key, v))
+            else:
+                # Otherwise, assign the value to the result dictionary
+                result[new_key] = v
+
+    return result
