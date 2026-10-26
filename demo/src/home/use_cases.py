@@ -180,9 +180,9 @@ def log_child_method():
 
 def log_v13():
     log_info("Message without activity.")
-    with begin_scope(about="outer") as outer:
+    with begin_scope(about="outer", foo="bar") as outer:
         outer.zero.log_debug(None)
         with begin_scope(about="inner") as inner:
             inner.zero.log_debug(None)
             inner.tick.log_info(None)
-            inner.last.log_info(None)
+            inner.last.log_info("That's it in {activity[duration_ms]} ms.")

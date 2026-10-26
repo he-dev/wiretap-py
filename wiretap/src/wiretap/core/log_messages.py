@@ -1,10 +1,5 @@
-import inspect
 import logging
 import sys
-from types import FrameType
-
-from wiretap.meta import trim_path
-from wiretap.util.activity import ActivityScope, ActivityEvent
 
 
 def log_event(
@@ -14,36 +9,14 @@ def log_event(
         frame_at: int | None,
         **kwargs
 ) -> None:
-    # meta: Not using these due to bad performance.
-    # stack = inspect.stack(2)
-    # frame = stack[frame_at] if frame_at else scope.frame
-
-    # core: Fetch the current frame in case logging is called by a method without its own span.
-    # meta: Avoids inspect.stack for performance reasons.
-    frame_type: FrameType = sys._getframe(frame_at or 1)
-    info = inspect.getframeinfo(frame_type)
-    frame: inspect.FrameInfo = inspect.FrameInfo(
-        frame_type,
-        info.filename,
-        info.lineno,
-        info.function,
-        info.code_context,
-        info.index
-    )
-
-    extra = kwargs | (state or {}) | {
-        "source": {
-            "func": frame.function,
-            "file": trim_path(frame.filename),
-            "line": frame.lineno
-        }
-    }
-
-    logging.getLogger(frame.function).log(
+    func_name = sys._getframe(2).f_code.co_name
+    extra = kwargs | (state or {})
+    logging.getLogger(func_name).log(
         level=level,
         msg=message,
         exc_info=level >= logging.ERROR or sys.exc_info()[0] is not None,
-        extra={"_wiretap": extra}
+        extra=extra,
+        stacklevel=1
     )
 
 

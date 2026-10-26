@@ -58,7 +58,6 @@ class ActivityScope:
         self.recent_event: Optional[ActivityEvent] = None
         self.stopwatch: Stopwatch = Stopwatch()
         self.duration_ms: int = 0
-        self.logger: logging.Logger = logging.getLogger(about)
 
     def __iter__(self) -> Iterator["ActivityScope"]:
         current: Optional["ActivityScope"] = self
@@ -69,43 +68,6 @@ class ActivityScope:
     @property
     def depth(self) -> int:
         return self.parent.depth + 1 if self.parent else 0
-
-    def log_event(
-            self,
-            message: str | None,
-            level: int,
-            event: ActivityEvent,
-            **kwargs
-    ) -> None:
-        # core: Fetch the current frame in case logging is called by a method without its own span.
-        # meta: Avoids inspect.stack for performance reasons.
-        frame_type: FrameType = sys._getframe(2)  # depth
-        info = inspect.getframeinfo(frame_type)
-        frame: inspect.FrameInfo = inspect.FrameInfo(
-            frame_type,
-            info.filename,
-            info.lineno,
-            info.function,
-            info.code_context,
-            info.index
-        )
-
-        extra = kwargs | {
-            "source": {
-                "func": frame.function,
-                "file": trim_path(frame.filename),
-                "line": frame.lineno
-            }
-        }
-
-        extra = extra | self.move_next(event)
-
-        self.logger.log(
-            level=level,
-            msg=message,
-            exc_info=level >= logging.ERROR or sys.exc_info()[0] is not None,
-            extra={"_wiretap": extra}
-        )
 
     def move_next(self, next_event: ActivityEvent) -> dict:
 
@@ -129,7 +91,8 @@ class ActivityScope:
 
         activity = activity | {
             "about": self.about,
-            "event": next_event.name
+            "event": next_event.name,
+            "depth": self.depth,
         }
 
         match next_event:
@@ -138,11 +101,11 @@ class ActivityScope:
                     "duration_ms": self.duration_ms
                 }
 
-        return self.state | {
+        return {"context": self.state} | {
             "activity": activity
         } | {
-            "tracing": {
-                "trace_id": self.trace_id,
+            "trace": {
+                "id": self.trace_id,
                 "span_id": self.span_id,
                 "parent_id": self.parent.span_id if self.parent else None
             }
@@ -187,15 +150,33 @@ class ActivityLogger:
     def __init__(self, activity: ActivityScope, event: ActivityEvent) -> None:
         self._activity = activity
         self._event = event
+        self.logger: logging.Logger = logging.getLogger(activity.about)
+
+    def _log_event(
+            self,
+            message: str | None,
+            level: int,
+            event: ActivityEvent,
+            **kwargs
+    ) -> None:
+        extra = kwargs | self._activity.move_next(event)
+
+        self.logger.log(
+            level=level,
+            msg=message,
+            exc_info=level >= logging.ERROR or sys.exc_info()[0] is not None,
+            extra=extra | {"_wiretap": True},
+            stacklevel=3
+        )
 
     def log_debug(self, message: str | None, **kwargs) -> None:
-        self._activity.log_event(message, logging.DEBUG, self._event, **kwargs)
+        self._log_event(message, logging.DEBUG, self._event, **kwargs)
 
     def log_info(self, message: str | None, **kwargs) -> None:
-        self._activity.log_event(message, logging.INFO, self._event, **kwargs)
+        self._log_event(message, logging.INFO, self._event, **kwargs)
 
     def log_warning(self, message: str | None, **kwargs) -> None:
-        self._activity.log_event(message, logging.WARNING, self._event, **kwargs)
+        self._log_event(message, logging.WARNING, self._event, **kwargs)
 
     def log_error(self, message: str | None, **kwargs) -> None:
-        self._activity.log_event(message, logging.ERROR, self._event, **kwargs)
+        self._log_event(message, logging.ERROR, self._event, **kwargs)

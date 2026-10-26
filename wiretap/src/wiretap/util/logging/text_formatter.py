@@ -1,7 +1,8 @@
 import logging
+from copy import copy
 
 from wiretap.util.activity import ActivityScope
-from wiretap.meta import trim_path
+from wiretap.meta import trim_path, FormatData
 
 
 class TextFormatter(logging.Formatter):
@@ -10,38 +11,47 @@ class TextFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord):
         # meta: Adds custom properties to the record so that they can be used in the configured log format.
 
-        include_source = logging.getLogger(__name__).isEnabledFor(logging.DEBUG)
+        activity = record.__dict__.get("activity", {})
 
-        # core: This is a native logging record, but inside a wiretap's span.
-        if activity := ActivityScope.get_current():
-            record.operation = event.operation
-            record.indent = self.indent * event.depth
-            record.properties = stringify_deep(event.state)
-            record.span = {} | {
-                "trace_id": event.trace_id,
-                "span_id": event.span_id,
-                "parent_id": event.parent_id,
-                "status": event.status.value,
-            } | event.stopwatch.move_next(iso=True)
+        if not activity:
+            record.activity = {
+                "about": None,
+                "event": None,
+            }
+            record.trace = {
+                "id": None,
+                "span_id": None,
+                "parent_id": None
+            }
+            record.source = {
+                "func": None,
+                "file": None,
+                "line": None
+            }
+            record.context = {}
+
+        record.indent = self.indent * activity.get("depth", 0)
+        include_source = (
+                logging.getLogger(record.name).isEnabledFor(logging.DEBUG)
+                or activity.get("event") == "ZERO"
+                or record.levelno >= logging.ERROR
+        )
+
+        if include_source:
             record.source = {
                 "func": record.funcName,
                 "file": trim_path(record.filename),
                 "line": record.lineno
-            } if include_source else "off"
+            }
 
-            return super().format(record)
-
-        # core: This is a native logging record, but stand-alone.
-        record.operation = record.funcName
-        record.message = record.msg
-        record.indent = ""
-        record.source = {
-            "func": record.funcName,
-            "file": trim_path(record.filename),
-            "line": record.lineno
-        } if include_source else "off"
-        record.properties = None
-        record.span = None
+        # core: dict-render only _wiretap messages.
+        record = copy(record)
+        if record.__dict__.get("_wiretap", False):
+            record.msg = (
+                None if record.msg is None
+                else str(record.msg).format_map(FormatData(record.__dict__))
+            )
+            record.args = ()
 
         return super().format(record)
 

@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from logging import LogRecord
 from typing import Any, Optional
 
-from wiretap.meta import trim_path
+from wiretap.meta import trim_path, FormatData
 from wiretap.util.activity import ActivityScope
 
 # util: Type alias for convenience
@@ -42,7 +42,8 @@ class AddMessage(BuildJSON):
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
         return json | {
-            "message": record.getMessage(),
+            "message": None if record.msg is None else record.getMessage().format_map(FormatData(record.__dict__)),
+            "logger": record.name,
             "level": record.levelname.lower(),
         }
 
@@ -50,35 +51,36 @@ class AddMessage(BuildJSON):
 class AddActivity(BuildJSON):
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        if activity := record.__dict__.get("_wiretap", {}):
-            return json | activity
+        if activity := record.__dict__.get("activity", {}):
+            return json | {"activity": activity}
         else:
             return json | {
-                "operation": record.funcName,
-                "status": None,
-                "trace_id": None,
-                "span_id": None,
-                "parent_id": None,
-                "start_at": None,
-                "end_at": None,
+                "activity": {
+                    "func": record.funcName,
+                    "file": record.filename,
+                    "line": record.lineno
+                }
             }
 
 
 class AddSource(BuildJSON):
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        if activity := ActivityScope.get_current():
-            return json | {"source": {
-                "func": activity.frame.function if activity.frame else record.funcName,
-                "file": trim_path(activity.frame.filename) if activity.frame else trim_path(record.filename),
-                "line": activity.frame.lineno if activity.frame else record.lineno,
-            }}
-        else:
+        activity = record.__dict__.get("activity", {})
+        include_source = (
+                logging.getLogger(record.name).isEnabledFor(logging.DEBUG)
+                or activity.get("event") == "ZERO"
+                or record.levelno >= logging.ERROR
+        )
+
+        if include_source:
             return json | {"source": {
                 "func": record.funcName,
                 "file": record.filename,
                 "line": record.lineno,
             }}
+
+        return json
 
 
 class AddProperties(BuildJSON):

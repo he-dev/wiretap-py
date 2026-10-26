@@ -1,4 +1,5 @@
 import contextlib
+import sys
 from typing import Any, Iterator, Callable
 
 from wiretap.util.activity import ActivityAbout, ActivityScope
@@ -23,9 +24,6 @@ def begin_scope(
     Returns:
         The newly created span.
     """
-
-    # stack = inspect.stack(2)
-    # frame = stack[2]
 
     state = (state or {}) | kwargs
     parent = ActivityScope.get_current()
