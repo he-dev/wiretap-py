@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=65.7.0", "wheel"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 #[tool.setuptools]
@@ -11,7 +11,7 @@ where = ["src"]
 [project]
 name = "wiretap"
 version = "13.0.0"
-requires-python = ">=3.14"
+requires-python = ">=3.10"
 authors = [{ name = "he-dev" }]
 description = "This package provides a context-oriented logger."
 classifiers = [
@@ -21,6 +21,8 @@ classifiers = [
     "Topic :: Utilities"
 ]
 readme = { file = "README.md", content-type = "text/markdown" }
+license = "MIT"
+license-files = ["LICENSE"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "mypy", "build", "twine"]
