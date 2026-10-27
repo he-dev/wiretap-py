@@ -26,8 +26,8 @@ formatters:
       - wiretap.util.buzz.AddTimestamp
       - wiretap.util.buzz.AddMessage
       - wiretap.util.buzz.AddActivity
-      #- wiretap.util.buzz.AddProperties
-      #- wiretap.util.buzz.AddSpan
+      #- wiretap.util.buzz.AddStory
+      - wiretap.util.buzz.AddContext
       - wiretap.util.buzz.AddSource
       - wiretap.util.buzz.AddException
 #      - (): wiretap.util.logging.AddEnvironmentVariables

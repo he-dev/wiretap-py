@@ -16,7 +16,7 @@ class TextFormatter(logging.Formatter):
         if not activity:
             record.activity = {
                 "about": None,
-                "event": None,
+                "event": None
             }
             record.trace = {
                 "id": None,
@@ -54,11 +54,3 @@ class TextFormatter(logging.Formatter):
             record.args = ()
 
         return super().format(record)
-
-
-def stringify_deep(obj: dict) -> dict | str:
-    match obj:
-        case dict():
-            return {k: stringify_deep(v) for k, v in obj.items()}
-        case _:
-            return str(obj)

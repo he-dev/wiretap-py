@@ -8,7 +8,8 @@ from datetime import date
 from enum import Enum
 from time import sleep
 
-from wiretap import begin_scope, log_info
+from wiretap import begin_scope, log_info, log_envelope, SYSTEM, DOMAIN
+
 
 
 # @wiretap.telemetry()
@@ -182,7 +183,7 @@ def log_v13():
     log_info("Message without activity.")
     with begin_scope(about="outer", foo="bar") as outer:
         outer.zero.log_debug(None)
-        with begin_scope(about="inner") as inner:
-            inner.zero.log_debug(None)
+        with begin_scope(about="inner", **SYSTEM) as inner, log_envelope(inner):
+            # inner.zero.log_debug(None)
             inner.tick.log_info(None)
             inner.last.log_info("That's it in {activity[duration_ms]} ms.")

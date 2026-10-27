@@ -1,14 +1,11 @@
 import contextlib
-import inspect
 import logging
 import secrets
 import sys
 from contextvars import ContextVar  # noqa: built-in module
 from enum import Enum, auto
-from types import FrameType
-from typing import Optional, Any, Iterator, TypeVar, ClassVar, Protocol
+from typing import Optional, Any, Iterator, TypeVar, ClassVar
 
-from wiretap.meta import trim_path
 from wiretap.util.stopwatch import Stopwatch
 
 T = TypeVar("T", bound="ActivityScope")
@@ -20,8 +17,8 @@ class ActivityEvent(Enum):
     LAST = auto()
 
 
-DOMAIN = {"story": "domain"}
-SYSTEM = {"story": "system"}
+DOMAIN = {"@story": "domain"}
+SYSTEM = {"@story": "system"}
 ZERO = {"activity.event": ActivityEvent.ZERO.name.lower()}
 TICK = {"activity.event": ActivityEvent.TICK.name.lower()}
 LAST = {"activity.event": ActivityEvent.LAST.name.lower()}
@@ -72,6 +69,7 @@ class ActivityScope:
     def move_next(self, next_event: ActivityEvent) -> dict:
 
         activity = {}
+        context = self.state
 
         match next_event:
             case ActivityEvent.ZERO if self.recent_event is None:
@@ -85,8 +83,8 @@ class ActivityScope:
                 self.duration_ms = self.stopwatch.elapsed_ms
             case _:
                 # core: The requested transition from one event to the next is not valid.
-                activity = activity | {
-                    "issue": "InvalidEventOrder"
+                context = context | {
+                    "@fixit": "EventOrder"
                 }
 
         activity = activity | {
@@ -101,7 +99,9 @@ class ActivityScope:
                     "duration_ms": self.duration_ms
                 }
 
-        return {"context": self.state} | {
+        return {
+            "context": context
+        } | {
             "activity": activity
         } | {
             "trace": {
@@ -159,14 +159,16 @@ class ActivityLogger:
             event: ActivityEvent,
             **kwargs
     ) -> None:
-        extra = kwargs | self._activity.move_next(event)
+        frame_at = kwargs.pop("frame_at", 3)
+        extra = self._activity.move_next(event)
+        extra["context"] = extra["context"] | kwargs
 
         self.logger.log(
             level=level,
             msg=message,
-            exc_info=level >= logging.ERROR or sys.exc_info()[0] is not None,
+            exc_info=sys.exc_info()[0] is not None,
             extra=extra | {"_wiretap": True},
-            stacklevel=3
+            stacklevel=frame_at
         )
 
     def log_debug(self, message: str | None, **kwargs) -> None:

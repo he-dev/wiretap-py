@@ -6,10 +6,9 @@ from datetime import datetime, timezone
 from logging import LogRecord
 from typing import Any, Optional
 
-from wiretap.meta import trim_path, FormatData
-from wiretap.util.activity import ActivityScope
+from wiretap.meta import FormatData
 
-# util: Type alias for convenience
+# util: Type alias for convenience.
 LogJson = dict[str, Any]
 
 
@@ -56,9 +55,8 @@ class AddActivity(BuildJSON):
         else:
             return json | {
                 "activity": {
-                    "func": record.funcName,
-                    "file": record.filename,
-                    "line": record.lineno
+                    "about": None,
+                    "event": None,
                 }
             }
 
@@ -68,8 +66,7 @@ class AddSource(BuildJSON):
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
         activity = record.__dict__.get("activity", {})
         include_source = (
-                logging.getLogger(record.name).isEnabledFor(logging.DEBUG)
-                or activity.get("event") == "ZERO"
+                (logging.getLogger(record.name).isEnabledFor(logging.DEBUG) and activity.get("event") == "ZERO")
                 or record.levelno >= logging.ERROR
         )
 
@@ -83,16 +80,27 @@ class AddSource(BuildJSON):
         return json
 
 
-class AddProperties(BuildJSON):
+class AddStory(BuildJSON):
+
+    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
+        story = record.__dict__.get("context", {}).pop("story", None)
+        if story:
+            return json | {
+                "story": story
+            }
+
+        return json
+
+
+class AddContext(BuildJSON):
 
     def __init__(self, names: Optional[list[str]] = None):
         self.names = names or ["src"]
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        if activity := ActivityScope.get_current():
-            return json | {"properties": activity.state}
-        else:
-            return json | {"properties": {}}
+        return json | {
+            "context": record.__dict__.get("context", None)
+        }
 
 
 class AddException(BuildJSON):

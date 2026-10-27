@@ -1,6 +1,5 @@
 import contextlib
-import sys
-from typing import Any, Iterator, Callable
+from typing import Any, Iterator, Literal
 
 from wiretap.util.activity import ActivityAbout, ActivityScope
 
@@ -28,9 +27,24 @@ def begin_scope(
     state = (state or {}) | kwargs
     parent = ActivityScope.get_current()
     with ActivityScope(about, state, trace_id, parent).push() as scope:
-        try:
-            yield ActivityAbout(scope)
-        except Exception:
-            raise
-        finally:
-            pass
+        yield ActivityAbout(scope)
+
+
+@contextlib.contextmanager
+def log_envelope(
+        activity: ActivityAbout,
+        mode: Literal["auto", "zero_only", "last_only"] = "auto",
+        **kwargs
+) -> Iterator[None]:
+    if mode in ("auto", "zero_only"):
+        activity.zero.log_debug(None, **kwargs)
+
+    try:
+        yield
+    except Exception:
+        if mode in ("auto", "last_only"):
+            activity.last.log_error(None, **kwargs)
+        raise
+    else:
+        if mode in ("auto", "last_only"):
+            activity.last.log_info(None, **kwargs)
