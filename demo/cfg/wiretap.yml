@@ -26,13 +26,10 @@ formatters:
       - wiretap.util.buzz.AddTimestamp
       - wiretap.util.buzz.AddMessage
       - wiretap.util.buzz.AddActivity
-      #- wiretap.util.buzz.AddStory
       - wiretap.util.buzz.AddContext
+      - wiretap.util.buzz.AddTrace
       - wiretap.util.buzz.AddSource
       - wiretap.util.buzz.AddException
-#      - (): wiretap.util.logging.AddEnvironmentVariables
-#        names:
-#          - app_id
 handlers:
   console_full:
     class: logging.StreamHandler

@@ -36,15 +36,17 @@ def log_envelope(
         mode: Literal["auto", "zero_only", "last_only"] = "auto",
         **kwargs
 ) -> Iterator[None]:
+    # meta: Account for the nesting of the log_envelope context manager by adjusting the stack-level.
+
     if mode in ("auto", "zero_only"):
-        activity.zero.log_debug(None, **kwargs)
+        activity.zero.log_debug(None, stack_level=5, **kwargs)
 
     try:
         yield
     except Exception:
         if mode in ("auto", "last_only"):
-            activity.last.log_error(None, **kwargs)
+            activity.last.log_error(None, stack_level=5, **kwargs)
         raise
     else:
         if mode in ("auto", "last_only"):
-            activity.last.log_info(None, **kwargs)
+            activity.last.log_info(None, stack_level=5, **kwargs)

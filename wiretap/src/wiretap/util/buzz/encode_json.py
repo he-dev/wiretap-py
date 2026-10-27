@@ -78,15 +78,6 @@ class EncodeSet(JSONEncoder):
         raise TypeError
 
 
-class EncodeChainPath(JSONEncoder):
-    """Supports: ChainPath -> string"""
-
-    def default(self, o: Any) -> Any:
-        if isinstance(o, ChainPath):
-            return str(o)
-        raise TypeError
-
-
 class EncodeToDict(JSONEncoder):
     """Supports: objects with .to_dict() -> dict-like"""
 

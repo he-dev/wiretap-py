@@ -7,6 +7,7 @@ from logging import LogRecord
 from typing import Any, Optional
 
 from wiretap.meta import FormatData
+from wiretap.util.buzz.render_message import render_message
 
 # util: Type alias for convenience.
 LogJson = dict[str, Any]
@@ -41,7 +42,7 @@ class AddMessage(BuildJSON):
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
         return json | {
-            "message": None if record.msg is None else record.getMessage().format_map(FormatData(record.__dict__)),
+            "message": render_message(record),
             "logger": record.name,
             "level": record.levelname.lower(),
         }
@@ -80,18 +81,6 @@ class AddSource(BuildJSON):
         return json
 
 
-class AddStory(BuildJSON):
-
-    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        story = record.__dict__.get("context", {}).pop("story", None)
-        if story:
-            return json | {
-                "story": story
-            }
-
-        return json
-
-
 class AddContext(BuildJSON):
 
     def __init__(self, names: Optional[list[str]] = None):
@@ -100,6 +89,14 @@ class AddContext(BuildJSON):
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
         return json | {
             "context": record.__dict__.get("context", None)
+        }
+
+
+class AddTrace(BuildJSON):
+
+    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
+        return json | {
+            "trace": record.__dict__.get("trace", None)
         }
 
 
@@ -117,13 +114,3 @@ class AddException(BuildJSON):
             }}
 
         return json
-
-
-class AddEnvironmentVariables(BuildJSON):
-
-    def __init__(self, names: list[str]):
-        self.names = names
-
-    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        env = {k: os.environ.get(k) for k in self.names}
-        return json | {"environment": env} if env else json

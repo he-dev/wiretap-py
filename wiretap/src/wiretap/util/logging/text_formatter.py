@@ -1,8 +1,8 @@
 import logging
 from copy import copy
 
-from wiretap.util.activity import ActivityScope
-from wiretap.meta import trim_path, FormatData
+from wiretap.meta import trim_path
+from wiretap.util.buzz.render_message import render_message
 
 
 class TextFormatter(logging.Formatter):
@@ -11,24 +11,22 @@ class TextFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord):
         # meta: Adds custom properties to the record so that they can be used in the configured log format.
 
+        record = copy(record)
+
         activity = record.__dict__.get("activity", {})
 
         if not activity:
-            record.activity = {
+            record.__dict__.setdefault("activity", {
                 "about": None,
-                "event": None
-            }
-            record.trace = {
+                "event": None,
+                "depth": 0,
+            })
+            record.__dict__.setdefault("trace", {
                 "id": None,
                 "span_id": None,
-                "parent_id": None
-            }
-            record.source = {
-                "func": None,
-                "file": None,
-                "line": None
-            }
-            record.context = {}
+                "parent_id": None,
+            })
+            record.__dict__.setdefault("context", {})
 
         record.indent = self.indent * activity.get("depth", 0)
         include_source = (
@@ -43,14 +41,14 @@ class TextFormatter(logging.Formatter):
                 "file": trim_path(record.filename),
                 "line": record.lineno
             }
+        else:
+            record.__dict__.setdefault("source", {
+                "func": None,
+                "file": None,
+                "line": None,
+            })
 
         # core: dict-render only _wiretap messages.
-        record = copy(record)
-        if record.__dict__.get("_wiretap", False):
-            record.msg = (
-                None if record.msg is None
-                else str(record.msg).format_map(FormatData(record.__dict__))
-            )
-            record.args = ()
-
+        record.msg = render_message(record)
+        record.args = ()
         return super().format(record)

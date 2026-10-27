@@ -4,6 +4,7 @@ import secrets
 import sys
 from contextvars import ContextVar  # noqa: built-in module
 from enum import Enum, auto
+from functools import cached_property
 from typing import Optional, Any, Iterator, TypeVar, ClassVar
 
 from wiretap.util.stopwatch import Stopwatch
@@ -18,7 +19,11 @@ class ActivityEvent(Enum):
 
 
 DOMAIN = {"@story": "domain"}
+"""Marks a log entry as part of the application's domain behavior."""
+
 SYSTEM = {"@story": "system"}
+"""Marks a log entry as technical or infrastructure-related."""
+
 ZERO = {"activity.event": ActivityEvent.ZERO.name.lower()}
 TICK = {"activity.event": ActivityEvent.TICK.name.lower()}
 LAST = {"activity.event": ActivityEvent.LAST.name.lower()}
@@ -49,9 +54,12 @@ class ActivityScope:
         """
         self.about = about
         self.parent = parent
+        self.depth: int = parent.depth + 1 if parent else 0
         self.trace_id: str = trace_id or (parent.trace_id if parent else secrets.token_hex(16))
         self.span_id: str = secrets.token_hex(8)
         self.state = parent.state | state if parent else state
+
+        # note: Uses "recent" and not "last" because there is a "last" event, so it would be ambiguous.
         self.recent_event: Optional[ActivityEvent] = None
         self.stopwatch: Stopwatch = Stopwatch()
         self.duration_ms: int = 0
@@ -63,58 +71,32 @@ class ActivityScope:
             current = current.parent
 
     @property
-    def depth(self) -> int:
-        return self.parent.depth + 1 if self.parent else 0
+    def trace(self) -> dict:
+        return {
+            "id": self.trace_id,
+            "span_id": self.span_id,
+            "parent_id": self.parent.span_id if self.parent else None,
+        }
 
-    def move_next(self, next_event: ActivityEvent) -> dict:
-
-        activity = {}
-        context = self.state
-
+    def move_next(self, next_event: ActivityEvent) -> bool:
         match next_event:
             case ActivityEvent.ZERO if self.recent_event is None:
-                self.recent_event = next_event
                 self.stopwatch = Stopwatch()
+            case ActivityEvent.TICK if self.recent_event in (ActivityEvent.ZERO, ActivityEvent.TICK):
                 pass
-            case ActivityEvent.TICK if self.recent_event == ActivityEvent.ZERO or self.recent_event == ActivityEvent.TICK:
-                self.recent_event = next_event
-            case ActivityEvent.LAST if self.recent_event == ActivityEvent.TICK:
-                self.recent_event = next_event
+            case ActivityEvent.LAST if self.recent_event in (ActivityEvent.ZERO, ActivityEvent.TICK):
                 self.duration_ms = self.stopwatch.elapsed_ms
             case _:
                 # core: The requested transition from one event to the next is not valid.
-                context = context | {
-                    "@fixit": "EventOrder"
-                }
+                return False
 
-        activity = activity | {
-            "about": self.about,
-            "event": next_event.name,
-            "depth": self.depth,
-        }
-
-        match next_event:
-            case ActivityEvent.LAST:
-                activity = activity | {
-                    "duration_ms": self.duration_ms
-                }
-
-        return {
-            "context": context
-        } | {
-            "activity": activity
-        } | {
-            "trace": {
-                "id": self.trace_id,
-                "span_id": self.span_id,
-                "parent_id": self.parent.span_id if self.parent else None
-            }
-        }
+        self.recent_event = next_event
+        return True
 
     @contextlib.contextmanager
     def push(self) -> Iterator["ActivityScope"]:
         """
-        Pushes the current span onto the stack.
+        Pushes the current activity-scope onto the stack.
         """
 
         token = ActivityScope._stack.set(self)
@@ -134,14 +116,18 @@ class ActivityAbout:
         self._activity = activity
 
     @property
+    def elapsed_ms(self) -> int:
+        return self._activity.stopwatch.elapsed_ms
+
+    @cached_property
     def zero(self) -> ActivityLogger:
         return ActivityLogger(self._activity, ActivityEvent.ZERO)
 
-    @property
+    @cached_property
     def tick(self) -> ActivityLogger:
         return ActivityLogger(self._activity, ActivityEvent.TICK)
 
-    @property
+    @cached_property
     def last(self) -> ActivityLogger:
         return ActivityLogger(self._activity, ActivityEvent.LAST)
 
@@ -156,29 +142,49 @@ class ActivityLogger:
             self,
             message: str | None,
             level: int,
-            event: ActivityEvent,
             **kwargs
     ) -> None:
-        frame_at = kwargs.pop("frame_at", 3)
-        extra = self._activity.move_next(event)
-        extra["context"] = extra["context"] | kwargs
+        valid = self._activity.move_next(self._event)
+
+        if not self.logger.isEnabledFor(level):
+            return
+
+        stack_level = kwargs.pop("stack_level", 3)
+        context = self._activity.state.copy()
+        context.update(kwargs)
+        if not valid:
+            context["@fixit"] = "EventOrder"
+
+        activity = {
+            "about": self._activity.about,
+            "event": self._event.name,
+            "depth": self._activity.depth,
+        }
+
+        if self._event is ActivityEvent.LAST:
+            activity["duration_ms"] = self._activity.duration_ms
 
         self.logger.log(
             level=level,
             msg=message,
             exc_info=sys.exc_info()[0] is not None,
-            extra=extra | {"_wiretap": True},
-            stacklevel=frame_at
+            extra={
+                "_wiretap": True,
+                "context": context,
+                "activity": activity,
+                "trace": self._activity.trace,
+            },
+            stacklevel=stack_level
         )
 
     def log_debug(self, message: str | None, **kwargs) -> None:
-        self._log_event(message, logging.DEBUG, self._event, **kwargs)
+        self._log_event(message, logging.DEBUG, **kwargs)
 
     def log_info(self, message: str | None, **kwargs) -> None:
-        self._log_event(message, logging.INFO, self._event, **kwargs)
+        self._log_event(message, logging.INFO, **kwargs)
 
     def log_warning(self, message: str | None, **kwargs) -> None:
-        self._log_event(message, logging.WARNING, self._event, **kwargs)
+        self._log_event(message, logging.WARNING, **kwargs)
 
     def log_error(self, message: str | None, **kwargs) -> None:
-        self._log_event(message, logging.ERROR, self._event, **kwargs)
+        self._log_event(message, logging.ERROR, **kwargs)
