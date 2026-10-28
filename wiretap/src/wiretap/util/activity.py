@@ -48,6 +48,7 @@ class ActivityScope:
             state: dict[str, Any],
             trace_id: Any | None,
             parent: Optional["ActivityScope"] = None,
+            parent_id: str | None = None,
     ):
         """
         Initializes a new ActivityScope instance.
@@ -57,9 +58,11 @@ class ActivityScope:
             state: The initial state of the activity.
             trace_id: The trace ID for the activity.
             parent: The parent activity.
+            parent_id: External parent span ID, used when there is no local parent activity.
         """
         self.about = about
         self.parent = parent
+        self.parent_id = parent.span_id if parent else parent_id
         self.depth: int = parent.depth + 1 if parent else 0
         self.trace_id: str = trace_id or (parent.trace_id if parent else secrets.token_hex(16))
         self.span_id: str = secrets.token_hex(8)
@@ -81,7 +84,7 @@ class ActivityScope:
         return {
             "id": self.trace_id,
             "span_id": self.span_id,
-            "parent_id": self.parent.span_id if self.parent else None,
+            "parent_id": self.parent_id,
         }
 
     def move_next(self, next_event: ActivityEvent) -> MoveNextEvent:
@@ -107,7 +110,8 @@ class ActivityScope:
             cls,
             about: str,
             state: dict[str, Any],
-            trace_id: Any | None = None
+            trace_id: Any | None = None,
+            parent_id: str | None = None,
     ) -> Iterator["ActivityScope"]:
         """
         Creates and pushes a child of the current activity-scope onto the stack.
@@ -118,6 +122,7 @@ class ActivityScope:
             state=state,
             trace_id=trace_id,
             parent=cls.get_current(),
+            parent_id=parent_id,
         )
         token = cls._stack.set(activity)
         try:
@@ -172,8 +177,6 @@ class ActivityLogger:
         stack_level = kwargs.pop("stack_level", 3)
         context = self._activity.state.copy()
         context.update(kwargs)
-        if move_result > MoveNextEvent.OKAY:
-            context["@error"] = move_result.name
 
         activity = {
             "about": self._activity.about,
@@ -184,16 +187,21 @@ class ActivityLogger:
         if self._event is ActivityEvent.LAST:
             activity["duration_ms"] = self._activity.duration_ms
 
+        extra: dict[str, Any] = {
+            "_wiretap": True,
+            "context": context,
+            "activity": activity,
+            "trace": self._activity.trace,
+        }
+
+        if move_result > MoveNextEvent.OKAY:
+            extra["_errors"] = [move_result.name]
+
         self.logger.log(
             level=level,
             msg=message,
             exc_info=sys.exc_info()[0] is not None,
-            extra={
-                "_wiretap": True,
-                "context": context,
-                "activity": activity,
-                "trace": self._activity.trace,
-            },
+            extra=extra,
             stacklevel=stack_level
         )
 

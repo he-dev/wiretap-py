@@ -135,3 +135,50 @@ class AddException(BuildJSON):
             }}
 
         return json
+
+
+# note: Experimental.
+class Redact(BuildJSON):
+    """Replaces values at dotted paths; '*' matches one dictionary key or list index."""
+
+    def __init__(self, paths: list[str], replacement: str = "[REDACTED]"):
+        self.paths = tuple(tuple(path.split(".")) for path in paths)
+        self.replacement = replacement
+
+    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
+        return {key: self._redact(value, (key,)) for key, value in json.items()}
+
+    def _redact(self, value: Any, path: tuple[str, ...]) -> Any:
+        if self._matches(path):
+            return self.replacement
+
+        # core: Rebuild containers so redaction cannot change values shared with the log record.
+        if isinstance(value, dict):
+            return {key: self._redact(child, (*path, key)) for key, child in value.items()}
+        if isinstance(value, list):
+            return [self._redact(child, (*path, str(index))) for index, child in enumerate(value)]
+        return value
+
+    def _matches(self, path: tuple[str, ...]) -> bool:
+        for pattern in self.paths:
+            if len(pattern) != len(path):
+                continue
+
+            matches = True
+            for expected, actual in zip(pattern, path):
+                if expected != "*" and expected != actual:
+                    matches = False
+                    break
+
+            if matches:
+                return True
+
+        return False
+
+
+# note: Experimental
+class RemoveNone(BuildJSON):
+    """Removes root-level fields containing None, leaving nested values untouched."""
+
+    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
+        return {key: value for key, value in json.items() if value is not None}

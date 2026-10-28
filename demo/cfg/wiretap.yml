@@ -6,14 +6,14 @@ formatters:
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       {asctime}.{msecs:03.0f} [{levelname:7s}]
-      {indent}{activity[about]}: "{message}", context: {context}, trace={trace}, source={source}
+      {indent}{activity[about]}: "{message}", ctx: {context}, err: {_errors}, trc={trace}, src={source}
   console_lite:
     (): wiretap.util.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       {asctime}.{msecs:03.0f} [{levelname:7s}]
-      {indent}{activity[about]}[{activity[event]}]: "{message}", context: {context}
+      {indent}{activity[about]}[{activity[event]}]: "{message}", ctx: {context}, err: {_errors}
   elastic_json:
     (): wiretap.util.logging.JsonFormatter
     encoders:
@@ -22,11 +22,13 @@ formatters:
       - wiretap.util.encoding.EncodeSet
       - wiretap.util.encoding.EncodePath
       - wiretap.util.encoding.EncodeToDict
-    properties:
+    pipeline:
       - wiretap.util.buzz.AddTimestamp
       - wiretap.util.buzz.AddMessage
       - wiretap.util.buzz.AddActivity
-      - wiretap.util.buzz.AddContext
+      #- wiretap.util.buzz.AddContext
+      - "()": wiretap.util.buzz.AddContext
+        key: "properties"
       - wiretap.util.buzz.AddTrace
       - wiretap.util.buzz.AddSource
       - wiretap.util.buzz.AddException

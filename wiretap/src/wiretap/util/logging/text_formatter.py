@@ -12,6 +12,7 @@ class TextFormatter(logging.Formatter):
         # meta: Adds custom properties to the record so that they can be used in the configured log format.
 
         record = copy(record)
+        record.__dict__.setdefault("_errors", [])
 
         activity = record.__dict__.get("activity", {})
 
