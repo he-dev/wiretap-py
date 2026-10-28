@@ -4,7 +4,7 @@ import logging
 import secrets
 import sys
 from contextvars import ContextVar  # noqa: built-in module
-from enum import Enum, auto
+from enum import Enum, auto, IntEnum
 from functools import cached_property
 from typing import Optional, Any, Iterator, TypeVar, ClassVar
 
@@ -13,10 +13,15 @@ from wiretap.util.stopwatch import Stopwatch
 T = TypeVar("T", bound="ActivityScope")
 
 
-class ActivityEvent(Enum):
+class ActivityEvent(IntEnum):
     ZERO = auto()
     TICK = auto()
     LAST = auto()
+
+
+class MoveNextEvent(IntEnum):
+    OKAY = auto()
+    INVALID_EVENT_SEQUENCE = auto()
 
 
 DOMAIN = {"@story": "domain"}
@@ -79,7 +84,7 @@ class ActivityScope:
             "parent_id": self.parent.span_id if self.parent else None,
         }
 
-    def move_next(self, next_event: ActivityEvent) -> bool:
+    def move_next(self, next_event: ActivityEvent) -> MoveNextEvent:
         match next_event:
             case ActivityEvent.ZERO if self.recent_event is None:
                 self.stopwatch = Stopwatch()
@@ -89,22 +94,36 @@ class ActivityScope:
                 self.duration_ms = self.stopwatch.elapsed_ms
             case _:
                 # core: The requested transition from one event to the next is not valid.
-                return False
+                return MoveNextEvent.INVALID_EVENT_SEQUENCE
 
         self.recent_event = next_event
-        return True
+        return MoveNextEvent.OKAY
 
+    # Transition 'last -> last' does not follow 'none -> zero(1) -> tick(0-n) -> last(1)'
+
+    @classmethod
     @contextlib.contextmanager
-    def push(self) -> Iterator["ActivityScope"]:
+    def push(
+            cls,
+            about: str,
+            state: dict[str, Any],
+            trace_id: Any | None = None
+    ) -> Iterator["ActivityScope"]:
         """
-        Pushes the current activity-scope onto the stack.
+        Creates and pushes a child of the current activity-scope onto the stack.
         """
 
-        token = ActivityScope._stack.set(self)
+        activity = cls(
+            about=about,
+            state=state,
+            trace_id=trace_id,
+            parent=cls.get_current(),
+        )
+        token = cls._stack.set(activity)
         try:
-            yield self
+            yield activity
         finally:
-            ActivityScope._stack.reset(token)
+            cls._stack.reset(token)
 
     # note: There is no builtin @classproperty! :-\
     @classmethod
@@ -139,13 +158,13 @@ class ActivityLogger:
         self._event = event
         self.logger: logging.Logger = logging.getLogger(activity.about)
 
-    def _log_event(
+    def _log(
             self,
             message: str | None,
             level: int,
             **kwargs
     ) -> None:
-        valid = self._activity.move_next(self._event)
+        move_result = self._activity.move_next(self._event)
 
         if not self.logger.isEnabledFor(level):
             return
@@ -153,8 +172,8 @@ class ActivityLogger:
         stack_level = kwargs.pop("stack_level", 3)
         context = self._activity.state.copy()
         context.update(kwargs)
-        if not valid:
-            context["@fixit"] = "EventOrder"
+        if move_result > MoveNextEvent.OKAY:
+            context["@error"] = move_result.name
 
         activity = {
             "about": self._activity.about,
@@ -179,13 +198,13 @@ class ActivityLogger:
         )
 
     def log_debug(self, message: str | None, **kwargs) -> None:
-        self._log_event(message, logging.DEBUG, **kwargs)
+        self._log(message, logging.DEBUG, **kwargs)
 
     def log_info(self, message: str | None, **kwargs) -> None:
-        self._log_event(message, logging.INFO, **kwargs)
+        self._log(message, logging.INFO, **kwargs)
 
     def log_warning(self, message: str | None, **kwargs) -> None:
-        self._log_event(message, logging.WARNING, **kwargs)
+        self._log(message, logging.WARNING, **kwargs)
 
     def log_error(self, message: str | None, **kwargs) -> None:
-        self._log_event(message, logging.ERROR, **kwargs)
+        self._log(message, logging.ERROR, **kwargs)

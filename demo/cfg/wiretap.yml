@@ -17,11 +17,11 @@ formatters:
   elastic_json:
     (): wiretap.util.logging.JsonFormatter
     encoders:
-      - wiretap.util.buzz.EncodeDateTime
-      - wiretap.util.buzz.EncodeUUID
-      - wiretap.util.buzz.EncodeSet
-      - wiretap.util.buzz.EncodePath
-      - wiretap.util.buzz.EncodeToDict
+      - wiretap.util.encoding.EncodeDateTime
+      - wiretap.util.encoding.EncodeUUID
+      - wiretap.util.encoding.EncodeSet
+      - wiretap.util.encoding.EncodePath
+      - wiretap.util.encoding.EncodeToDict
     properties:
       - wiretap.util.buzz.AddTimestamp
       - wiretap.util.buzz.AddMessage

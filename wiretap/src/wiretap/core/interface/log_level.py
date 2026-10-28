@@ -1,41 +1,6 @@
 import logging
-import sys
 
-from wiretap.util.activity import ActivityScope
-
-
-def log_event(
-        message: str | None,
-        level: int,
-        state: dict | None,
-        **kwargs
-) -> None:
-    logger = logging.getLogger(sys._getframe(2).f_code.co_name)
-
-    if not logger.isEnabledFor(level):
-        return
-
-    scope = ActivityScope.get_current()
-
-    context = scope.state.copy() if scope else {}
-    if state:
-        context.update(state)
-    context.update(kwargs)
-
-    extra = {
-        "_wiretap": True,
-        "context": context,
-    }
-    if scope:
-        extra["trace"] = scope.trace
-
-    logger.log(
-        level=level,
-        msg=message,
-        exc_info=sys.exc_info()[0] is not None,
-        extra=extra,
-        stacklevel=3,
-    )
+from wiretap.core.objective.log_event import log_event
 
 
 # note: Ignore duplicate code for the below functions because they are too small to refactor.

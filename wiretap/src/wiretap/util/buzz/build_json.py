@@ -1,12 +1,10 @@
 import logging
-import os
 import traceback
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from logging import LogRecord
-from typing import Any, Optional
+from typing import Any
 
-from wiretap.meta import FormatData
 from wiretap.util.buzz.render_message import render_message
 
 # util: Type alias for convenience.
@@ -17,11 +15,15 @@ LogJson = dict[str, Any]
 class BuildJSON(ABC):
     """Allows modifying the structure of the JSON entry."""
 
+    root_keys: tuple[str, ...] = ()
+
     @abstractmethod
     def __call__(self, record: LogRecord, json: LogJson) -> LogJson: ...
 
 
 class AddTimestamp(BuildJSON):
+    root_keys = ("timestamp",)
+
     def __init__(self, tz: str = "utc"):
         super().__init__()
         match tz.casefold().strip():
@@ -39,6 +41,7 @@ class AddTimestamp(BuildJSON):
 
 
 class AddMessage(BuildJSON):
+    root_keys = ("message", "logger", "level")
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
         return json | {
@@ -49,6 +52,7 @@ class AddMessage(BuildJSON):
 
 
 class AddActivity(BuildJSON):
+    root_keys = ("activity",)
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
         if activity := record.__dict__.get("activity", {}):
@@ -63,6 +67,7 @@ class AddActivity(BuildJSON):
 
 
 class AddSource(BuildJSON):
+    root_keys = ("source",)
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
         activity = record.__dict__.get("activity", {})
@@ -82,17 +87,33 @@ class AddSource(BuildJSON):
 
 
 class AddContext(BuildJSON):
-
-    def __init__(self, names: Optional[list[str]] = None):
-        self.names = names or ["src"]
+    def __init__(self, key: str | None = "context"):
+        self.key = key
+        self.root_keys = (key,) if key is not None else ("context",)
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        return json | {
-            "context": record.__dict__.get("context", None)
-        }
+        context = record.__dict__.get("context")
+        if self.key is not None:
+            return json | {self.key: context}
+
+        # core: Promote context properties to root if they do not conflict with reserved root keys.
+        # core: Contex properties that conflict with reserved root keys stay in context as fallback.
+        root_keys = set(json) | {"context", "@errors"}
+        json["context"] = {}
+        for key, value in (context or {}).items():
+            if key in root_keys:
+                json["context"][key] = value
+            else:
+                json[key] = value
+
+        # core: Report one collision error regardless of how many keys conflict.
+        if json["context"]:
+            json["@errors"] = [*(json.get("@errors") or []), "CONTEXT_ROOT_KEY_COLLISION"]
+        return json
 
 
 class AddTrace(BuildJSON):
+    root_keys = ("trace",)
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
         return json | {
@@ -101,12 +122,12 @@ class AddTrace(BuildJSON):
 
 
 class AddException(BuildJSON):
+    root_keys = ("exception",)
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
         if record.exc_info and all(record.exc_info):
             exc_cls, exc, exc_tb = record.exc_info
             # note: format_exception returns a list of lines. Join it a single sing or otherwise an array will be logged.
-            # entry["trace"]["event"] = exc_cls.__name__
             return json | {"exception": {
                 "message": str(exc),
                 "type": exc_cls.__name__,  # type: ignore
