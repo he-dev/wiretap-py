@@ -3,7 +3,7 @@ import logging
 from json import JSONEncoder
 from typing import Any
 
-from wiretap.meta.type_factory import create_instance
+from wiretap.meta.create_instance import create_instance
 from wiretap.util.encoding.encode_json import DefaultEncode
 from wiretap.util.buzz.build_json import BuildJSON
 
@@ -18,9 +18,21 @@ class JsonFormatter(logging.Formatter):
         super().__init__()
 
         if encoders is not None:
-            self.default_encode = DefaultEncode([create_instance(e, JSONEncoder) for e in encoders])
+            encoder_instances: list[JSONEncoder] = []
+            for definition in encoders:
+                encoder = create_instance(definition)
+                if not isinstance(encoder, JSONEncoder):
+                    raise TypeError(f"Expected JSONEncoder, got {type(encoder).__name__}.")
+                encoder_instances.append(encoder)
+            self.default_encode = DefaultEncode(encoder_instances)
 
-        self.builders = [create_instance(p, BuildJSON) for p in (pipeline or [])]
+        self.builders: list[BuildJSON] = []
+        for definition in pipeline or []:
+            builder = create_instance(definition)
+            if not isinstance(builder, BuildJSON):
+                raise TypeError(f"Expected BuildJSON, got {type(builder).__name__}.")
+            self.builders.append(builder)
+
         # core: Collect all root keys from the builders keeping their order.
         self.root_keys = tuple(dict.fromkeys(
             key

@@ -66,7 +66,7 @@ class ActivityScope:
         self.depth: int = parent.depth + 1 if parent else 0
         self.trace_id: str = trace_id or (parent.trace_id if parent else secrets.token_hex(16))
         self.span_id: str = secrets.token_hex(8)
-        self.state = parent.state | state if parent else state
+        self.state: dict = parent.state | state if parent else state
 
         # note: Uses "recent" and not "last" because there is a "last" event, so it would be ambiguous.
         self.recent_event: Optional[ActivityEvent] = None

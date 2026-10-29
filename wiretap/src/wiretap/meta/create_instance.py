@@ -1,5 +1,5 @@
 from importlib import import_module
-from typing import Type, Any, TypeVar
+from typing import Type, Any
 
 
 def resolve_class(type_name: str) -> Type:
@@ -8,16 +8,12 @@ def resolve_class(type_name: str) -> Type:
     return getattr(import_module(".".join(module_names)), class_name)
 
 
-T = TypeVar('T')
-
-
-def create_instance(type_name: str | dict, expected_type: Type[T]) -> T:
+def create_instance(type_name: str | dict) -> Any:
     """
     Creates an instance of the given type.
     Example: wiretap.util.logging.DateTimeEncoder
     """
 
-    obj: T | None = None
     match type_name:
         case str():
             try:
@@ -35,12 +31,5 @@ def create_instance(type_name: str | dict, expected_type: Type[T]) -> T:
             obj = cls(**params)
         case _:
             raise TypeError(f"Cannot create type from '{type(type_name)}'. Only from str or dict.")
-
-    if obj is None:
-        raise TypeError(f"Cannot parse {expected_type} due to an invalid definition.")
-
-    # if not issubclass(type(obj), expected_type):
-    if not isinstance(obj, expected_type):
-        raise TypeError(f"Cannot parse {expected_type} due to an unexpected type '{type(obj)}'.")
 
     return obj
