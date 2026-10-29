@@ -87,7 +87,7 @@ class ActivityScope:
             "parent_id": self.parent_id,
         }
 
-    def move_next(self, next_event: ActivityEvent) -> MoveNextEvent:
+    def move_next(self, next_event: ActivityEvent) -> str | None:
         match next_event:
             case ActivityEvent.ZERO if self.recent_event is None:
                 self.stopwatch = Stopwatch()
@@ -97,10 +97,20 @@ class ActivityScope:
                 self.duration_ms = self.stopwatch.elapsed_ms
             case _:
                 # core: The requested transition from one event to the next is not valid.
-                return MoveNextEvent.INVALID_EVENT_SEQUENCE
+                # return MoveNextEvent.INVALID_EVENT_SEQUENCE
+
+                match next_event:
+                    case ActivityEvent.ZERO:
+                        return "zero-must-occur-only-once"
+                    case ActivityEvent.TICK:
+                        return "tick-must-follow-zero-or-tick"
+                    case ActivityEvent.LAST if self.recent_event is None:
+                        return "last-must-follow-zero-or-tick"
+                    case ActivityEvent.LAST if self.recent_event is ActivityEvent.LAST:
+                        return "last-must-occur-only-once"
 
         self.recent_event = next_event
-        return MoveNextEvent.OKAY
+        return None
 
     # Transition 'last -> last' does not follow 'none -> zero(1) -> tick(0-n) -> last(1)'
 
@@ -194,8 +204,8 @@ class ActivityLogger:
             "trace": self._activity.trace,
         }
 
-        if move_result > MoveNextEvent.OKAY:
-            extra["_errors"] = [move_result.name]
+        if move_result is not None:
+            extra["fixme"] = [move_result]
 
         self.logger.log(
             level=level,

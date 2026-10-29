@@ -98,7 +98,7 @@ class AddContext(BuildJSON):
 
         # core: Promote context properties to root if they do not conflict with reserved root keys.
         # core: Contex properties that conflict with reserved root keys stay in context as fallback.
-        root_keys = set(json) | {"context", "@errors"}
+        root_keys = set(json) | {"context", "fixme"}
         json["context"] = {}
         for key, value in (context or {}).items():
             if key in root_keys:
@@ -106,9 +106,9 @@ class AddContext(BuildJSON):
             else:
                 json[key] = value
 
-        # core: Report one collision error regardless of how many keys conflict.
+        # core: Report a violation when there are any key conflicts.
         if json["context"]:
-            json["@errors"] = [*(json.get("@errors") or []), "CONTEXT_ROOT_KEY_COLLISION"]
+            json["fixme"] = [*(json.get("fixme") or []), "rooted-context-properties-must-be-unique"]
         return json
 
 
@@ -177,8 +177,16 @@ class Redact(BuildJSON):
 
 
 # note: Experimental
-class RemoveNone(BuildJSON):
-    """Removes root-level fields containing None, leaving nested values untouched."""
+class RemoveNoneOrEmpty(BuildJSON):
+    """Removes root-level None values and empty strings/containers, leaving nested values untouched."""
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        return {key: value for key, value in json.items() if value is not None}
+        entry = {}
+        for key, value in json.items():
+            if value is None:
+                continue
+            # core: Empty containers are omitted, but numeric zero and False are meaningful values.
+            if isinstance(value, (str, bytes, dict, list, tuple, set, frozenset)) and len(value) == 0:
+                continue
+            entry[key] = value
+        return entry
