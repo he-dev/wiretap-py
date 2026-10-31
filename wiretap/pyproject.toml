@@ -30,7 +30,7 @@ license = "MIT"
 license-files = ["LICENSE"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "mypy", "build", "twine"]
+dev = ["pytest>=8", "mypy", "build", "twine", "pyyaml"]
 
 [project.urls]
 "GitHub" = "https://github.com/he-dev/wiretap-py"

@@ -4,6 +4,7 @@ import logging
 import secrets
 import sys
 from contextvars import ContextVar  # noqa: built-in module
+from dataclasses import dataclass
 from enum import Enum, auto, IntEnum
 from functools import cached_property
 from typing import Optional, Any, Iterator, TypeVar, ClassVar
@@ -11,6 +12,11 @@ from typing import Optional, Any, Iterator, TypeVar, ClassVar
 from wiretap.util.stopwatch import Stopwatch
 
 T = TypeVar("T", bound="ActivityScope")
+
+
+@dataclass(frozen=True)
+class Fixme:
+    constraint: str
 
 
 class ActivityEvent(IntEnum):
@@ -87,7 +93,7 @@ class ActivityScope:
             "parent_id": self.parent_id,
         }
 
-    def move_next(self, next_event: ActivityEvent) -> str | None:
+    def move_next(self, next_event: ActivityEvent) -> Fixme | None:
         match next_event:
             case ActivityEvent.ZERO if self.recent_event is None:
                 self.stopwatch = Stopwatch()
@@ -101,13 +107,13 @@ class ActivityScope:
 
                 match next_event:
                     case ActivityEvent.ZERO:
-                        return "zero-must-occur-only-once"
+                        return Fixme("zero-must-occur-only-once")
                     case ActivityEvent.TICK:
-                        return "tick-must-follow-zero-or-tick"
+                        return Fixme("tick-must-follow-zero-or-tick")
                     case ActivityEvent.LAST if self.recent_event is None:
-                        return "last-must-follow-zero-or-tick"
+                        return Fixme("last-must-follow-zero-or-tick")
                     case ActivityEvent.LAST if self.recent_event is ActivityEvent.LAST:
-                        return "last-must-occur-only-once"
+                        return Fixme("last-must-occur-only-once")
 
         self.recent_event = next_event
         return None
@@ -205,7 +211,7 @@ class ActivityLogger:
         }
 
         if move_result is not None:
-            extra["fixme"] = [move_result]
+            extra["fixme"] = [move_result.constraint]
 
         self.logger.log(
             level=level,
