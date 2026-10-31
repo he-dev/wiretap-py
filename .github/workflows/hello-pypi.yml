@@ -1,0 +1,16 @@
+
+name: Hello PyPi
+
+on:
+  workflow_dispatch:
+
+jobs:
+  hello:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Greetings
+        run: echo "Hello from Wiretap!"
+
+      - name: Show current directory
+        run: pwd
