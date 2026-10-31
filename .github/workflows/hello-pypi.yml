@@ -35,10 +35,11 @@ jobs:
         run: python -m build
 
       - name: Upload distribution
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v8
         with:
           name: distributions
           path: wiretap/dist/
+          if-no-files-found: error
 
   publish:
     needs: build
