@@ -1,0 +1,58 @@
+
+name: Hello PyPi
+
+on:
+  workflow_dispatch: {}
+
+# meta: PyPi recommends two jobs for security purposes.
+# https://packaging.python.org/en/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        # note: The actual project is in a sub-directory.
+        working-directory: ./wiretap
+        
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+
+      - name: Install build tools
+        run: python -m pip install build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Upload distribution
+        uses: actions/upload-artifact@v5
+        with:
+          name: distributions
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+
+    steps:
+      - name: Download distribution
+        uses: actions/download-artifact@v6
+        with:
+          name: distributions
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
