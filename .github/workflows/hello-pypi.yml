@@ -38,7 +38,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: distributions
-          path: dist/
+          path: wiretap/dist/
 
   publish:
     needs: build
