@@ -15,7 +15,7 @@ check_untyped_defs = true
 
 [project]
 name = "wiretap"
-version = "13.0.0"
+version = "13.0.1"
 requires-python = ">=3.10"
 authors = [{ name = "he-dev" }]
 description = "This package provides a context-oriented logger."
