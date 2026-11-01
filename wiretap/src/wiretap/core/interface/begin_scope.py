@@ -1,7 +1,7 @@
 import contextlib
 from typing import Any, Iterator
 
-from wiretap.util.activity import ActivityAbout, ActivityScope
+from wiretap.util.activity import ActivityAbout, ActivityScope, ActivityEventMode
 
 
 @contextlib.contextmanager
@@ -32,4 +32,21 @@ def begin_scope(
             trace_id=trace_id,
             parent_id=parent_id,
     ) as activity:
-        yield ActivityAbout(activity)
+        about = ActivityAbout(activity)
+        try:
+            yield about
+        except Exception:
+            about.last.log_error(
+                message="{activity[about]} fails after {activity[duration_ms]} ms.",
+                stack_level=5,
+                _mode=ActivityEventMode.FALLBACK,
+                **kwargs
+            )
+            raise
+        else:
+            about.last.log_info(
+                message="{activity[about]} completes in {activity[duration_ms]} ms.",
+                stack_level=5,
+                _mode=ActivityEventMode.FALLBACK,
+                **kwargs
+            )

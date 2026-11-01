@@ -16,13 +16,18 @@ T = TypeVar("T", bound="ActivityScope")
 
 @dataclass(frozen=True)
 class Fixme:
-    constraint: str
+    constraints: list[str]
 
 
 class ActivityEvent(IntEnum):
     ZERO = auto()
     TICK = auto()
     LAST = auto()
+
+
+class ActivityEventMode(Enum):
+    FALLBACK = auto()
+    REGULAR = auto()
 
 
 class MoveNextEvent(IntEnum):
@@ -93,32 +98,60 @@ class ActivityScope:
             "parent_id": self.parent_id,
         }
 
-    def move_next(self, next_event: ActivityEvent) -> Fixme | None:
-        match next_event:
-            case ActivityEvent.ZERO if self.recent_event is None:
+    def move_next(self, next_event: ActivityEvent, mode: ActivityEventMode) -> Fixme | None:
+        match next_event, self.recent_event, mode:
+            # core: This is the very first zero, in either mode.
+            case ActivityEvent.ZERO, None, ActivityEventMode.REGULAR | ActivityEventMode.FALLBACK:
                 self.stopwatch = Stopwatch()
-            case ActivityEvent.TICK if self.recent_event in (ActivityEvent.ZERO, ActivityEvent.TICK):
-                pass
-            case ActivityEvent.LAST if self.recent_event in (ActivityEvent.ZERO, ActivityEvent.TICK):
+                self.recent_event = next_event
+                return Fixme([])
+
+            # core: This zero follows an existing event instead of starting the activity.
+            case ActivityEvent.ZERO, ActivityEvent.ZERO | ActivityEvent.TICK | ActivityEvent.LAST, ActivityEventMode.REGULAR | ActivityEventMode.FALLBACK:
+                self.recent_event = next_event
+                return Fixme(["zero-must-occur-only-once"])
+
+            # core: This tick follows its sequence, in either mode.
+            case ActivityEvent.TICK, ActivityEvent.ZERO | ActivityEvent.TICK, ActivityEventMode.REGULAR | ActivityEventMode.FALLBACK:
+                self.recent_event = next_event
+                return Fixme([])
+
+            # core: This tick has no preceding event or follows last, so it does not follow its sequence.
+            case ActivityEvent.TICK, None | ActivityEvent.LAST, ActivityEventMode.REGULAR | ActivityEventMode.FALLBACK:
+                self.recent_event = next_event
+                return Fixme(["tick-must-follow-zero-or-tick"])
+
+            # core: This is the auto-last, but there is one already. Ignore.
+            case ActivityEvent.LAST, ActivityEvent.LAST, ActivityEventMode.FALLBACK:
+                return None
+
+            # core: No last was logged explicitly. Emit the auto-last with a fixme.
+            case ActivityEvent.LAST, None | ActivityEvent.ZERO | ActivityEvent.TICK, ActivityEventMode.FALLBACK:
                 self.duration_ms = self.stopwatch.elapsed_ms
+                self.recent_event = next_event
+                return Fixme(["last-must-be-explicit"])
+
+            # core: This explicit last follows its sequence.
+            case ActivityEvent.LAST, ActivityEvent.ZERO | ActivityEvent.TICK, ActivityEventMode.REGULAR:
+                self.duration_ms = self.stopwatch.elapsed_ms
+                self.recent_event = next_event
+                return Fixme([])
+
+            # core: This is another explicit last.
+            case ActivityEvent.LAST, ActivityEvent.LAST, ActivityEventMode.REGULAR:
+                self.duration_ms = self.stopwatch.elapsed_ms
+                self.recent_event = next_event
+                return Fixme(["last-must-occur-only-once"])
+
+            # core: This explicit last has no preceding zero or tick.
+            case ActivityEvent.LAST, None, ActivityEventMode.REGULAR:
+                self.duration_ms = self.stopwatch.elapsed_ms
+                self.recent_event = next_event
+                return Fixme(["last-must-follow-zero-or-tick"])
+
+            # core: An event, state, or mode combination is missing from the cases above.
             case _:
-                # core: The requested transition from one event to the next is not valid.
-                # return MoveNextEvent.INVALID_EVENT_SEQUENCE
-
-                match next_event:
-                    case ActivityEvent.ZERO:
-                        return Fixme("zero-must-occur-only-once")
-                    case ActivityEvent.TICK:
-                        return Fixme("tick-must-follow-zero-or-tick")
-                    case ActivityEvent.LAST if self.recent_event is None:
-                        return Fixme("last-must-follow-zero-or-tick")
-                    case ActivityEvent.LAST if self.recent_event is ActivityEvent.LAST:
-                        return Fixme("last-must-occur-only-once")
-
-        self.recent_event = next_event
-        return None
-
-    # Transition 'last -> last' does not follow 'none -> zero(1) -> tick(0-n) -> last(1)'
+                raise ValueError(f"Unhandled activity transition: next_event={next_event!r}, recent_event={self.recent_event!r}, mode={mode!r}")
 
     @classmethod
     @contextlib.contextmanager
@@ -179,13 +212,13 @@ class ActivityLogger:
         self._event = event
         self.logger: logging.Logger = logging.getLogger(activity.about)
 
-    def _log(
-            self,
-            message: str | None,
-            level: int,
-            **kwargs
-    ) -> None:
-        move_result = self._activity.move_next(self._event)
+    def _log(self, message: str | None, level: int, **kwargs) -> None:
+
+        mode = kwargs.pop("_mode", ActivityEventMode.REGULAR)
+        move_result = self._activity.move_next(self._event, mode)
+
+        if move_result is None:
+            return
 
         if not self.logger.isEnabledFor(level):
             return
@@ -208,10 +241,8 @@ class ActivityLogger:
             "context": context,
             "activity": activity,
             "trace": self._activity.trace,
+            "fixme": move_result.constraints
         }
-
-        if move_result is not None:
-            extra["fixme"] = [move_result.constraint]
 
         self.logger.log(
             level=level,
