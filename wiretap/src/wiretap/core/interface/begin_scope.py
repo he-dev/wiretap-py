@@ -1,7 +1,7 @@
 import contextlib
 from typing import Any, Iterator
 
-from wiretap.util.activity import ActivityAbout, ActivityScope, ActivityEventMode
+from wiretap.util.activity import ActivityAbout, ActivityScope
 
 
 @contextlib.contextmanager
@@ -13,7 +13,7 @@ def begin_scope(
         **kwargs
 ) -> Iterator[ActivityAbout]:
     """
-    Initializes a new span and logs its start at the TRACE level and duration at the INFO level by default.
+    Creates an activity scope and logs a closing event if no explicit last event occurred.
 
     Args:
         about: The name of the span. If None, the name will be derived from the calling frame. Usually the function name.
@@ -32,21 +32,21 @@ def begin_scope(
             trace_id=trace_id,
             parent_id=parent_id,
     ) as activity:
-        about = ActivityAbout(activity)
+        activity_about = ActivityAbout(activity)
         try:
-            yield about
+            yield activity_about
         except Exception:
-            about.last.log_error(
+            activity.stop()
+            activity_about.last.log_error(
                 message="{activity[about]} fails after {activity[duration_ms]} ms.",
                 stack_level=5,
-                _mode=ActivityEventMode.FALLBACK,
                 **kwargs
             )
             raise
         else:
-            about.last.log_info(
+            activity.stop()
+            activity_about.last.log_info(
                 message="{activity[about]} completes in {activity[duration_ms]} ms.",
                 stack_level=5,
-                _mode=ActivityEventMode.FALLBACK,
                 **kwargs
             )

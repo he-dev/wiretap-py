@@ -4,8 +4,7 @@ import logging
 import secrets
 import sys
 from contextvars import ContextVar  # noqa: built-in module
-from dataclasses import dataclass
-from enum import Enum, auto, IntEnum
+from enum import auto, IntEnum
 from functools import cached_property
 from typing import Optional, Any, Iterator, TypeVar, ClassVar
 
@@ -14,31 +13,16 @@ from wiretap.util.stopwatch import Stopwatch
 T = TypeVar("T", bound="ActivityScope")
 
 
-@dataclass(frozen=True)
-class Fixme:
-    constraints: list[str]
-
-
 class ActivityEvent(IntEnum):
     ZERO = auto()
     TICK = auto()
     LAST = auto()
 
 
-class ActivityEventMode(Enum):
-    FALLBACK = auto()
-    REGULAR = auto()
-
-
-class MoveNextEvent(IntEnum):
-    OKAY = auto()
-    INVALID_EVENT_SEQUENCE = auto()
-
-
-DOMAIN = {"@story": "domain"}
+DOMAIN = {"story": "domain"}
 """Marks a log entry as part of the application's domain behavior."""
 
-SYSTEM = {"@story": "system"}
+SYSTEM = {"story": "system"}
 """Marks a log entry as technical or infrastructure-related."""
 
 ZERO = {"activity.event": ActivityEvent.ZERO.name.lower()}
@@ -79,10 +63,10 @@ class ActivityScope:
         self.span_id: str = secrets.token_hex(8)
         self.state: dict = parent.state | state if parent else state
 
-        # note: Uses "recent" and not "last" because there is a "last" event, so it would be ambiguous.
-        self.recent_event: Optional[ActivityEvent] = None
+        self.history: list[ActivityEvent] = []
         self.stopwatch: Stopwatch = Stopwatch()
         self.duration_ms: int = 0
+        self.in_progress: bool = True
 
     def __iter__(self) -> Iterator["ActivityScope"]:
         current: Optional["ActivityScope"] = self
@@ -98,60 +82,8 @@ class ActivityScope:
             "parent_id": self.parent_id,
         }
 
-    def move_next(self, next_event: ActivityEvent, mode: ActivityEventMode) -> Fixme | None:
-        match next_event, self.recent_event, mode:
-            # core: This is the very first zero, in either mode.
-            case ActivityEvent.ZERO, None, ActivityEventMode.REGULAR | ActivityEventMode.FALLBACK:
-                self.stopwatch = Stopwatch()
-                self.recent_event = next_event
-                return Fixme([])
-
-            # core: This zero follows an existing event instead of starting the activity.
-            case ActivityEvent.ZERO, ActivityEvent.ZERO | ActivityEvent.TICK | ActivityEvent.LAST, ActivityEventMode.REGULAR | ActivityEventMode.FALLBACK:
-                self.recent_event = next_event
-                return Fixme(["zero-must-occur-only-once"])
-
-            # core: This tick follows its sequence, in either mode.
-            case ActivityEvent.TICK, ActivityEvent.ZERO | ActivityEvent.TICK, ActivityEventMode.REGULAR | ActivityEventMode.FALLBACK:
-                self.recent_event = next_event
-                return Fixme([])
-
-            # core: This tick has no preceding event or follows last, so it does not follow its sequence.
-            case ActivityEvent.TICK, None | ActivityEvent.LAST, ActivityEventMode.REGULAR | ActivityEventMode.FALLBACK:
-                self.recent_event = next_event
-                return Fixme(["tick-must-follow-zero-or-tick"])
-
-            # core: This is the auto-last, but there is one already. Ignore.
-            case ActivityEvent.LAST, ActivityEvent.LAST, ActivityEventMode.FALLBACK:
-                return None
-
-            # core: No last was logged explicitly. Emit the auto-last with a fixme.
-            case ActivityEvent.LAST, None | ActivityEvent.ZERO | ActivityEvent.TICK, ActivityEventMode.FALLBACK:
-                self.duration_ms = self.stopwatch.elapsed_ms
-                self.recent_event = next_event
-                return Fixme(["last-must-be-explicit"])
-
-            # core: This explicit last follows its sequence.
-            case ActivityEvent.LAST, ActivityEvent.ZERO | ActivityEvent.TICK, ActivityEventMode.REGULAR:
-                self.duration_ms = self.stopwatch.elapsed_ms
-                self.recent_event = next_event
-                return Fixme([])
-
-            # core: This is another explicit last.
-            case ActivityEvent.LAST, ActivityEvent.LAST, ActivityEventMode.REGULAR:
-                self.duration_ms = self.stopwatch.elapsed_ms
-                self.recent_event = next_event
-                return Fixme(["last-must-occur-only-once"])
-
-            # core: This explicit last has no preceding zero or tick.
-            case ActivityEvent.LAST, None, ActivityEventMode.REGULAR:
-                self.duration_ms = self.stopwatch.elapsed_ms
-                self.recent_event = next_event
-                return Fixme(["last-must-follow-zero-or-tick"])
-
-            # core: An event, state, or mode combination is missing from the cases above.
-            case _:
-                raise ValueError(f"Unhandled activity transition: next_event={next_event!r}, recent_event={self.recent_event!r}, mode={mode!r}")
+    def stop(self) -> None:
+        self.in_progress = False
 
     @classmethod
     @contextlib.contextmanager
@@ -194,54 +126,61 @@ class ActivityAbout:
         return self._activity.stopwatch.elapsed_ms
 
     @cached_property
-    def zero(self) -> ActivityLogger:
-        return ActivityLogger(self._activity, ActivityEvent.ZERO)
+    def zero(self) -> ZeroLogger:
+        return ZeroLogger(self._activity)
 
     @cached_property
-    def tick(self) -> ActivityLogger:
-        return ActivityLogger(self._activity, ActivityEvent.TICK)
+    def tick(self) -> TickLogger:
+        return TickLogger(self._activity)
 
     @cached_property
-    def last(self) -> ActivityLogger:
-        return ActivityLogger(self._activity, ActivityEvent.LAST)
+    def last(self) -> LastLogger:
+        return LastLogger(self._activity)
 
 
-class ActivityLogger:
-    def __init__(self, activity: ActivityScope, event: ActivityEvent) -> None:
+class EventLogger:
+    """Builds and emits records enriched by the individual event loggers."""
+
+    _event: ClassVar[ActivityEvent]
+
+    def __init__(self, activity: ActivityScope) -> None:
         self._activity = activity
-        self._event = event
         self.logger: logging.Logger = logging.getLogger(activity.about)
 
-    def _log(self, message: str | None, level: int, **kwargs) -> None:
+    def _log(self, data: dict[str, Any]) -> dict[str, Any] | None:
+        raise NotImplementedError
 
-        mode = kwargs.pop("_mode", ActivityEventMode.REGULAR)
-        move_result = self._activity.move_next(self._event, mode)
+    def _emit(self, message: str | None, level: int, **kwargs) -> None:
+        data: dict[str, Any] = {
+            "activity": {
+                "about": self._activity.about,
+                "depth": self._activity.depth,
+                "event": self._event.name,
+            },
+            "fixme": [],
+            "aboutme": [],
+        }
 
-        if move_result is None:
+        if (enriched := self._log(data)) is None:
             return
+
+        # core: Record accepted events even when their log level is filtered out.
+        self._activity.history.append(self._event)
 
         if not self.logger.isEnabledFor(level):
             return
 
+        # mata: Remove it before copying kwargs into the logged context.
         stack_level = kwargs.pop("stack_level", 3)
+
         context = self._activity.state.copy()
         context.update(kwargs)
-
-        activity = {
-            "about": self._activity.about,
-            "event": self._event.name,
-            "depth": self._activity.depth,
-        }
-
-        if self._event is ActivityEvent.LAST:
-            activity["duration_ms"] = self._activity.duration_ms
 
         extra: dict[str, Any] = {
             "_wiretap": True,
             "context": context,
-            "activity": activity,
             "trace": self._activity.trace,
-            "fixme": move_result.constraints
+            **enriched,
         }
 
         self.logger.log(
@@ -249,17 +188,70 @@ class ActivityLogger:
             msg=message,
             exc_info=sys.exc_info()[0] is not None,
             extra=extra,
-            stacklevel=stack_level
+            stacklevel=stack_level,
         )
 
     def log_debug(self, message: str | None, **kwargs) -> None:
-        self._log(message, logging.DEBUG, **kwargs)
+        self._emit(message, logging.DEBUG, **kwargs)
 
     def log_info(self, message: str | None, **kwargs) -> None:
-        self._log(message, logging.INFO, **kwargs)
+        self._emit(message, logging.INFO, **kwargs)
 
     def log_warning(self, message: str | None, **kwargs) -> None:
-        self._log(message, logging.WARNING, **kwargs)
+        self._emit(message, logging.WARNING, **kwargs)
 
     def log_error(self, message: str | None, **kwargs) -> None:
-        self._log(message, logging.ERROR, **kwargs)
+        self._emit(message, logging.ERROR, **kwargs)
+
+
+class ZeroLogger(EventLogger):
+    _event = ActivityEvent.ZERO
+
+    def _log(self, data: dict[str, Any]) -> dict[str, Any] | None:
+        # core: After last, report only that the activity has already ended.
+        if ActivityEvent.LAST in self._activity.history:
+            data["fixme"].append("no-events-must-follow-last")
+        else:
+            # core: Otherwise, attach the duplicate-zero diagnostic to this zero.
+            if ActivityEvent.ZERO in self._activity.history:
+                data["fixme"].append("zero-occurs-more-than-once")
+
+        return data
+
+
+class TickLogger(EventLogger):
+    # core: Ticks need no sequence validation before the first last.
+    _event = ActivityEvent.TICK
+
+    def _log(self, data: dict[str, Any]) -> dict[str, Any] | None:
+        # core: Ticks are unrestricted until the activity has ended.
+        if ActivityEvent.LAST in self._activity.history:
+            data["fixme"].append("no-events-must-follow-last")
+
+        return data
+
+
+class LastLogger(EventLogger):
+    _event = ActivityEvent.LAST
+
+    def _log(self, data: dict[str, Any]) -> dict[str, Any] | None:
+        if ActivityEvent.LAST in self._activity.history:
+            # core: Scope closure does not add another last if one already occurred.
+            if not self._activity.in_progress:
+                return None
+
+            # core: A repeated explicit last during the scope is logged without changing the duration.
+            data["activity"]["duration_ms"] = self._activity.duration_ms
+            data["fixme"].append("no-events-must-follow-last")
+            return data
+
+        # core: Only the first last reports omissions and captures the activity's duration.
+        if ActivityEvent.ZERO not in self._activity.history:
+            data["aboutme"].append("does-not-log-zero")
+
+        if not self._activity.in_progress:
+            data["aboutme"].append("does-not-log-last")
+
+        self._activity.duration_ms = self._activity.stopwatch.elapsed_ms
+        data["activity"]["duration_ms"] = self._activity.duration_ms
+        return data

@@ -39,19 +39,22 @@ class JsonFormatter(logging.Formatter):
             for builder in self.builders
             for key in builder.root_keys
         ))
-        self.root_keys = tuple(dict.fromkeys((*self.root_keys, "fixme")))
+        self.root_keys = tuple(dict.fromkeys((*self.root_keys, "fixme", "aboutme")))
 
     def format(self, record: logging.LogRecord):
         # core: Apply each modifier.
         entry: dict[str, Any] = dict.fromkeys(self.root_keys)
-        # core: Copy record diagnostics so builders can add fixme without modifying the record.
+        # core: Copy record diagnostics so builders can enrich them without modifying the record.
         entry["fixme"] = list(record.__dict__.get("fixme") or [])
+        entry["aboutme"] = list(record.__dict__.get("aboutme") or [])
         for build in self.builders:
             entry = build(record, entry)
 
-        # core: Remove the "fixme" key to avoid empty lists or "false positives".
+        # core: Omit empty diagnostics and observations.
         if entry.get("fixme") == []:
             del entry["fixme"]
+        if entry.get("aboutme") == []:
+            del entry["aboutme"]
 
         return json.dumps(
             entry,

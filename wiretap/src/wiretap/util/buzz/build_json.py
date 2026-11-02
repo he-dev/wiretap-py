@@ -98,7 +98,7 @@ class AddContext(BuildJSON):
 
         # core: Promote context properties to root if they do not conflict with reserved root keys.
         # core: Contex properties that conflict with reserved root keys stay in context as fallback.
-        root_keys = set(json) | {"context", "fixme"}
+        root_keys = set(json) | {"context", "fixme", "aboutme"}
         json["context"] = {}
         for key, value in (context or {}).items():
             if key in root_keys:

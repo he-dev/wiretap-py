@@ -13,6 +13,7 @@ class TextFormatter(logging.Formatter):
 
         record = copy(record)
         record.__dict__.setdefault("fixme", [])
+        record.__dict__.setdefault("aboutme", [])
 
         activity = record.__dict__.get("activity", {})
 
