@@ -1,9 +1,11 @@
 from __future__ import annotations
 import contextlib
 import logging
+import re
 import secrets
 import sys
 from contextvars import ContextVar  # noqa: built-in module
+from dataclasses import dataclass
 from enum import auto, IntEnum
 from functools import cached_property
 from typing import Optional, Any, Iterator, TypeVar, ClassVar
@@ -30,6 +32,51 @@ TICK = {"activity.event": ActivityEvent.TICK.name.lower()}
 LAST = {"activity.event": ActivityEvent.LAST.name.lower()}
 
 
+@dataclass(frozen=True)
+class TraceW3C:
+    id: str
+    span_id: str
+    parent_id: str | None
+
+    @classmethod
+    def create(
+            cls,
+            trace_id: str | None = None,
+            parent_id: str | None = None,
+    ) -> TraceW3C:
+        if trace_id is None:
+            trace_id = cls._generate_id(16)
+        else:
+            cls._validate_id(trace_id, 32, "trace_id")
+
+        if parent_id is not None:
+            cls._validate_id(parent_id, 16, "parent_id")
+
+        return cls(id=trace_id, span_id=cls._generate_id(8), parent_id=parent_id)
+
+    @staticmethod
+    def _validate_id(value: str, length: int, name: str) -> None:
+        if not isinstance(value, str) or re.fullmatch(rf"[0-9a-f]{{{length}}}", value) is None:
+            raise ValueError(f"{name} must be {length} lowercase hex characters")
+        if value == "0" * length:
+            raise ValueError(f"{name} must not be all zeros")
+
+    @staticmethod
+    def _generate_id(size: int) -> str:
+        zero = "0" * (size * 2)
+        value = secrets.token_hex(size)
+        while value == zero:
+            value = secrets.token_hex(size)
+        return value
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "span_id": self.span_id,
+            "parent_id": self.parent_id,
+        }
+
+
 class ActivityScope:
     """
     This class represents a single activity scope.
@@ -41,7 +88,7 @@ class ActivityScope:
             self,
             about: str,
             state: dict[str, Any],
-            trace_id: Any | None,
+            trace_id: str | None,
             parent: Optional["ActivityScope"] = None,
             parent_id: str | None = None,
     ):
@@ -57,16 +104,17 @@ class ActivityScope:
         """
         self.about = about
         self.parent = parent
-        self.parent_id = parent.span_id if parent else parent_id
         self.depth: int = parent.depth + 1 if parent else 0
-        self.trace_id: str = trace_id or (parent.trace_id if parent else secrets.token_hex(16))
-        self.span_id: str = secrets.token_hex(8)
+        if parent:
+            if trace_id is None:
+                trace_id = parent.trace.id
+            parent_id = parent.trace.span_id
+        self.trace = TraceW3C.create(trace_id=trace_id, parent_id=parent_id)
         self.state: dict = parent.state | state if parent else state
 
         self.history: list[ActivityEvent] = []
         self.stopwatch: Stopwatch = Stopwatch()
         self.duration_ms: int = 0
-        self.in_progress: bool = True
 
     def __iter__(self) -> Iterator["ActivityScope"]:
         current: Optional["ActivityScope"] = self
@@ -74,24 +122,14 @@ class ActivityScope:
             yield current
             current = current.parent
 
-    @property
-    def trace(self) -> dict:
-        return {
-            "id": self.trace_id,
-            "span_id": self.span_id,
-            "parent_id": self.parent_id,
-        }
-
-    def stop(self) -> None:
-        self.in_progress = False
-
+    # core: Stops the activity-scope so that omitted last events can be detected.
     @classmethod
     @contextlib.contextmanager
     def push(
             cls,
             about: str,
             state: dict[str, Any],
-            trace_id: Any | None = None,
+            trace_id: str | None = None,
             parent_id: str | None = None,
     ) -> Iterator["ActivityScope"]:
         """
@@ -120,6 +158,10 @@ class ActivityScope:
 class ActivityAbout:
     def __init__(self, activity: ActivityScope) -> None:
         self._activity = activity
+
+    @property
+    def trace(self) -> TraceW3C:
+        return self._activity.trace
 
     @property
     def elapsed_ms(self) -> int:
@@ -179,7 +221,7 @@ class EventLogger:
         extra: dict[str, Any] = {
             "_wiretap": True,
             "context": context,
-            "trace": self._activity.trace,
+            "trace": self._activity.trace.to_dict(),
             **enriched,
         }
 
@@ -234,13 +276,21 @@ class TickLogger(EventLogger):
 class LastLogger(EventLogger):
     _event = ActivityEvent.LAST
 
+    def __init__(self, activity: ActivityScope, *, _once: bool = False) -> None:
+        super().__init__(activity)
+        self._once = _once
+
+    @cached_property
+    def once(self) -> LastLogger:
+        return LastLogger(self._activity, _once=True)
+
     def _log(self, data: dict[str, Any]) -> dict[str, Any] | None:
         if ActivityEvent.LAST in self._activity.history:
             # core: Scope closure does not add another last if one already occurred.
-            if not self._activity.in_progress:
+            if self._once:
                 return None
 
-            # core: A repeated explicit last during the scope is logged without changing the duration.
+            # core: A repeated explicit last is logged without changing the duration.
             data["activity"]["duration_ms"] = self._activity.duration_ms
             data["fixme"].append("no-events-must-follow-last")
             return data
@@ -249,8 +299,8 @@ class LastLogger(EventLogger):
         if ActivityEvent.ZERO not in self._activity.history:
             data["aboutme"].append("does-not-log-zero")
 
-        if not self._activity.in_progress:
-            data["aboutme"].append("does-not-log-last")
+        if self._once:
+            data["aboutme"].append("logs-last-silently")
 
         self._activity.duration_ms = self._activity.stopwatch.elapsed_ms
         data["activity"]["duration_ms"] = self._activity.duration_ms

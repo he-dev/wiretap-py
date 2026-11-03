@@ -1,4 +1,5 @@
 import logging
+import sys
 import traceback
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
@@ -69,19 +70,37 @@ class AddActivity(BuildJSON):
 class AddSource(BuildJSON):
     root_keys = ("source",)
 
+    def __init__(self, include_when: list[int | str] | None = None):
+        self.include_when: set[int] = set()
+        if include_when is not None:
+            for level in include_when:
+                self.include_when.add(self._resolve_level(level))
+
+    @staticmethod
+    def _resolve_level(value: int | str) -> int:
+        match value:
+            case int():
+                return value
+            case str():
+                match logging.getLevelName(value.strip().upper()):
+                    case int(level):
+                        return level
+
+        raise ValueError(f"Invalid logging level: {value!r}")
+
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
         activity = record.__dict__.get("activity", {})
-        include_source = (
-                (logging.getLogger(record.name).isEnabledFor(logging.DEBUG) and activity.get("event") == "ZERO")
-                or record.levelno >= logging.ERROR
-        )
+        if activity.get("event") != "LAST":
+            return json
 
-        if include_source:
-            return json | {"source": {
-                "func": record.funcName,
-                "file": record.filename,
-                "line": record.lineno,
-            }}
+        if record.levelno in self.include_when:
+            return json | {
+                "source": {
+                    "func": record.funcName,
+                    "file": record.filename,
+                    "line": record.lineno,
+                },
+            }
 
         return json
 
@@ -97,7 +116,7 @@ class AddContext(BuildJSON):
             return json | {self.key: context}
 
         # core: Promote context properties to root if they do not conflict with reserved root keys.
-        # core: Contex properties that conflict with reserved root keys stay in context as fallback.
+        # core: Context properties that conflict with reserved root keys stay in context as fallback.
         root_keys = set(json) | {"context", "fixme", "aboutme"}
         json["context"] = {}
         for key, value in (context or {}).items():

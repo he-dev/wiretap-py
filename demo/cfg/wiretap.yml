@@ -30,7 +30,8 @@ formatters:
       - "()": wiretap.util.buzz.AddContext
         key: "properties"
       - wiretap.util.buzz.AddTrace
-      - wiretap.util.buzz.AddSource
+      - "()": wiretap.util.buzz.AddSource
+        include_when: [DEBUG, ERROR, CRITICAL]
       - wiretap.util.buzz.AddException
       - wiretap.util.buzz.RemoveNoneOrEmpty
 handlers:

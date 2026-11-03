@@ -8,7 +8,7 @@ from wiretap.util.activity import ActivityAbout, ActivityScope
 def begin_scope(
         about: str,
         state: dict[str, Any] | None = None,
-        trace_id: Any | None = None,
+        trace_id: str | None = None,
         parent_id: str | None = None,
         **kwargs
 ) -> Iterator[ActivityAbout]:
@@ -36,16 +36,14 @@ def begin_scope(
         try:
             yield activity_about
         except Exception:
-            activity.stop()
-            activity_about.last.log_error(
+            activity_about.last.once.log_error(
                 message="{activity[about]} fails after {activity[duration_ms]} ms.",
                 stack_level=5,
                 **kwargs
             )
             raise
         else:
-            activity.stop()
-            activity_about.last.log_info(
+            activity_about.last.once.log_info(
                 message="{activity[about]} completes in {activity[duration_ms]} ms.",
                 stack_level=5,
                 **kwargs

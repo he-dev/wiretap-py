@@ -24,7 +24,7 @@ def log_event(
     extra = {
         "_wiretap": True,
         "context": context or None,
-        "trace": scope.trace if scope else None
+        "trace": scope.trace.to_dict() if scope else None
     }
 
     logger.log(
