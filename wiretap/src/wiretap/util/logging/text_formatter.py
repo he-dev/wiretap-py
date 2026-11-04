@@ -17,7 +17,6 @@ class TextFormatter(logging.Formatter):
         plot.setdefault("event", None)
         plot.setdefault("story", None)
         plot.setdefault("depth", 0)
-        plot.setdefault("diagnostics", {"errors": [], "remarks": []})
         record.__dict__["plot"] = plot
         record.__dict__["trace"] = record.__dict__.get("trace") or {
             "id": None,

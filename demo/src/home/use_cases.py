@@ -9,5 +9,7 @@ def log_v13():
         logger.debug(None, extra=outer.zero())
         with storyline.begin_plot("inner", "core") as inner:
             logger.info(None, extra=inner.tick())
+            logger.info("This zero comes after tick!", extra=inner.zero())
             logger.info("Processed %s items in {plot[duration_ms]} ms.", 42, extra=inner.last())
+            logger.info("This tick comes after last!", extra=inner.tick())
     logger.info("That's it.", extra=storyline.snap("enough", "buzz"))

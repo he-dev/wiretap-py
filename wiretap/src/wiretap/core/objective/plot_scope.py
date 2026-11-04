@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 from contextvars import ContextVar
 from typing import Any, ClassVar, Iterator, Literal, Optional
 
@@ -18,6 +19,7 @@ class PlotScope:
 
     def __init__(
             self,
+            logger: logging.Logger,
             about: str,
             story: Literal["core", "buzz"],
             state: dict[str, Any],
@@ -29,6 +31,7 @@ class PlotScope:
         Initializes a new PlotScope instance.
 
         Args:
+            logger: The logger used for framework findings.
             about: The name of the plot.
             story: The default story for events in this plot.
             state: The initial state of the plot.
@@ -36,6 +39,7 @@ class PlotScope:
             parent: The parent plot.
             parent_id: External parent span ID, taking precedence over the local parent span ID.
         """
+        self.logger = logger
         self.about = about
         self.story = story
         self.parent = parent
@@ -51,8 +55,42 @@ class PlotScope:
         self.state: dict[str, Any] = parent.state | state if parent else state.copy()
 
         self.history: list[PlotEvent] = []
+        self.beeps: set[str] = set()
         self.stopwatch: Stopwatch = Stopwatch()
         self.duration_ms: int = 0
+
+    def extra(
+            self,
+            event: PlotEvent,
+            story: Literal["core", "buzz"] | None = None,
+            **kwargs,
+    ) -> dict[str, Any]:
+        return {
+            "_format_map": True,
+            "plot": {
+                "about": self.about,
+                "event": event.name,
+                "story": self.story if story is None else story,
+                "depth": self.depth,
+            },
+            "context": self.state | kwargs,
+            "trace": self.trace.to_dict(),
+        }
+
+    def beep(
+            self,
+            finding: str,
+            level: int,
+            context: dict[str, Any],
+            stack_level: int = 3,
+    ) -> None:
+        if finding in self.beeps or not self.logger.isEnabledFor(level):
+            return
+
+        extra = self.extra(PlotEvent.BEEP, "buzz", **context)
+        extra["context"]["error_code"] = finding
+        self.beeps.add(finding)
+        self.logger.log(level, finding, extra=extra, stacklevel=stack_level)
 
     def __iter__(self) -> Iterator["PlotScope"]:
         current: Optional["PlotScope"] = self
@@ -65,6 +103,7 @@ class PlotScope:
     @contextlib.contextmanager
     def push(
             cls,
+            logger: logging.Logger,
             about: str,
             story: Literal["core", "buzz"],
             state: dict[str, Any],
@@ -76,6 +115,7 @@ class PlotScope:
         """
 
         plot = cls(
+            logger=logger,
             about=about,
             story=story,
             state=state,

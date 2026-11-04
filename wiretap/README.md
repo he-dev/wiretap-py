@@ -16,4 +16,5 @@ with storyline.begin_plot("LoadWorkflow", "core", workflow_id=42) as plot:
 
 Use Wiretap's text or JSON formatter for message interpolation and structured output.
 An omitted LAST is emitted automatically through the storyline's logger.
-Event diagnostics are stored in `plot.diagnostics.errors` and `plot.diagnostics.remarks`.
+Lifecycle findings are emitted as `BEEP` events with `story="buzz"` and a `context.error_code` code.
+Invalid sequences use ERROR; remarks use DEBUG. Each enabled finding is emitted once per plot scope.

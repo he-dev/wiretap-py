@@ -84,7 +84,7 @@ def test_plot_and_json_pipeline(
 
     # INFO filters ZERO, but the event must still advance the lifecycle.
     assert [record.plot["event"] for record in records] == expected_events
-    assert not records[-1].plot["diagnostics"]["errors"]
+    assert all(record.plot["event"] != "BEEP" for record in records)
 
     # CaptureHandler stores raw records. Explicitly run them through the JSON pipeline.
     entries = [json.loads(json_formatter.format(record)) for record in records]
@@ -92,7 +92,7 @@ def test_plot_and_json_pipeline(
     assert entries[-1]["context"] == {"order_id": 42}
     assert entries[-2]["context"] == {"order_id": 42, "attempt": 1}
     assert entries[-1]["plot"]["duration_ms"] >= 0
-    assert entries[-1]["plot"]["diagnostics"]["errors"] == []
+    assert "diagnostics" not in entries[-1]["plot"]
 
     # All events in this plot must describe the same trace and span.
     assert all(entry["trace"] == entries[0]["trace"] for entry in entries)
@@ -112,9 +112,12 @@ def test_invalid_sequence_is_reported(
         # Repeating LAST is misuse, but it should still produce a log record.
         logger.info("Invalid sequence", extra=plot.last())
 
-    assert len(records) == 2
-    assert records[-1].plot["diagnostics"]["errors"] == ["no-events-must-follow-last"]
+    assert [record.plot["event"] for record in records] == ["LAST", "BEEP", "LAST"]
+    assert records[1].levelno == logging.ERROR
+    assert records[1].context["error_code"] == "no-events-must-follow-last"
 
-    # The record's nested diagnostics are included in the JSON output.
-    entry = json.loads(json_formatter.format(records[-1]))
-    assert entry["plot"]["diagnostics"]["errors"] == ["no-events-must-follow-last"]
+    # Framework findings are separate records using the affected plot's trace.
+    entry = json.loads(json_formatter.format(records[1]))
+    assert entry["plot"]["event"] == "BEEP"
+    assert entry["context"]["error_code"] == "no-events-must-follow-last"
+    assert entry["trace"] == records[-1].trace

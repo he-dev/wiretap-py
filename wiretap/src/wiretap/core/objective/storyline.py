@@ -30,6 +30,7 @@ class Storyline:
             **kwargs,
     ) -> Iterator[Plot]:
         with PlotScope.push(
+                logger=self._logger,
                 about=about,
                 story=story,
                 state=kwargs,
@@ -46,7 +47,7 @@ class Storyline:
             finally:
                 if PlotEvent.LAST not in scope.history:
                     extra = plot.last()
-                    extra["plot"]["diagnostics"]["remarks"].append("logs-last-silently")
+                    scope.beep("logs-last-silently", logging.DEBUG, {}, stack_level=4)
                     level = logging.INFO
                     message = "{plot[about]} completes in {plot[duration_ms]} ms."
                     if error is not None:
@@ -71,10 +72,6 @@ class Storyline:
                 "event": PlotEvent.SNAP.name,
                 "story": story,
                 "depth": scope.depth + 1 if scope else 0,
-                "diagnostics": {
-                    "errors": [],
-                    "remarks": [],
-                },
             },
             "context": context,
             "trace": scope.trace.to_dict() if scope else None,

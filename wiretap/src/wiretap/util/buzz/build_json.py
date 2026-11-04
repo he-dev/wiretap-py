@@ -64,10 +64,11 @@ class AddPlot(BuildJSON):
             "story": None,
             "depth": 0,
         })
-        diagnostics = plot.setdefault("diagnostics", {"errors": [], "remarks": []})
         previous = (json.get("plot") or {}).get("diagnostics", {})
-        diagnostics["errors"].extend(previous.get("errors", []))
-        diagnostics["remarks"].extend(previous.get("remarks", []))
+        if previous:
+            plot.setdefault("diagnostics", {"errors": [], "remarks": []})
+            plot["diagnostics"]["errors"].extend(previous.get("errors", []))
+            plot["diagnostics"]["remarks"].extend(previous.get("remarks", []))
         return json | {"plot": plot}
 
 
@@ -94,7 +95,7 @@ class AddSource(BuildJSON):
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
         plot = record.__dict__.get("plot", {})
-        if plot.get("event") != "LAST":
+        if plot.get("event") not in {"LAST", "BEEP"}:
             return json
 
         if record.levelno in self.include_when:

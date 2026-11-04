@@ -6,3 +6,4 @@ class PlotEvent(IntEnum):
     TICK = auto()
     LAST = auto()
     SNAP = auto()
+    BEEP = auto()
