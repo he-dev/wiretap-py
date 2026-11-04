@@ -4,10 +4,11 @@ from wiretap.meta import FormatData
 
 
 def render_message(record: logging.LogRecord) -> str | None:
-    if not record.__dict__.get("_wiretap", False):
-        return record.getMessage()
+    message = record.getMessage()
+    if not record.__dict__.get("_format_map", False):
+        return message
 
     if record.msg is None:
         return None
 
-    return str(record.msg).format_map(FormatData(record.__dict__))
+    return message.format_map(FormatData(record.__dict__))

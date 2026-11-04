@@ -12,23 +12,19 @@ class TextFormatter(logging.Formatter):
         # meta: Adds custom properties to the record so that they can be used in the configured log format.
 
         record = copy(record)
-        record.__dict__.setdefault("fixme", [])
-        record.__dict__.setdefault("aboutme", [])
-
-        plot = record.__dict__.get("plot", {})
-
-        if not plot:
-            record.__dict__.setdefault("plot", {
-                "about": None,
-                "event": None,
-                "depth": 0,
-            })
-            record.__dict__.setdefault("trace", {
-                "id": None,
-                "span_id": None,
-                "parent_id": None,
-            })
-            record.__dict__.setdefault("context", {})
+        plot = dict(record.__dict__.get("plot") or {})
+        plot.setdefault("about", None)
+        plot.setdefault("event", None)
+        plot.setdefault("story", None)
+        plot.setdefault("depth", 0)
+        plot.setdefault("diagnostics", {"errors": [], "remarks": []})
+        record.__dict__["plot"] = plot
+        record.__dict__["trace"] = record.__dict__.get("trace") or {
+            "id": None,
+            "span_id": None,
+            "parent_id": None,
+        }
+        record.__dict__.setdefault("context", {})
 
         record.indent = self.indent * plot.get("depth", 0)
         include_source = (
@@ -50,7 +46,7 @@ class TextFormatter(logging.Formatter):
                 "line": None,
             })
 
-        # core: dict-render only _wiretap messages.
+        # core: dict-render only _format_map messages.
         record.msg = render_message(record)
         record.args = ()
         return super().format(record)

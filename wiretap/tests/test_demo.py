@@ -5,7 +5,7 @@ import logging
 
 import pytest
 
-from wiretap import begin_plot
+from wiretap import Storyline
 from wiretap.util.logging import JsonFormatter
 
 
@@ -76,14 +76,15 @@ def test_plot_and_json_pipeline(
     name, records = captured
 
     # Match the plot name to the logger configured by the captured fixture.
-    with begin_plot(name, "user", order_id=42) as plot:
-        plot.zero.log_debug(None)
-        plot.tick.log_info("Working", attempt=1)
-        plot.last.log_info("Order {context[order_id]} finished")
+    logger, storyline = Storyline.logger(name)
+    with storyline.begin_plot(name, "core", order_id=42) as plot:
+        logger.debug(None, extra=plot.zero())
+        logger.info("Working", extra=plot.tick(attempt=1))
+        logger.info("Order {context[order_id]} finished", extra=plot.last())
 
     # INFO filters ZERO, but the event must still advance the lifecycle.
     assert [record.plot["event"] for record in records] == expected_events
-    assert not records[-1].__dict__.get("fixme")
+    assert not records[-1].plot["diagnostics"]["errors"]
 
     # CaptureHandler stores raw records. Explicitly run them through the JSON pipeline.
     entries = [json.loads(json_formatter.format(record)) for record in records]
@@ -91,7 +92,7 @@ def test_plot_and_json_pipeline(
     assert entries[-1]["context"] == {"order_id": 42}
     assert entries[-2]["context"] == {"order_id": 42, "attempt": 1}
     assert entries[-1]["plot"]["duration_ms"] >= 0
-    assert "fixme" not in entries[-1]
+    assert entries[-1]["plot"]["diagnostics"]["errors"] == []
 
     # All events in this plot must describe the same trace and span.
     assert all(entry["trace"] == entries[0]["trace"] for entry in entries)
@@ -104,15 +105,16 @@ def test_invalid_sequence_is_reported(
 ) -> None:
     name, records = captured
 
-    with begin_plot(name, "user") as plot:
-        plot.zero.log_debug(None)
-        plot.last.log_info("Finished")
+    logger, storyline = Storyline.logger(name)
+    with storyline.begin_plot(name, "core") as plot:
+        logger.debug(None, extra=plot.zero())
+        logger.info("Finished", extra=plot.last())
         # Repeating LAST is misuse, but it should still produce a log record.
-        plot.last.log_info("Invalid sequence")
+        logger.info("Invalid sequence", extra=plot.last())
 
     assert len(records) == 2
-    assert records[-1].fixme == ["last-must-occur-only-once"]
+    assert records[-1].plot["diagnostics"]["errors"] == ["no-events-must-follow-last"]
 
-    # The record's fixme list is included in the JSON output.
+    # The record's nested diagnostics are included in the JSON output.
     entry = json.loads(json_formatter.format(records[-1]))
-    assert entry["fixme"] == ["last-must-occur-only-once"]
+    assert entry["plot"]["diagnostics"]["errors"] == ["no-events-must-follow-last"]

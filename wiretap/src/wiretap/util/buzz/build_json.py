@@ -2,6 +2,7 @@ import logging
 import sys
 import traceback
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from datetime import datetime, timezone
 from logging import LogRecord
 from typing import Any
@@ -56,15 +57,18 @@ class AddPlot(BuildJSON):
     root_keys = ("plot",)
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        if plot := record.__dict__.get("plot", {}):
-            return json | {"plot": plot}
-        else:
-            return json | {
-                "plot": {
-                    "about": None,
-                    "event": None,
-                }
-            }
+        # core: Keep builder changes local to this formatter invocation.
+        plot = deepcopy(record.__dict__.get("plot") or {
+            "about": None,
+            "event": None,
+            "story": None,
+            "depth": 0,
+        })
+        diagnostics = plot.setdefault("diagnostics", {"errors": [], "remarks": []})
+        previous = (json.get("plot") or {}).get("diagnostics", {})
+        diagnostics["errors"].extend(previous.get("errors", []))
+        diagnostics["remarks"].extend(previous.get("remarks", []))
+        return json | {"plot": plot}
 
 
 class AddSource(BuildJSON):
@@ -117,7 +121,7 @@ class AddContext(BuildJSON):
 
         # core: Promote context properties to root if they do not conflict with reserved root keys.
         # core: Context properties that conflict with reserved root keys stay in context as fallback.
-        root_keys = set(json) | {"context", "fixme", "aboutme"}
+        root_keys = set(json) | {"context", "plot"}
         json["context"] = {}
         for key, value in (context or {}).items():
             if key in root_keys:
@@ -127,7 +131,10 @@ class AddContext(BuildJSON):
 
         # core: Report a violation when there are any key conflicts.
         if json["context"]:
-            json["fixme"] = [*(json.get("fixme") or []), "rooted-context-properties-must-be-unique"]
+            json["plot"] = json.get("plot") or {}
+            json["plot"].setdefault("diagnostics", {"errors": [], "remarks": []})["errors"].append(
+                "rooted-context-properties-must-be-unique"
+            )
         return json
 
 
