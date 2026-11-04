@@ -15,10 +15,10 @@ class TextFormatter(logging.Formatter):
         record.__dict__.setdefault("fixme", [])
         record.__dict__.setdefault("aboutme", [])
 
-        activity = record.__dict__.get("activity", {})
+        plot = record.__dict__.get("plot", {})
 
-        if not activity:
-            record.__dict__.setdefault("activity", {
+        if not plot:
+            record.__dict__.setdefault("plot", {
                 "about": None,
                 "event": None,
                 "depth": 0,
@@ -30,10 +30,10 @@ class TextFormatter(logging.Formatter):
             })
             record.__dict__.setdefault("context", {})
 
-        record.indent = self.indent * activity.get("depth", 0)
+        record.indent = self.indent * plot.get("depth", 0)
         include_source = (
                 logging.getLogger(record.name).isEnabledFor(logging.DEBUG)
-                or activity.get("event") == "ZERO"
+                or plot.get("event") == "ZERO"
                 or record.levelno >= logging.ERROR
         )
 

@@ -52,15 +52,15 @@ class AddMessage(BuildJSON):
         }
 
 
-class AddActivity(BuildJSON):
-    root_keys = ("activity",)
+class AddPlot(BuildJSON):
+    root_keys = ("plot",)
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        if activity := record.__dict__.get("activity", {}):
-            return json | {"activity": activity}
+        if plot := record.__dict__.get("plot", {}):
+            return json | {"plot": plot}
         else:
             return json | {
-                "activity": {
+                "plot": {
                     "about": None,
                     "event": None,
                 }
@@ -89,8 +89,8 @@ class AddSource(BuildJSON):
         raise ValueError(f"Invalid logging level: {value!r}")
 
     def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        activity = record.__dict__.get("activity", {})
-        if activity.get("event") != "LAST":
+        plot = record.__dict__.get("plot", {})
+        if plot.get("event") != "LAST":
             return json
 
         if record.levelno in self.include_when:

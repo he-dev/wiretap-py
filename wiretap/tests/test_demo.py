@@ -5,7 +5,7 @@ import logging
 
 import pytest
 
-from wiretap import begin_scope
+from wiretap import begin_plot
 from wiretap.util.logging import JsonFormatter
 
 
@@ -52,7 +52,7 @@ def json_formatter() -> JsonFormatter:
         encoders=[],
         pipeline=[
             "wiretap.util.buzz.build_json.AddMessage",
-            "wiretap.util.buzz.build_json.AddActivity",
+            "wiretap.util.buzz.build_json.AddPlot",
             "wiretap.util.buzz.build_json.AddContext",
             "wiretap.util.buzz.build_json.AddTrace",
         ],
@@ -68,21 +68,21 @@ def json_formatter() -> JsonFormatter:
     # Only "captured" goes through a fixture; expected_events goes straight to the test.
     indirect=["captured"],
 )
-def test_activity_and_json_pipeline(
+def test_plot_and_json_pipeline(
     captured: CapturedLogs,
     expected_events: list[str],
     json_formatter: JsonFormatter,
 ) -> None:
     name, records = captured
 
-    # Match the activity name to the logger configured by the captured fixture.
-    with begin_scope(name, order_id=42) as activity:
-        activity.zero.log_debug(None)
-        activity.tick.log_info("Working", attempt=1)
-        activity.last.log_info("Order {context[order_id]} finished")
+    # Match the plot name to the logger configured by the captured fixture.
+    with begin_plot(name, "user", order_id=42) as plot:
+        plot.zero.log_debug(None)
+        plot.tick.log_info("Working", attempt=1)
+        plot.last.log_info("Order {context[order_id]} finished")
 
     # INFO filters ZERO, but the event must still advance the lifecycle.
-    assert [record.activity["event"] for record in records] == expected_events
+    assert [record.plot["event"] for record in records] == expected_events
     assert not records[-1].__dict__.get("fixme")
 
     # CaptureHandler stores raw records. Explicitly run them through the JSON pipeline.
@@ -90,10 +90,10 @@ def test_activity_and_json_pipeline(
     assert entries[-1]["message"] == "Order 42 finished"
     assert entries[-1]["context"] == {"order_id": 42}
     assert entries[-2]["context"] == {"order_id": 42, "attempt": 1}
-    assert entries[-1]["activity"]["duration_ms"] >= 0
+    assert entries[-1]["plot"]["duration_ms"] >= 0
     assert "fixme" not in entries[-1]
 
-    # All events in this activity must describe the same trace and span.
+    # All events in this plot must describe the same trace and span.
     assert all(entry["trace"] == entries[0]["trace"] for entry in entries)
 
 
@@ -104,11 +104,11 @@ def test_invalid_sequence_is_reported(
 ) -> None:
     name, records = captured
 
-    with begin_scope(name) as activity:
-        activity.zero.log_debug(None)
-        activity.last.log_info("Finished")
+    with begin_plot(name, "user") as plot:
+        plot.zero.log_debug(None)
+        plot.last.log_info("Finished")
         # Repeating LAST is misuse, but it should still produce a log record.
-        activity.last.log_info("Invalid sequence")
+        plot.last.log_info("Invalid sequence")
 
     assert len(records) == 2
     assert records[-1].fixme == ["last-must-occur-only-once"]

@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from wiretap.util.activity import ActivityScope
+from wiretap.util.plot import PlotScope
 
 
 def log_event(
@@ -15,7 +15,7 @@ def log_event(
     if not logger.isEnabledFor(level):
         return
 
-    scope = ActivityScope.get_current()
+    scope = PlotScope.get_current()
 
     context = scope.state.copy() if scope else {}
     context.update(state or {})

@@ -23,7 +23,7 @@ def demo():
     log_child_method()
     log_with_timing_1()
     log_with_timing_2()
-    log_nested_activities()
+    log_nested_plots()
     log_with_none_block()
     log_single_loop_3()
     log_multiple_times()

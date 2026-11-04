@@ -1,18 +1,13 @@
-from .util.activity import DOMAIN, SYSTEM
+from .util.plot import USER, BUZZ
 from .core.objective.configure import configure
 from .core.objective.benchmark import Benchmark
-from .core.interface.begin_scope import begin_scope
-from .core.interface.log_level import log_info, log_debug, log_warning, log_error
+from .core.interface.log_solo import snap
+from .core.interface.begin_plot import begin_plot
 
 # core: Star import for convenience.
 __all__ = [
+    "configure",
+    "begin_plot",
+    "snap",
     "Benchmark",
-    "begin_scope",
-    "log_info",
-    "log_debug",
-    "log_warning",
-    "log_error",
-    "DOMAIN",
-    "SYSTEM",
-    "configure"
 ]

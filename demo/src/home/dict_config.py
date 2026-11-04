@@ -17,7 +17,7 @@ config = {
             "()": logging.Formatter,
             "style": "{",
             "datefmt": "%Y-%m-%d %H:%M:%S",
-            "fmt": "{asctime}.{msecs:03.0f} {indent} {activity} | {event} | {elapsed:.3f}s | {message} | {snapshot} | {tags}",
+            "fmt": "{asctime}.{msecs:03.0f} {indent} {plot} | {event} | {elapsed:.3f}s | {message} | {snapshot} | {tags}",
         },
         "elastic": {
             "()": wiretap.formatters.JsonFormatter,
