@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import logging.config
 from typing import Any, Iterator, Literal
 
 from wiretap.core.objective.plot import Plot
@@ -20,6 +21,13 @@ class Storyline:
         logger = logging.getLogger(name)
         return logger, cls(logger)
 
+    @staticmethod
+    def configure(config: dict):
+        """
+        Configures standard Python logging.
+        """
+        logging.config.dictConfig(config)
+
     @contextlib.contextmanager
     def begin_plot(
             self,
@@ -29,6 +37,10 @@ class Storyline:
             parent_id: str | None = None,
             **kwargs,
     ) -> Iterator[Plot]:
+        """
+        Begins a new plot.
+        """
+
         with PlotScope.push(
                 logger=self._logger,
                 about=about,
@@ -47,12 +59,17 @@ class Storyline:
             finally:
                 if PlotEvent.LAST not in scope.history:
                     extra = plot.last()
-                    scope.beep("logs-last-silently", logging.DEBUG, {}, stack_level=4)
+                    scope.beep(
+                        logging.DEBUG,
+                        "Plot {plot[about]} ends without an explicit LAST.",
+                        "logs-last-silently",
+                        stacklevel=4,
+                    )
                     level = logging.INFO
-                    message = "{plot[about]} completes in {plot[duration_ms]} ms."
+                    message = "Plot {plot[about]} completes in {plot[duration_ms]} ms."
                     if error is not None:
                         level = logging.ERROR
-                        message = "{plot[about]} fails after {plot[duration_ms]} ms."
+                        message = "Plot {plot[about]} fails after {plot[duration_ms]} ms."
                     self._logger.log(
                         level=level,
                         msg=message,
@@ -63,8 +80,8 @@ class Storyline:
 
     def snap(self, about: str, story: Literal["core", "buzz"], **kwargs) -> dict[str, Any]:
         scope = PlotScope.get_current()
-        context = scope.state.copy() if scope else {}
-        context.update(kwargs)
+        samples = scope.state.copy() if scope else {}
+        samples.update(kwargs)
         return {
             "_format_map": True,
             "plot": {
@@ -73,6 +90,6 @@ class Storyline:
                 "story": story,
                 "depth": scope.depth + 1 if scope else 0,
             },
-            "context": context,
+            "samples": samples,
             "trace": scope.trace.to_dict() if scope else None,
         }

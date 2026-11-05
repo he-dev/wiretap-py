@@ -2,7 +2,7 @@ import logging
 from copy import copy
 
 from wiretap.meta import trim_path
-from wiretap.util.buzz.render_message import render_message
+from wiretap.util.rendering.render_message import render_message
 
 
 class TextFormatter(logging.Formatter):
@@ -23,7 +23,7 @@ class TextFormatter(logging.Formatter):
             "span_id": None,
             "parent_id": None,
         }
-        record.__dict__.setdefault("context", {})
+        record.__dict__.setdefault("samples", {})
 
         record.indent = self.indent * plot.get("depth", 0)
         include_source = (

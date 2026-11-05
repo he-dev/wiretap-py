@@ -31,9 +31,9 @@ class PlotScope:
         Initializes a new PlotScope instance.
 
         Args:
-            logger: The logger used for framework findings.
+            logger: The logger used for diagnostic longs.
             about: The name of the plot.
-            story: The default story for events in this plot.
+            story: The story for events in this plot.
             state: The initial state of the plot.
             trace_id: The trace ID for the plot.
             parent: The parent plot.
@@ -65,6 +65,10 @@ class PlotScope:
             story: Literal["core", "buzz"] | None = None,
             **kwargs,
     ) -> dict[str, Any]:
+        """
+        Creates extra with default values.
+        """
+
         return {
             "_format_map": True,
             "plot": {
@@ -73,24 +77,29 @@ class PlotScope:
                 "story": self.story if story is None else story,
                 "depth": self.depth,
             },
-            "context": self.state | kwargs,
+            "samples": self.state | kwargs,
             "trace": self.trace.to_dict(),
         }
 
     def beep(
             self,
-            finding: str,
             level: int,
-            context: dict[str, Any],
-            stack_level: int = 3,
+            message: str | None,
+            beep_code: str,
+            stacklevel: int = 3,
+            **kwargs,
     ) -> None:
-        if finding in self.beeps or not self.logger.isEnabledFor(level):
+        """
+        Logs diagnostic messages.
+        """
+
+        if beep_code in self.beeps or not self.logger.isEnabledFor(level):
             return
 
-        extra = self.extra(PlotEvent.BEEP, "buzz", **context)
-        extra["context"]["error_code"] = finding
-        self.beeps.add(finding)
-        self.logger.log(level, finding, extra=extra, stacklevel=stack_level)
+        extra = self.extra(PlotEvent.BEEP, "buzz", **kwargs)
+        extra["samples"]["beep_code"] = beep_code
+        self.beeps.add(beep_code)
+        self.logger.log(level, message, extra=extra, stacklevel=stacklevel)
 
     def __iter__(self) -> Iterator["PlotScope"]:
         current: Optional["PlotScope"] = self

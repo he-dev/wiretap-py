@@ -9,7 +9,9 @@ from wiretap.util.trace_w3c import TraceW3C
 
 
 class Plot:
-    """Builds event metadata using lifecycle state owned by its scope."""
+    """
+    Provides event extra.
+    """
 
     def __init__(self, scope: PlotScope) -> None:
         self._scope = scope
@@ -26,13 +28,28 @@ class Plot:
         extra = self._scope.extra(PlotEvent.ZERO, story, **kwargs)
 
         if PlotEvent.LAST in self._scope.history:
-            self._scope.beep("no-events-must-follow-last", logging.ERROR, kwargs)
+            self._scope.beep(
+                logging.ERROR,
+                "Plot {plot[about]} logs ZERO after LAST.",
+                "no-events-must-follow-last",
+                **kwargs,
+            )
 
         if PlotEvent.ZERO in self._scope.history:
-            self._scope.beep("zero-occurs-more-than-once", logging.ERROR, kwargs)
+            self._scope.beep(
+                logging.ERROR,
+                "Plot {plot[about]} logs ZERO more than once.",
+                "zero-occurs-more-than-once",
+                **kwargs,
+            )
 
         if PlotEvent.TICK in self._scope.history:
-            self._scope.beep("zero-must-precede-tick", logging.ERROR, kwargs)
+            self._scope.beep(
+                logging.ERROR,
+                "Plot {plot[about]} logs ZERO after TICK.",
+                "zero-must-precede-tick",
+                **kwargs,
+            )
 
         self._scope.history.append(PlotEvent.ZERO)
         return extra
@@ -41,7 +58,12 @@ class Plot:
         extra = self._scope.extra(PlotEvent.TICK, story, **kwargs)
 
         if PlotEvent.LAST in self._scope.history:
-            self._scope.beep("no-events-must-follow-last", logging.ERROR, kwargs)
+            self._scope.beep(
+                logging.ERROR,
+                "Plot {plot[about]} logs TICK after LAST.",
+                "no-events-must-follow-last",
+                **kwargs,
+            )
 
         self._scope.history.append(PlotEvent.TICK)
         return extra
@@ -50,10 +72,20 @@ class Plot:
         extra = self._scope.extra(PlotEvent.LAST, story, **kwargs)
 
         if PlotEvent.LAST in self._scope.history:
-            self._scope.beep("no-events-must-follow-last", logging.ERROR, kwargs)
+            self._scope.beep(
+                logging.ERROR,
+                "Plot {plot[about]} logs LAST more than once.",
+                "no-events-must-follow-last",
+                **kwargs,
+            )
         else:
             if PlotEvent.ZERO not in self._scope.history:
-                self._scope.beep("does-not-log-zero", logging.DEBUG, kwargs)
+                self._scope.beep(
+                    logging.DEBUG,
+                    "Plot {plot[about]} reaches LAST without ZERO.",
+                    "does-not-log-zero",
+                    **kwargs,
+                )
             self._scope.duration_ms = self._scope.stopwatch.elapsed_ms
 
         extra["plot"]["duration_ms"] = self._scope.duration_ms

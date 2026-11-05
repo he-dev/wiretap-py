@@ -2,15 +2,14 @@ import logging
 import sys
 import traceback
 from abc import ABC, abstractmethod
-from copy import deepcopy
 from datetime import datetime, timezone
 from logging import LogRecord
 from typing import Any
 
-from wiretap.util.buzz.render_message import render_message
+from wiretap.util.rendering.render_message import render_message
 
 # util: Type alias for convenience.
-LogJson = dict[str, Any]
+Entry = dict[str, Any]
 
 
 # meta: Using ABC because we're creating objects dynamically.
@@ -20,7 +19,7 @@ class BuildJSON(ABC):
     root_keys: tuple[str, ...] = ()
 
     @abstractmethod
-    def __call__(self, record: LogRecord, json: LogJson) -> LogJson: ...
+    def __call__(self, record: LogRecord, entry: Entry) -> Entry: ...
 
 
 class AddTimestamp(BuildJSON):
@@ -36,8 +35,8 @@ class AddTimestamp(BuildJSON):
             case _:
                 raise ValueError(f"Invalid timezone: {tz}. Only [utc|local] are supported.")
 
-    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        return json | {
+    def __call__(self, record: logging.LogRecord, entry: Entry) -> Entry:
+        return entry | {
             "timestamp": datetime.fromtimestamp(record.created, tz=self.tz)
         }
 
@@ -45,8 +44,8 @@ class AddTimestamp(BuildJSON):
 class AddMessage(BuildJSON):
     root_keys = ("message", "logger", "level")
 
-    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        return json | {
+    def __call__(self, record: logging.LogRecord, entry: Entry) -> Entry:
+        return entry | {
             "message": render_message(record),
             "logger": record.name,
             "level": record.levelname.lower(),
@@ -56,20 +55,14 @@ class AddMessage(BuildJSON):
 class AddPlot(BuildJSON):
     root_keys = ("plot",)
 
-    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        # core: Keep builder changes local to this formatter invocation.
-        plot = deepcopy(record.__dict__.get("plot") or {
+    def __call__(self, record: logging.LogRecord, entry: Entry) -> Entry:
+        plot = record.__dict__.get("plot") or {
             "about": None,
             "event": None,
             "story": None,
             "depth": 0,
-        })
-        previous = (json.get("plot") or {}).get("diagnostics", {})
-        if previous:
-            plot.setdefault("diagnostics", {"errors": [], "remarks": []})
-            plot["diagnostics"]["errors"].extend(previous.get("errors", []))
-            plot["diagnostics"]["remarks"].extend(previous.get("remarks", []))
-        return json | {"plot": plot}
+        }
+        return entry | {"plot": plot}
 
 
 class AddSource(BuildJSON):
@@ -93,13 +86,13 @@ class AddSource(BuildJSON):
 
         raise ValueError(f"Invalid logging level: {value!r}")
 
-    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
+    def __call__(self, record: logging.LogRecord, entry: Entry) -> Entry:
         plot = record.__dict__.get("plot", {})
         if plot.get("event") not in {"LAST", "BEEP"}:
-            return json
+            return entry
 
         if record.levelno in self.include_when:
-            return json | {
+            return entry | {
                 "source": {
                     "func": record.funcName,
                     "file": record.filename,
@@ -107,43 +100,40 @@ class AddSource(BuildJSON):
                 },
             }
 
-        return json
+        return entry
 
 
-class AddContext(BuildJSON):
-    def __init__(self, key: str | None = "context"):
+class AddSamples(BuildJSON):
+    def __init__(self, key: str | None = "samples"):
         self.key = key
-        self.root_keys = (key,) if key is not None else ("context",)
+        self.root_keys = (key,) if key is not None else ("samples",)
 
-    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        context = record.__dict__.get("context")
+    def __call__(self, record: logging.LogRecord, entry: Entry) -> Entry:
+        samples = record.__dict__.get("samples")
         if self.key is not None:
-            return json | {self.key: context}
+            return entry | {self.key: samples}
 
-        # core: Promote context properties to root if they do not conflict with reserved root keys.
-        # core: Context properties that conflict with reserved root keys stay in context as fallback.
-        root_keys = set(json) | {"context", "plot"}
-        json["context"] = {}
-        for key, value in (context or {}).items():
+        # core: Promote samples properties to root if they do not conflict with reserved root keys.
+        # core: Sample values that conflict with reserved root keys stay in samples as fallback.
+        root_keys = set(entry) | {self.key}
+        entry["samples"] = {}
+        for key, value in (samples or {}).items():
             if key in root_keys:
-                json["context"][key] = value
+                entry["samples"][key] = value
             else:
-                json[key] = value
+                entry[key] = value
 
-        # core: Report a violation when there are any key conflicts.
-        if json["context"]:
-            json["plot"] = json.get("plot") or {}
-            json["plot"].setdefault("diagnostics", {"errors": [], "remarks": []})["errors"].append(
-                "rooted-context-properties-must-be-unique"
-            )
-        return json
+        if entry["samples"]:
+            entry["samples"]["beep_code"] = "rooted-samples-must-be-unique"
+
+        return entry
 
 
 class AddTrace(BuildJSON):
     root_keys = ("trace",)
 
-    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        return json | {
+    def __call__(self, record: logging.LogRecord, entry: Entry) -> Entry:
+        return entry | {
             "trace": record.__dict__.get("trace", None)
         }
 
@@ -151,17 +141,17 @@ class AddTrace(BuildJSON):
 class AddException(BuildJSON):
     root_keys = ("exception",)
 
-    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
+    def __call__(self, record: logging.LogRecord, entry: Entry) -> Entry:
         if record.exc_info and all(record.exc_info):
             exc_cls, exc, exc_tb = record.exc_info
             # note: format_exception returns a list of lines. Join it a single sing or otherwise an array will be logged.
-            return json | {"exception": {
+            return entry | {"exception": {
                 "message": str(exc),
                 "type": exc_cls.__name__,  # type: ignore
                 "stack_trace": "".join(traceback.format_exception(exc_cls, exc, exc_tb))
             }}
 
-        return json
+        return entry
 
 
 # note: Experimental.
@@ -172,8 +162,8 @@ class Redact(BuildJSON):
         self.paths = tuple(tuple(path.split(".")) for path in paths)
         self.replacement = replacement
 
-    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        return {key: self._redact(value, (key,)) for key, value in json.items()}
+    def __call__(self, record: logging.LogRecord, entry: Entry) -> Entry:
+        return {key: self._redact(value, (key,)) for key, value in entry.items()}
 
     def _redact(self, value: Any, path: tuple[str, ...]) -> Any:
         if self._matches(path):
@@ -207,13 +197,13 @@ class Redact(BuildJSON):
 class RemoveNoneOrEmpty(BuildJSON):
     """Removes root-level None values and empty strings/containers, leaving nested values untouched."""
 
-    def __call__(self, record: logging.LogRecord, json: LogJson) -> LogJson:
-        entry = {}
-        for key, value in json.items():
+    def __call__(self, record: logging.LogRecord, entry: Entry) -> Entry:
+        filtered: Entry = {}
+        for key, value in entry.items():
             if value is None:
                 continue
             # core: Empty containers are omitted, but numeric zero and False are meaningful values.
             if isinstance(value, (str, bytes, dict, list, tuple, set, frozenset)) and len(value) == 0:
                 continue
-            entry[key] = value
-        return entry
+            filtered[key] = value
+        return filtered
