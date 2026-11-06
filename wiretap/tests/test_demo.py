@@ -53,7 +53,7 @@ def json_formatter() -> JsonFormatter:
         pipeline=[
             "wiretap.util.rendering.build_json.AddMessage",
             "wiretap.util.rendering.build_json.AddPlot",
-            "wiretap.util.rendering.build_json.AddSamples",
+            "wiretap.util.rendering.build_json.AddSample",
             "wiretap.util.rendering.build_json.AddTrace",
         ],
     )
@@ -80,7 +80,7 @@ def test_plot_and_json_pipeline(
     with storyline.begin_plot(name, "core", order_id=42) as plot:
         logger.debug(None, extra=plot.zero())
         logger.info("Working", extra=plot.tick(attempt=1))
-        logger.info("Order {samples[order_id]} finished", extra=plot.last())
+        logger.info("Order {sample[order_id]} finished", extra=plot.last())
 
     # INFO filters ZERO, but the event must still advance the lifecycle.
     assert [record.plot["event"] for record in records] == expected_events
@@ -89,8 +89,8 @@ def test_plot_and_json_pipeline(
     # CaptureHandler stores raw records. Explicitly run them through the JSON pipeline.
     entries = [json.loads(json_formatter.format(record)) for record in records]
     assert entries[-1]["message"] == "Order 42 finished"
-    assert entries[-1]["samples"] == {"order_id": 42}
-    assert entries[-2]["samples"] == {"order_id": 42, "attempt": 1}
+    assert entries[-1]["sample"] == {"order_id": 42}
+    assert entries[-2]["sample"] == {"order_id": 42, "attempt": 1}
     assert entries[-1]["plot"]["duration_ms"] >= 0
     assert "diagnostics" not in entries[-1]["plot"]
 
@@ -114,10 +114,10 @@ def test_invalid_sequence_is_reported(
 
     assert [record.plot["event"] for record in records] == ["LAST", "BEEP", "LAST"]
     assert records[1].levelno == logging.ERROR
-    assert records[1].samples["beep_code"] == "no-events-must-follow-last"
+    assert records[1].sample["beep_code"] == "no-events-must-follow-last"
 
     # Framework findings are separate records using the affected plot's trace.
     entry = json.loads(json_formatter.format(records[1]))
     assert entry["plot"]["event"] == "BEEP"
-    assert entry["samples"]["beep_code"] == "no-events-must-follow-last"
+    assert entry["sample"]["beep_code"] == "no-events-must-follow-last"
     assert entry["trace"] == records[-1].trace

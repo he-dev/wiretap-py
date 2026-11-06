@@ -11,10 +11,10 @@ logger.info("Configuration loaded", extra=storyline.snap("Configuration", "buzz"
 with storyline.begin_plot("LoadWorkflow", "core", workflow_id=42) as plot:
     logger.debug(None, extra=plot.zero())
     logger.info("Working", extra=plot.tick())
-    logger.info("Loaded {samples[workflow_id]}", extra=plot.last())
+    logger.info("Loaded {sample[workflow_id]}", extra=plot.last())
 ```
 
 Use Wiretap's text or JSON formatter for message interpolation and structured output.
 An omitted LAST is emitted automatically through the storyline's logger.
-Lifecycle findings are emitted as `BEEP` events with `story="buzz"` and a `samples.beep_code` code.
+Lifecycle findings are emitted as `BEEP` events with `story="buzz"` and a `sample.beep_code` code.
 Invalid sequences use ERROR; remarks use DEBUG. Each enabled finding is emitted once per plot scope.

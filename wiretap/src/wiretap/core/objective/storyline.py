@@ -80,8 +80,8 @@ class Storyline:
 
     def snap(self, about: str, story: Literal["core", "buzz"], **kwargs) -> dict[str, Any]:
         scope = PlotScope.get_current()
-        samples = scope.state.copy() if scope else {}
-        samples.update(kwargs)
+        sample = scope.state.copy() if scope else {}
+        sample.update(kwargs)
         return {
             "_format_map": True,
             "plot": {
@@ -90,6 +90,6 @@ class Storyline:
                 "story": story,
                 "depth": scope.depth + 1 if scope else 0,
             },
-            "samples": samples,
+            "sample": sample,
             "trace": scope.trace.to_dict() if scope else None,
         }

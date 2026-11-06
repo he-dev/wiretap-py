@@ -103,28 +103,28 @@ class AddSource(BuildJSON):
         return entry
 
 
-class AddSamples(BuildJSON):
-    def __init__(self, key: str | None = "samples"):
+class AddSample(BuildJSON):
+    def __init__(self, key: str | None = "sample"):
         self.key = key
-        self.root_keys = (key,) if key is not None else ("samples",)
+        self.root_keys = (key,) if key is not None else ("sample",)
 
     def __call__(self, record: logging.LogRecord, entry: Entry) -> Entry:
-        samples = record.__dict__.get("samples")
+        sample = record.__dict__.get("sample")
         if self.key is not None:
-            return entry | {self.key: samples}
+            return entry | {self.key: sample}
 
-        # core: Promote samples properties to root if they do not conflict with reserved root keys.
-        # core: Sample values that conflict with reserved root keys stay in samples as fallback.
+        # core: Promote sample properties to root if they do not conflict with reserved root keys.
+        # core: Sample values that conflict with reserved root keys stay in sample as fallback.
         root_keys = set(entry) | {self.key}
-        entry["samples"] = {}
-        for key, value in (samples or {}).items():
+        entry["sample"] = {}
+        for key, value in (sample or {}).items():
             if key in root_keys:
-                entry["samples"][key] = value
+                entry["sample"][key] = value
             else:
                 entry[key] = value
 
-        if entry["samples"]:
-            entry["samples"]["beep_code"] = "rooted-samples-must-be-unique"
+        if entry["sample"]:
+            entry["sample"]["beep_code"] = "rooted-sample-must-be-unique"
 
         return entry
 

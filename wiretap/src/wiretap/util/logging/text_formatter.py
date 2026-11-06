@@ -23,7 +23,7 @@ class TextFormatter(logging.Formatter):
             "span_id": None,
             "parent_id": None,
         }
-        record.__dict__.setdefault("samples", {})
+        record.__dict__.setdefault("sample", {})
 
         record.indent = self.indent * plot.get("depth", 0)
         include_source = (

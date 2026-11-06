@@ -77,7 +77,7 @@ class PlotScope:
                 "story": self.story if story is None else story,
                 "depth": self.depth,
             },
-            "samples": self.state | kwargs,
+            "sample": self.state | kwargs,
             "trace": self.trace.to_dict(),
         }
 
@@ -97,7 +97,7 @@ class PlotScope:
             return
 
         extra = self.extra(PlotEvent.BEEP, "buzz", **kwargs)
-        extra["samples"]["beep_code"] = beep_code
+        extra["sample"]["beep_code"] = beep_code
         self.beeps.add(beep_code)
         self.logger.log(level, message, extra=extra, stacklevel=stacklevel)
 
