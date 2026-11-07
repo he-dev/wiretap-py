@@ -1,9 +1,9 @@
 from .core.objective.configure import configure
 from .core.objective.benchmark import Benchmark
-from .core.objective.storyline import Storyline
+from .core.objective.wiretap import Wiretap
 
 __all__ = [
     "configure",
-    "Storyline",
+    "Wiretap",
     "Benchmark",
 ]

@@ -1,113 +1,87 @@
-import logging.handlers
+"""Demo logging configuration, matching demo/cfg/wiretap.yml."""
 
-import wiretap
-import wiretap_sqlserver.sqlserverhandler
-from wiretap_sqlserver.sqlserverhandler import SqlServerOdbcConnectionString
+import logging
+from logging.handlers import TimedRotatingFileHandler
+
+from wiretap.util.logging import JsonFormatter, TextFormatter
+
 
 config = {
     "version": 1,
+    "disable_existing_loggers": False,
     "formatters": {
-        # "console": {
-        #    "style": "{",
-        #    "format": "{asctime}.{msecs:.0f} | {module}.{funcName} | {status}",
-        #    "datefmt": "%Y-%m-%d %H:%M:%S",
-        #    "defaults": {"status": "<status>", "correlation": "<correlation>", "extra": "<extra>"}
-        # },
-        "wiretap": {
-            "()": logging.Formatter,
+        "console_full": {
+            "()": TextFormatter,
             "style": "{",
             "datefmt": "%Y-%m-%d %H:%M:%S",
-            "fmt": "{asctime}.{msecs:03.0f} {indent} {plot} | {event} | {elapsed:.3f}s | {message} | {snapshot} | {tags}",
+            "fmt": (
+                '{asctime}.{msecs:03.0f} [{levelname:7s}] '
+                '{indent}{activity[about]}: "{message}", '
+                'properties: {properties}, trc={trace}, src={source}'
+            ),
         },
-        "elastic": {
-            "()": wiretap.formatters.JsonFormatter,
-            ".": {
-                "json_encoder_cls": wiretap.tools.JSONMultiEncoder
-            }
-        }
-    },
-    "filters": {
-        "instance": {
-            "()": wiretap.filters.ConstField,
-            "name": "instance",
-            "value": "demo-1"
+        "console_lite": {
+            "()": TextFormatter,
+            "style": "{",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+            "fmt": (
+                '{asctime}.{msecs:03.0f} [{levelname:7s}] '
+                '{activity[focus]}: {indent}{activity[about]}[{activity[event]}]: '
+                '"{message}", properties: {properties}'
+            ),
         },
-        "indent": {
-            "()": wiretap.filters.IndentField,
-            "char": "_"
+        "elastic_json": {
+            "()": JsonFormatter,
+            # JsonFormatter resolves encoder and pipeline definitions by import path.
+            "encoders": [
+                "wiretap.util.encoding.EncodeDateTime",
+                "wiretap.util.encoding.EncodeUUID",
+                "wiretap.util.encoding.EncodeSet",
+                "wiretap.util.encoding.EncodePath",
+                "wiretap.util.encoding.EncodeToDict",
+            ],
+            "pipeline": [
+                "wiretap.util.rendering.AddTimestamp",
+                "wiretap.util.rendering.AddMessage",
+                "wiretap.util.rendering.AddActivity",
+                "wiretap.util.rendering.AddProperties",
+                "wiretap.util.rendering.AddTrace",
+                {
+                    "()": "wiretap.util.rendering.AddSource",
+                    "include_when": [logging.DEBUG, logging.ERROR, logging.CRITICAL],
+                },
+                "wiretap.util.rendering.AddException",
+                "wiretap.util.rendering.RemoveNoneOrEmpty",
+            ],
         },
-        "timestamp_local": {
-            "()": wiretap.filters.TimestampField,
-            "tz": "local"
-        },
-        "timestamp_utc": {
-            "()": wiretap.filters.TimestampField,
-            "tz": "utc"
-        },
-        "strip_exc_info": {
-            "()": wiretap.filters.StripExcInfo
-        }
     },
     "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "wiretap",
-            "level": "DEBUG",
-            "filters": [
-                "indent",
-                "timestamp_local",
-                "strip_exc_info",
-            ]
+        "console_full": {
+            "()": logging.StreamHandler,
+            "formatter": "console_full",
         },
-        "file": {
-            "class": "logging.handlers.TimedRotatingFileHandler",
+        "console_lite": {
+            "()": logging.StreamHandler,
+            "formatter": "console_lite",
+        },
+        "console_file": {
+            "()": TimedRotatingFileHandler,
             "when": "d",
             "interval": 1,
-            "filename": r"c:\temp\wiretap.log",
-            "formatter": "wiretap",
-            "level": "DEBUG"
+            "filename": r"c:\temp\wiretap_console.log",
+            "formatter": "console_full",
         },
-        "elastic": {
-            "class": "logging.handlers.TimedRotatingFileHandler",
-            "when": "d",
-            "interval": 1,
-            "filename": r"c:\temp\elastic.log",
-            "formatter": "elastic",
-            "level": "DEBUG",
-            "filters": [
-                "timestamp_utc",
-                "strip_exc_info",
-            ]
+        "elastic_file": {
+            "()": logging.FileHandler,
+            "filename": r"c:\temp\wiretap_elastic.log",
+            "formatter": "elastic_json",
         },
-        "sqlserver": {
-            # "class": "wiretap_sqlserver.src.wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
-            # "class": "wiretap_sqlserver.sqlserverhandler.SqlServerHandler",
-            "()": wiretap_sqlserver.sqlserverhandler.SqlServerHandler,
-            "connection_string": SqlServerOdbcConnectionString.standard(server="localhost,1433", database="master", username="sa", password="MSSQL2022!"),
-            "insert": INSERT,
-            "level": "DEBUG",
-            "filters": [
-                "instance",
-                "strip_exc_info",
-            ],
-            ".": {
-                "extra_params": ["instance"]
-            }
-        },
-        "memory": {
-            "class": "logging.handlers.MemoryHandler",
-            "capacity": 100,
-            "formatter": "wiretap",
-            "level": "DEBUG"
-        }
+    },
+    "root": {
+        "handlers": ["console_lite", "console_file", "elastic_file"],
+        "level": logging.DEBUG,
     },
     "loggers": {
-        "": {
-            # "handlers": ["console", "file", "sqlserver"],
-            "handlers": ["console", "file", "elastic"],
-            # "handlers": ["file"],
-            # "handlers": ["console", "file", "memory"],
-            "level": "DEBUG"
-        }
-    }
+        "PIL": {"level": logging.WARNING},
+    },
 }

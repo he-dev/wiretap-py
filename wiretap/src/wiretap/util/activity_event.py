@@ -1,7 +1,7 @@
 from enum import auto, IntEnum
 
 
-class PlotEvent(IntEnum):
+class ActivityEvent(IntEnum):
     ZERO = auto()
     TICK = auto()
     LAST = auto()

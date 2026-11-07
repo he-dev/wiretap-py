@@ -5,7 +5,7 @@ import logging
 
 import pytest
 
-from wiretap import Storyline
+from wiretap import Wiretap
 from wiretap.util.logging import JsonFormatter
 
 
@@ -52,8 +52,8 @@ def json_formatter() -> JsonFormatter:
         encoders=[],
         pipeline=[
             "wiretap.util.rendering.build_json.AddMessage",
-            "wiretap.util.rendering.build_json.AddPlot",
-            "wiretap.util.rendering.build_json.AddSample",
+            "wiretap.util.rendering.build_json.AddActivity",
+            "wiretap.util.rendering.build_json.AddProperties",
             "wiretap.util.rendering.build_json.AddTrace",
         ],
     )
@@ -68,33 +68,33 @@ def json_formatter() -> JsonFormatter:
     # Only "captured" goes through a fixture; expected_events goes straight to the test.
     indirect=["captured"],
 )
-def test_plot_and_json_pipeline(
+def test_activity_and_json_pipeline(
     captured: CapturedLogs,
     expected_events: list[str],
     json_formatter: JsonFormatter,
 ) -> None:
     name, records = captured
 
-    # Match the plot name to the logger configured by the captured fixture.
-    logger, storyline = Storyline.logger(name)
-    with storyline.begin_plot(name, "core", order_id=42) as plot:
-        logger.debug(None, extra=plot.zero())
-        logger.info("Working", extra=plot.tick(attempt=1))
-        logger.info("Order {sample[order_id]} finished", extra=plot.last())
+    # Match the activity name to the logger configured by the captured fixture.
+    logger, wiretap = Wiretap.get(name)
+    with wiretap.begin_scope(name, "core", order_id=42) as activity:
+        logger.debug(None, extra=activity.zero())
+        logger.info("Working", extra=activity.tick(attempt=1))
+        logger.info("Order {properties[order_id]} finished", extra=activity.last())
 
     # INFO filters ZERO, but the event must still advance the lifecycle.
-    assert [record.plot["event"] for record in records] == expected_events
-    assert all(record.plot["event"] != "BEEP" for record in records)
+    assert [record.activity["event"] for record in records] == expected_events
+    assert all(record.activity["event"] != "BEEP" for record in records)
 
     # CaptureHandler stores raw records. Explicitly run them through the JSON pipeline.
     entries = [json.loads(json_formatter.format(record)) for record in records]
     assert entries[-1]["message"] == "Order 42 finished"
-    assert entries[-1]["sample"] == {"order_id": 42}
-    assert entries[-2]["sample"] == {"order_id": 42, "attempt": 1}
-    assert entries[-1]["plot"]["duration_ms"] >= 0
-    assert "diagnostics" not in entries[-1]["plot"]
+    assert entries[-1]["properties"] == {"order_id": 42}
+    assert entries[-2]["properties"] == {"order_id": 42, "attempt": 1}
+    assert entries[-1]["activity"]["duration_ms"] >= 0
+    assert "diagnostics" not in entries[-1]["activity"]
 
-    # All events in this plot must describe the same trace and span.
+    # All events in this activity must describe the same trace and span.
     assert all(entry["trace"] == entries[0]["trace"] for entry in entries)
 
 
@@ -105,19 +105,19 @@ def test_invalid_sequence_is_reported(
 ) -> None:
     name, records = captured
 
-    logger, storyline = Storyline.logger(name)
-    with storyline.begin_plot(name, "core") as plot:
-        logger.debug(None, extra=plot.zero())
-        logger.info("Finished", extra=plot.last())
+    logger, wiretap = Wiretap.get(name)
+    with wiretap.begin_scope(name, "core") as activity:
+        logger.debug(None, extra=activity.zero())
+        logger.info("Finished", extra=activity.last())
         # Repeating LAST is misuse, but it should still produce a log record.
-        logger.info("Invalid sequence", extra=plot.last())
+        logger.info("Invalid sequence", extra=activity.last())
 
-    assert [record.plot["event"] for record in records] == ["LAST", "BEEP", "LAST"]
+    assert [record.activity["event"] for record in records] == ["LAST", "BEEP", "LAST"]
     assert records[1].levelno == logging.ERROR
-    assert records[1].sample["beep_code"] == "no-events-must-follow-last"
+    assert records[1].properties["beep_code"] == "no-events-must-follow-last"
 
-    # Framework findings are separate records using the affected plot's trace.
+    # Framework findings are separate records using the affected activity's trace.
     entry = json.loads(json_formatter.format(records[1]))
-    assert entry["plot"]["event"] == "BEEP"
-    assert entry["sample"]["beep_code"] == "no-events-must-follow-last"
+    assert entry["activity"]["event"] == "BEEP"
+    assert entry["properties"]["beep_code"] == "no-events-must-follow-last"
     assert entry["trace"] == records[-1].trace

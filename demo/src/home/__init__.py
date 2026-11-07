@@ -16,26 +16,6 @@ from use_cases import *
 #print(*sys.path, sep="\n")
 
 
-def demo():
-    log_without_scope()
-    log_with_defaults()
-    log_unknown_type()
-    log_child_method()
-    log_with_timing_1()
-    log_with_timing_2()
-    log_nested_plots()
-    log_with_none_block()
-    log_single_loop_3()
-    log_multiple_times()
-    log_multiple_times()
-    log_exception_with_stack()
-    log_error_without_stack()
-    log_with_custom_correlation()
-    log_multiple_times()
-    log_path()
-    log_error_()
-
-
 if __name__ == "__main__":
     # asyncio.run(main())
     # main_proc()

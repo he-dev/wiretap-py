@@ -52,17 +52,17 @@ class AddMessage(BuildJSON):
         }
 
 
-class AddPlot(BuildJSON):
-    root_keys = ("plot",)
+class AddActivity(BuildJSON):
+    root_keys = ("activity",)
 
     def __call__(self, record: logging.LogRecord, entry: Entry) -> Entry:
-        plot = record.__dict__.get("plot") or {
+        activity = record.__dict__.get("activity") or {
             "about": None,
             "event": None,
-            "story": None,
+            "focus": None,
             "depth": 0,
         }
-        return entry | {"plot": plot}
+        return entry | {"activity": activity}
 
 
 class AddSource(BuildJSON):
@@ -87,8 +87,8 @@ class AddSource(BuildJSON):
         raise ValueError(f"Invalid logging level: {value!r}")
 
     def __call__(self, record: logging.LogRecord, entry: Entry) -> Entry:
-        plot = record.__dict__.get("plot", {})
-        if plot.get("event") not in {"LAST", "BEEP"}:
+        activity = record.__dict__.get("activity", {})
+        if activity.get("event") not in {"LAST", "BEEP"}:
             return entry
 
         if record.levelno in self.include_when:
@@ -103,28 +103,28 @@ class AddSource(BuildJSON):
         return entry
 
 
-class AddSample(BuildJSON):
-    def __init__(self, key: str | None = "sample"):
+class AddProperties(BuildJSON):
+    def __init__(self, key: str | None = "properties"):
         self.key = key
-        self.root_keys = (key,) if key is not None else ("sample",)
+        self.root_keys = (key,) if key is not None else ("properties",)
 
     def __call__(self, record: logging.LogRecord, entry: Entry) -> Entry:
-        sample = record.__dict__.get("sample")
+        properties = record.__dict__.get("properties")
         if self.key is not None:
-            return entry | {self.key: sample}
+            return entry | {self.key: properties}
 
-        # core: Promote sample properties to root if they do not conflict with reserved root keys.
-        # core: Sample values that conflict with reserved root keys stay in sample as fallback.
+        # core: Promote properties to root if they do not conflict with reserved root keys.
+        # core: Properties values that conflict with reserved root keys stay in properties as fallback.
         root_keys = set(entry) | {self.key}
-        entry["sample"] = {}
-        for key, value in (sample or {}).items():
+        entry["properties"] = {}
+        for key, value in (properties or {}).items():
             if key in root_keys:
-                entry["sample"][key] = value
+                entry["properties"][key] = value
             else:
                 entry[key] = value
 
-        if entry["sample"]:
-            entry["sample"]["beep_code"] = "rooted-sample-must-be-unique"
+        if entry["properties"]:
+            entry["properties"]["beep_code"] = "rooted-properties-must-be-unique"
 
         return entry
 

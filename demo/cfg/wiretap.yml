@@ -7,14 +7,14 @@ formatters:
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       {asctime}.{msecs:03.0f} [{levelname:7s}]
-      {indent}{plot[about]}: "{message}", sample: {sample}, trc={trace}, src={source}
+      {indent}{activity[about]}: "{message}", properties: {properties}, trc={trace}, src={source}
   console_lite:
     (): wiretap.util.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       {asctime}.{msecs:03.0f} [{levelname:7s}]
-      {plot[story]}: {indent}{plot[about]}[{plot[event]}]: "{message}", sample: {sample}
+      {activity[focus]}: {indent}{activity[about]}[{activity[event]}]: "{message}", properties: {properties}
   elastic_json:
     (): wiretap.util.logging.JsonFormatter
     encoders:
@@ -26,10 +26,8 @@ formatters:
     pipeline:
       - wiretap.util.rendering.AddTimestamp
       - wiretap.util.rendering.AddMessage
-      - wiretap.util.rendering.AddPlot
-      #- wiretap.util.rendering.AddSample
-      - "()": wiretap.util.rendering.AddSample
-        key: "sample"
+      - wiretap.util.rendering.AddActivity
+      - wiretap.util.rendering.AddProperties
       - wiretap.util.rendering.AddTrace
       - "()": wiretap.util.rendering.AddSource
         include_when: [DEBUG, ERROR, CRITICAL]

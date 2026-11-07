@@ -3,21 +3,22 @@ from __future__ import annotations
 import contextlib
 import logging
 import logging.config
-from typing import Any, Iterator, Literal
+from typing import Any, Iterator
 
-from wiretap.core.objective.plot import Plot
-from wiretap.core.objective.plot_scope import PlotScope
-from wiretap.util.plot_event import PlotEvent
+from wiretap.core.objective.activity import Activity
+from wiretap.core.objective.activity_scope import ActivityScope
+from wiretap.util import Focus
+from wiretap.util.activity_event import ActivityEvent
 
 
-class Storyline:
-    """Binds a logger to plot scopes and builds standalone snap metadata."""
+class Wiretap:
+    """Binds a logger to activities and builds standalone snap metadata."""
 
     def __init__(self, logger: logging.Logger) -> None:
         self._logger = logger
 
     @classmethod
-    def logger(cls, name: str) -> tuple[logging.Logger, Storyline]:
+    def get(cls, name: str) -> tuple[logging.Logger, Wiretap]:
         logger = logging.getLogger(name)
         return logger, cls(logger)
 
@@ -29,47 +30,47 @@ class Storyline:
         logging.config.dictConfig(config)
 
     @contextlib.contextmanager
-    def begin_plot(
+    def begin_scope(
             self,
             about: str,
-            story: Literal["core", "buzz"],
+            focus: Focus,
             trace_id: str | None = None,
             parent_id: str | None = None,
             **kwargs,
-    ) -> Iterator[Plot]:
+    ) -> Iterator[Activity]:
         """
-        Begins a new plot.
+        Begins a new activity.
         """
 
-        with PlotScope.push(
+        with ActivityScope.push(
                 logger=self._logger,
                 about=about,
-                story=story,
+                focus=focus,
                 state=kwargs,
                 trace_id=trace_id,
                 parent_id=parent_id,
-        ) as scope:
-            plot = Plot(scope)
+        ) as activity_scope:
+            activity = Activity(activity_scope)
             error: BaseException | None = None
             try:
-                yield plot
+                yield activity
             except BaseException as exception:
                 error = exception
                 raise
             finally:
-                if PlotEvent.LAST not in scope.history:
-                    extra = plot.last()
-                    scope.beep(
+                if ActivityEvent.LAST not in activity_scope.history:
+                    extra = activity.last()
+                    activity_scope.beep(
                         logging.DEBUG,
-                        "Plot {plot[about]} ends without an explicit LAST.",
+                        "Activity {activity[about]} ends without an explicit LAST.",
                         "logs-last-silently",
                         stacklevel=4,
                     )
                     level = logging.INFO
-                    message = "Plot {plot[about]} completes in {plot[duration_ms]} ms."
+                    message = "Activity {activity[about]} completes in {activity[duration_ms]} ms."
                     if error is not None:
                         level = logging.ERROR
-                        message = "Plot {plot[about]} fails after {plot[duration_ms]} ms."
+                        message = "Activity {activity[about]} fails after {activity[duration_ms]} ms."
                     self._logger.log(
                         level=level,
                         msg=message,
@@ -78,18 +79,18 @@ class Storyline:
                         stacklevel=3,
                     )
 
-    def snap(self, about: str, story: Literal["core", "buzz"], **kwargs) -> dict[str, Any]:
-        scope = PlotScope.get_current()
-        sample = scope.state.copy() if scope else {}
-        sample.update(kwargs)
+    def snap(self, about: str, focus: Focus, **kwargs) -> dict[str, Any]:
+        activity = ActivityScope.get_current()
+        properties = activity.state.copy() if activity else {}
+        properties.update(kwargs)
         return {
             "_format_map": True,
-            "plot": {
+            "activity": {
                 "about": about,
-                "event": PlotEvent.SNAP.name,
-                "story": story,
-                "depth": scope.depth + 1 if scope else 0,
+                "event": ActivityEvent.SNAP.name,
+                "focus": focus,
+                "depth": activity.depth + 1 if activity else 0,
             },
-            "sample": sample,
-            "trace": scope.trace.to_dict() if scope else None,
+            "properties": properties,
+            "trace": activity.trace.to_dict() if activity else None,
         }

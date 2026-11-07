@@ -12,23 +12,23 @@ class TextFormatter(logging.Formatter):
         # meta: Adds custom properties to the record so that they can be used in the configured log format.
 
         record = copy(record)
-        plot = dict(record.__dict__.get("plot") or {})
-        plot.setdefault("about", None)
-        plot.setdefault("event", None)
-        plot.setdefault("story", None)
-        plot.setdefault("depth", 0)
-        record.__dict__["plot"] = plot
+        activity = dict(record.__dict__.get("activity") or {})
+        activity.setdefault("about", None)
+        activity.setdefault("event", None)
+        activity.setdefault("focus", None)
+        activity.setdefault("depth", 0)
+        record.__dict__["activity"] = activity
         record.__dict__["trace"] = record.__dict__.get("trace") or {
             "id": None,
             "span_id": None,
             "parent_id": None,
         }
-        record.__dict__.setdefault("sample", {})
+        record.__dict__.setdefault("properties", {})
 
-        record.indent = self.indent * plot.get("depth", 0)
+        record.indent = self.indent * activity.get("depth", 0)
         include_source = (
                 logging.getLogger(record.name).isEnabledFor(logging.DEBUG)
-                or plot.get("event") == "ZERO"
+                or activity.get("event") == "ZERO"
                 or record.levelno >= logging.ERROR
         )
 
