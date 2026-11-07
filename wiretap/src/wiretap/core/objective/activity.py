@@ -4,7 +4,7 @@ import logging
 from typing import Any
 
 from wiretap.core.objective.activity_scope import ActivityScope
-from wiretap.util import Focus
+from wiretap.util import Buzzing
 from wiretap.util.activity_event import ActivityEvent
 from wiretap.util.trace_w3c import TraceW3C
 
@@ -25,8 +25,8 @@ class Activity:
     def elapsed_ms(self) -> int:
         return self._activity.stopwatch.elapsed_ms
 
-    def zero(self, focus: Focus | None = None, **kwargs) -> dict[str, Any]:
-        extra = self._activity.extra(ActivityEvent.ZERO, focus, **kwargs)
+    def zero(self, buzzing: Buzzing | None = None, **kwargs) -> dict[str, Any]:
+        extra = self._activity.extra(ActivityEvent.ZERO, buzzing, **kwargs)
 
         if ActivityEvent.LAST in self._activity.history:
             self._activity.beep(
@@ -55,8 +55,8 @@ class Activity:
         self._activity.history.append(ActivityEvent.ZERO)
         return extra
 
-    def tick(self, focus: Focus | None = None, **kwargs) -> dict[str, Any]:
-        extra = self._activity.extra(ActivityEvent.TICK, focus, **kwargs)
+    def tick(self, buzzing: Buzzing | None = None, **kwargs) -> dict[str, Any]:
+        extra = self._activity.extra(ActivityEvent.TICK, buzzing, **kwargs)
 
         if ActivityEvent.LAST in self._activity.history:
             self._activity.beep(
@@ -69,8 +69,8 @@ class Activity:
         self._activity.history.append(ActivityEvent.TICK)
         return extra
 
-    def last(self, focus: Focus | None = None, **kwargs) -> dict[str, Any]:
-        extra = self._activity.extra(ActivityEvent.LAST, focus, **kwargs)
+    def last(self, buzzing: Buzzing | None = None, **kwargs) -> dict[str, Any]:
+        extra = self._activity.extra(ActivityEvent.LAST, buzzing, **kwargs)
 
         if ActivityEvent.LAST in self._activity.history:
             self._activity.beep(

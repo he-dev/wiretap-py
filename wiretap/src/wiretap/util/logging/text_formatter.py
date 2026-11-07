@@ -15,7 +15,7 @@ class TextFormatter(logging.Formatter):
         activity = dict(record.__dict__.get("activity") or {})
         activity.setdefault("about", None)
         activity.setdefault("event", None)
-        activity.setdefault("focus", None)
+        activity.setdefault("buzzing", None)
         activity.setdefault("depth", 0)
         record.__dict__["activity"] = activity
         record.__dict__["trace"] = record.__dict__.get("trace") or {

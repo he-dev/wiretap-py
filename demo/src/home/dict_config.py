@@ -26,7 +26,7 @@ config = {
             "datefmt": "%Y-%m-%d %H:%M:%S",
             "fmt": (
                 '{asctime}.{msecs:03.0f} [{levelname:7s}] '
-                '{activity[focus]}: {indent}{activity[about]}[{activity[event]}]: '
+                '{activity[buzzing]}: {indent}{activity[about]}[{activity[event]}]: '
                 '"{message}", properties: {properties}'
             ),
         },

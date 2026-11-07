@@ -5,7 +5,7 @@ import logging
 from contextvars import ContextVar
 from typing import Any, ClassVar, Iterator, Optional
 
-from wiretap.util import Focus
+from wiretap.util import Buzzing
 from wiretap.util.activity_event import ActivityEvent
 from wiretap.util.stopwatch import Stopwatch
 from wiretap.util.trace_w3c import TraceW3C
@@ -22,7 +22,7 @@ class ActivityScope:
             self,
             logger: logging.Logger,
             about: str,
-            focus: Focus,
+            buzzing: Buzzing,
             state: dict[str, Any],
             trace_id: str | None,
             parent: Optional["ActivityScope"] = None,
@@ -34,7 +34,7 @@ class ActivityScope:
         Args:
             logger: The logger used for diagnostic longs.
             about: The name of the activity.
-            focus: The focus for events in this activity.
+            buzzing: The buzzing for events in this activity.
             state: The initial state of the activity.
             trace_id: The trace ID for the activity.
             parent: The parent activity.
@@ -42,7 +42,7 @@ class ActivityScope:
         """
         self.logger = logger
         self.about = about
-        self.focus = focus
+        self.buzzing = buzzing
         self.parent = parent
         self.depth: int = parent.depth + 1 if parent else 0
         resolved_trace_id = trace_id
@@ -63,7 +63,7 @@ class ActivityScope:
     def extra(
             self,
             event: ActivityEvent,
-            focus: Focus | None = None,
+            buzzing: Buzzing | None = None,
             **kwargs,
     ) -> dict[str, Any]:
         """
@@ -75,7 +75,7 @@ class ActivityScope:
             "activity": {
                 "about": self.about,
                 "event": event.name,
-                "focus": self.focus if focus is None else focus,
+                "buzzing": self.buzzing if buzzing is None else buzzing,
                 "depth": self.depth,
             },
             "properties": self.state | kwargs,
@@ -97,7 +97,7 @@ class ActivityScope:
         if beep_code in self.beeps or not self.logger.isEnabledFor(level):
             return
 
-        extra = self.extra(ActivityEvent.BEEP, "buzz", **kwargs)
+        extra = self.extra(ActivityEvent.BEEP, "internal", **kwargs)
         extra["properties"]["beep_code"] = beep_code
         self.beeps.add(beep_code)
         self.logger.log(level, message, extra=extra, stacklevel=stacklevel)
@@ -115,7 +115,7 @@ class ActivityScope:
             cls,
             logger: logging.Logger,
             about: str,
-            focus: Focus,
+            buzzing: Buzzing,
             state: dict[str, Any],
             trace_id: str | None = None,
             parent_id: str | None = None,
@@ -127,7 +127,7 @@ class ActivityScope:
         activity = cls(
             logger=logger,
             about=about,
-            focus=focus,
+            buzzing=buzzing,
             state=state,
             trace_id=trace_id,
             parent=cls.get_current(),

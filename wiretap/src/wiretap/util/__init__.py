@@ -1,3 +1,3 @@
 from typing import Literal, TypeAlias
 
-Focus: TypeAlias = Literal["core", "buzz"]
+Buzzing: TypeAlias = Literal["regular", "internal"]

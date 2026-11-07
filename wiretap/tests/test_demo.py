@@ -77,7 +77,7 @@ def test_activity_and_json_pipeline(
 
     # Match the activity name to the logger configured by the captured fixture.
     logger, wiretap = Wiretap.get(name)
-    with wiretap.begin_scope(name, "core", order_id=42) as activity:
+    with wiretap.begin_scope(name, "regular", order_id=42) as activity:
         logger.debug(None, extra=activity.zero())
         logger.info("Working", extra=activity.tick(attempt=1))
         logger.info("Order {properties[order_id]} finished", extra=activity.last())
@@ -106,7 +106,7 @@ def test_invalid_sequence_is_reported(
     name, records = captured
 
     logger, wiretap = Wiretap.get(name)
-    with wiretap.begin_scope(name, "core") as activity:
+    with wiretap.begin_scope(name, "regular") as activity:
         logger.debug(None, extra=activity.zero())
         logger.info("Finished", extra=activity.last())
         # Repeating LAST is misuse, but it should still produce a log record.

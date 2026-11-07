@@ -59,7 +59,7 @@ class AddActivity(BuildJSON):
         activity = record.__dict__.get("activity") or {
             "about": None,
             "event": None,
-            "focus": None,
+            "buzzing": None,
             "depth": 0,
         }
         return entry | {"activity": activity}

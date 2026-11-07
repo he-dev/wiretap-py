@@ -7,7 +7,7 @@ from typing import Any, Iterator
 
 from wiretap.core.objective.activity import Activity
 from wiretap.core.objective.activity_scope import ActivityScope
-from wiretap.util import Focus
+from wiretap.util import Buzzing
 from wiretap.util.activity_event import ActivityEvent
 
 
@@ -33,7 +33,7 @@ class Wiretap:
     def begin_scope(
             self,
             about: str,
-            focus: Focus,
+            buzzing: Buzzing,
             trace_id: str | None = None,
             parent_id: str | None = None,
             **kwargs,
@@ -45,7 +45,7 @@ class Wiretap:
         with ActivityScope.push(
                 logger=self._logger,
                 about=about,
-                focus=focus,
+                buzzing=buzzing,
                 state=kwargs,
                 trace_id=trace_id,
                 parent_id=parent_id,
@@ -79,7 +79,7 @@ class Wiretap:
                         stacklevel=3,
                     )
 
-    def snap(self, about: str, focus: Focus, **kwargs) -> dict[str, Any]:
+    def snap(self, about: str, buzzing: Buzzing, **kwargs) -> dict[str, Any]:
         activity = ActivityScope.get_current()
         properties = activity.state.copy() if activity else {}
         properties.update(kwargs)
@@ -88,7 +88,7 @@ class Wiretap:
             "activity": {
                 "about": about,
                 "event": ActivityEvent.SNAP.name,
-                "focus": focus,
+                "buzzing": buzzing,
                 "depth": activity.depth + 1 if activity else 0,
             },
             "properties": properties,
