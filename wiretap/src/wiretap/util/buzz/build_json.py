@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from logging import LogRecord
 from typing import Any
 
-from wiretap.util.rendering.render_message import render_message
+from wiretap.util.buzz.render_message import render_message
 
 # util: Type alias for convenience.
 Entry = dict[str, Any]
@@ -59,7 +59,7 @@ class AddActivity(BuildJSON):
         activity = record.__dict__.get("activity") or {
             "about": None,
             "event": None,
-            "buzzing": None,
+            "channel": None,
             "depth": 0,
         }
         return entry | {"activity": activity}

@@ -11,7 +11,7 @@ def resolve_class(type_name: str) -> Type:
 def create_instance(type_name: str | dict) -> Any:
     """
     Creates an instance of the given type.
-    Example: wiretap.util.logging.DateTimeEncoder
+    Example: wiretap.util.buzz.EncodeDateTime
     """
 
     match type_name:

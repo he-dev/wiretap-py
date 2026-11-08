@@ -1,9 +1,10 @@
-from .core.objective.configure import configure
-from .core.objective.benchmark import Benchmark
-from .core.objective.wiretap import Wiretap
+from .core.wiretap import Wiretap
+from .core.channel import INTERNAL, OFFICIAL
+from .core.benchmark import Benchmark
 
 __all__ = [
-    "configure",
     "Wiretap",
+    "INTERNAL",
+    "OFFICIAL",
     "Benchmark",
 ]

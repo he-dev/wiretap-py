@@ -5,10 +5,9 @@ import logging
 import logging.config
 from typing import Any, Iterator
 
-from wiretap.core.objective.activity import Activity
-from wiretap.core.objective.activity_scope import ActivityScope
-from wiretap.util import Buzzing
-from wiretap.util.activity_event import ActivityEvent
+from wiretap.core.activity import Activity
+from wiretap.core.activity_scope import ActivityScope
+from wiretap.core.activity_event import ActivityEvent
 
 
 class Wiretap:
@@ -18,7 +17,7 @@ class Wiretap:
         self._logger = logger
 
     @classmethod
-    def get(cls, name: str) -> tuple[logging.Logger, Wiretap]:
+    def get(cls: type[Wiretap], name: str) -> tuple[logging.Logger, Wiretap]:
         logger = logging.getLogger(name)
         return logger, cls(logger)
 
@@ -33,7 +32,7 @@ class Wiretap:
     def begin_scope(
             self,
             about: str,
-            buzzing: Buzzing,
+            channel: str,
             trace_id: str | None = None,
             parent_id: str | None = None,
             **kwargs,
@@ -45,7 +44,7 @@ class Wiretap:
         with ActivityScope.push(
                 logger=self._logger,
                 about=about,
-                buzzing=buzzing,
+                channel=channel,
                 state=kwargs,
                 trace_id=trace_id,
                 parent_id=parent_id,
@@ -67,10 +66,10 @@ class Wiretap:
                         stacklevel=4,
                     )
                     level = logging.INFO
-                    message = "Activity {activity[about]} completes in {activity[duration_ms]} ms."
+                    message = "Activity {activity[about]} completes in {activity[duration_ms]:,d} ms."
                     if error is not None:
                         level = logging.ERROR
-                        message = "Activity {activity[about]} fails after {activity[duration_ms]} ms."
+                        message = "Activity {activity[about]} fails after {activity[duration_ms]:,d} ms."
                     self._logger.log(
                         level=level,
                         msg=message,
@@ -79,7 +78,7 @@ class Wiretap:
                         stacklevel=3,
                     )
 
-    def snap(self, about: str, buzzing: Buzzing, **kwargs) -> dict[str, Any]:
+    def snap(self, about: str, channel: str, **kwargs) -> dict[str, Any]:
         activity = ActivityScope.get_current()
         properties = activity.state.copy() if activity else {}
         properties.update(kwargs)
@@ -88,7 +87,7 @@ class Wiretap:
             "activity": {
                 "about": about,
                 "event": ActivityEvent.SNAP.name,
-                "buzzing": buzzing,
+                "channel": channel,
                 "depth": activity.depth + 1 if activity else 0,
             },
             "properties": properties,

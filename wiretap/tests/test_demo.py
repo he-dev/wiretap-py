@@ -6,7 +6,8 @@ import logging
 import pytest
 
 from wiretap import Wiretap
-from wiretap.util.logging import JsonFormatter
+from wiretap.util.buzz.logging import JsonFormatter
+from wiretap.util.buzz.logging import TextFormatter
 
 
 class TestHandler(logging.Handler):
@@ -51,10 +52,10 @@ def json_formatter() -> JsonFormatter:
     return JsonFormatter(
         encoders=[],
         pipeline=[
-            "wiretap.util.rendering.build_json.AddMessage",
-            "wiretap.util.rendering.build_json.AddActivity",
-            "wiretap.util.rendering.build_json.AddProperties",
-            "wiretap.util.rendering.build_json.AddTrace",
+            "wiretap.util.buzz.build_json.AddMessage",
+            "wiretap.util.buzz.build_json.AddActivity",
+            "wiretap.util.buzz.build_json.AddProperties",
+            "wiretap.util.buzz.build_json.AddTrace",
         ],
     )
 
@@ -77,7 +78,7 @@ def test_activity_and_json_pipeline(
 
     # Match the activity name to the logger configured by the captured fixture.
     logger, wiretap = Wiretap.get(name)
-    with wiretap.begin_scope(name, "regular", order_id=42) as activity:
+    with wiretap.begin_scope(name, "official", order_id=42) as activity:
         logger.debug(None, extra=activity.zero())
         logger.info("Working", extra=activity.tick(attempt=1))
         logger.info("Order {properties[order_id]} finished", extra=activity.last())
@@ -85,10 +86,14 @@ def test_activity_and_json_pipeline(
     # INFO filters ZERO, but the event must still advance the lifecycle.
     assert [record.activity["event"] for record in records] == expected_events
     assert all(record.activity["event"] != "BEEP" for record in records)
+    assert all(record.activity["channel"] == "official" for record in records)
+    assert all("channel" not in record.__dict__ for record in records)
 
     # CaptureHandler stores raw records. Explicitly run them through the JSON pipeline.
     entries = [json.loads(json_formatter.format(record)) for record in records]
     assert entries[-1]["message"] == "Order 42 finished"
+    assert entries[-1]["activity"]["channel"] == "official"
+    assert "channel" not in entries[-1]
     assert entries[-1]["properties"] == {"order_id": 42}
     assert entries[-2]["properties"] == {"order_id": 42, "attempt": 1}
     assert entries[-1]["activity"]["duration_ms"] >= 0
@@ -106,7 +111,7 @@ def test_invalid_sequence_is_reported(
     name, records = captured
 
     logger, wiretap = Wiretap.get(name)
-    with wiretap.begin_scope(name, "regular") as activity:
+    with wiretap.begin_scope(name, "official") as activity:
         logger.debug(None, extra=activity.zero())
         logger.info("Finished", extra=activity.last())
         # Repeating LAST is misuse, but it should still produce a log record.
@@ -119,5 +124,17 @@ def test_invalid_sequence_is_reported(
     # Framework findings are separate records using the affected activity's trace.
     entry = json.loads(json_formatter.format(records[1]))
     assert entry["activity"]["event"] == "BEEP"
+    assert entry["activity"]["channel"] == "internal"
+    assert "channel" not in entry
     assert entry["properties"]["beep_code"] == "no-events-must-follow-last"
     assert entry["trace"] == records[-1].trace
+
+
+def test_plain_records_have_activity_channel_default(json_formatter: JsonFormatter) -> None:
+    record = logging.LogRecord("plain", logging.INFO, __file__, 1, "hello", (), None)
+    entry = json.loads(json_formatter.format(record))
+    assert entry["activity"]["channel"] is None
+    assert "channel" not in entry
+
+    formatter = TextFormatter(fmt="{activity[channel]}: {message}", style="{")
+    assert formatter.format(record) == "None: hello"

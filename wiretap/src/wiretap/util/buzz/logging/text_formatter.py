@@ -2,7 +2,7 @@ import logging
 from copy import copy
 
 from wiretap.meta import trim_path
-from wiretap.util.rendering.render_message import render_message
+from wiretap.util.buzz.render_message import render_message
 
 
 class TextFormatter(logging.Formatter):
@@ -15,7 +15,7 @@ class TextFormatter(logging.Formatter):
         activity = dict(record.__dict__.get("activity") or {})
         activity.setdefault("about", None)
         activity.setdefault("event", None)
-        activity.setdefault("buzzing", None)
+        activity.setdefault("channel", None)
         activity.setdefault("depth", 0)
         record.__dict__["activity"] = activity
         record.__dict__["trace"] = record.__dict__.get("trace") or {

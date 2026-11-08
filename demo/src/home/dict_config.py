@@ -3,7 +3,7 @@
 import logging
 from logging.handlers import TimedRotatingFileHandler
 
-from wiretap.util.logging import JsonFormatter, TextFormatter
+from wiretap.util.buzz.logging import JsonFormatter, TextFormatter
 
 
 config = {
@@ -26,7 +26,7 @@ config = {
             "datefmt": "%Y-%m-%d %H:%M:%S",
             "fmt": (
                 '{asctime}.{msecs:03.0f} [{levelname:7s}] '
-                '{activity[buzzing]}: {indent}{activity[about]}[{activity[event]}]: '
+                '{activity[channel]}: {indent}{activity[about]}[{activity[event]}]: '
                 '"{message}", properties: {properties}'
             ),
         },
@@ -34,24 +34,24 @@ config = {
             "()": JsonFormatter,
             # JsonFormatter resolves encoder and pipeline definitions by import path.
             "encoders": [
-                "wiretap.util.encoding.EncodeDateTime",
-                "wiretap.util.encoding.EncodeUUID",
-                "wiretap.util.encoding.EncodeSet",
-                "wiretap.util.encoding.EncodePath",
-                "wiretap.util.encoding.EncodeToDict",
+                "wiretap.util.buzz.EncodeDateTime",
+                "wiretap.util.buzz.EncodeUUID",
+                "wiretap.util.buzz.EncodeSet",
+                "wiretap.util.buzz.EncodePath",
+                "wiretap.util.buzz.EncodeToDict",
             ],
             "pipeline": [
-                "wiretap.util.rendering.AddTimestamp",
-                "wiretap.util.rendering.AddMessage",
-                "wiretap.util.rendering.AddActivity",
-                "wiretap.util.rendering.AddProperties",
-                "wiretap.util.rendering.AddTrace",
+                "wiretap.util.buzz.AddTimestamp",
+                "wiretap.util.buzz.AddMessage",
+                "wiretap.util.buzz.AddActivity",
+                "wiretap.util.buzz.AddProperties",
+                "wiretap.util.buzz.AddTrace",
                 {
-                    "()": "wiretap.util.rendering.AddSource",
+                    "()": "wiretap.util.buzz.AddSource",
                     "include_when": [logging.DEBUG, logging.ERROR, logging.CRITICAL],
                 },
-                "wiretap.util.rendering.AddException",
-                "wiretap.util.rendering.RemoveNoneOrEmpty",
+                "wiretap.util.buzz.AddException",
+                "wiretap.util.buzz.RemoveNoneOrEmpty",
             ],
         },
     },

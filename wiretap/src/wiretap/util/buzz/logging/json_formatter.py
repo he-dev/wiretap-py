@@ -4,8 +4,8 @@ from json import JSONEncoder
 from typing import Any
 
 from wiretap.meta.create_instance import create_instance
-from wiretap.util.encoding.encode_json import DefaultEncode
-from wiretap.util.rendering.build_json import BuildJSON
+from wiretap.util.buzz.encode_json import DefaultEncode
+from wiretap.util.buzz.build_json import BuildJSON
 
 
 class JsonFormatter(logging.Formatter):

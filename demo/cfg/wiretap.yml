@@ -2,37 +2,37 @@ version: 1
 disable_existing_loggers: false
 formatters:
   console_full:
-    (): wiretap.util.logging.TextFormatter
+    (): wiretap.util.buzz.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       {asctime}.{msecs:03.0f} [{levelname:7s}]
       {indent}{activity[about]}: "{message}", properties: {properties}, trc={trace}, src={source}
   console_lite:
-    (): wiretap.util.logging.TextFormatter
+    (): wiretap.util.buzz.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       {asctime}.{msecs:03.0f} [{levelname:7s}]
-      {activity[buzzing]}: {indent}{activity[about]}[{activity[event]}]: "{message}", properties: {properties}
+      {activity[channel]:>8}: {indent}{activity[about]}[{activity[event]}]: "{message}", properties: {properties}
   elastic_json:
-    (): wiretap.util.logging.JsonFormatter
+    (): wiretap.util.buzz.logging.JsonFormatter
     encoders:
-      - wiretap.util.encoding.EncodeDateTime
-      - wiretap.util.encoding.EncodeUUID
-      - wiretap.util.encoding.EncodeSet
-      - wiretap.util.encoding.EncodePath
-      - wiretap.util.encoding.EncodeToDict
+      - wiretap.util.buzz.EncodeDateTime
+      - wiretap.util.buzz.EncodeUUID
+      - wiretap.util.buzz.EncodeSet
+      - wiretap.util.buzz.EncodePath
+      - wiretap.util.buzz.EncodeToDict
     pipeline:
-      - wiretap.util.rendering.AddTimestamp
-      - wiretap.util.rendering.AddMessage
-      - wiretap.util.rendering.AddActivity
-      - wiretap.util.rendering.AddProperties
-      - wiretap.util.rendering.AddTrace
-      - "()": wiretap.util.rendering.AddSource
+      - wiretap.util.buzz.AddTimestamp
+      - wiretap.util.buzz.AddMessage
+      - wiretap.util.buzz.AddActivity
+      - wiretap.util.buzz.AddProperties
+      - wiretap.util.buzz.AddTrace
+      - "()": wiretap.util.buzz.AddSource
         include_when: [DEBUG, ERROR, CRITICAL]
-      - wiretap.util.rendering.AddException
-      - wiretap.util.rendering.RemoveNoneOrEmpty
+      - wiretap.util.buzz.AddException
+      - wiretap.util.buzz.RemoveNoneOrEmpty
 handlers:
   console_full:
     class: logging.StreamHandler
