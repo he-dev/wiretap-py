@@ -18,7 +18,7 @@ name = "wiretap"
 version = "14.0.0"
 requires-python = ">=3.10"
 authors = [{ name = "he-dev" }]
-description = "This package provides a context-oriented logger."
+description = "Logging extensions making logs useful."
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
