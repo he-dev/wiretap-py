@@ -22,7 +22,7 @@ class Activity:
 
     @property
     def elapsed_ms(self) -> int:
-        return self._activity.stopwatch.elapsed_ms
+        return self._activity.stopwatch.elapsed.duration_ms
 
     def zero(self, channel: str | None = None, **kwargs) -> dict[str, Any]:
         extra = self._activity.extra(ActivityEvent.ZERO, channel, **kwargs)
@@ -86,7 +86,7 @@ class Activity:
                     "does-not-log-zero",
                     **kwargs,
                 )
-            self._activity.duration_ms = self._activity.stopwatch.elapsed_ms
+            self._activity.duration_ms = self._activity.stopwatch.elapsed.duration_ms
 
         extra["activity"]["duration_ms"] = self._activity.duration_ms
         self._activity.history.append(ActivityEvent.LAST)

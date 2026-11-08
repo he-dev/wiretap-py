@@ -1,57 +1,27 @@
-import time
-from contextlib import ContextDecorator
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from time import perf_counter_ns
 
 
-class Stopwatch(ContextDecorator):
+@dataclass(frozen=True)
+class Timespan:
+    start_utc: datetime
+    end_utc: datetime
+    duration_ms: int
 
-    def __init__(self):
-        self.start_at = time.time()
-        self.start_pc = time.perf_counter_ns()
-        self.end_at = self.start_at
-        self.end_pc = self.start_pc
 
-    def stop(self) -> float:
-        if self.end_pc == self.start_pc:
-            self.end_at = time.time()
-            self.end_pc = time.perf_counter_ns()
-        return self.duration_ms
-
-    @property
-    def is_running(self) -> bool:
-        return self.end_pc == self.start_pc
+class Stopwatch:
+    def __init__(self) -> None:
+        self._start_utc = datetime.now(timezone.utc)
+        self._start_pc = perf_counter_ns()
 
     @property
-    def duration_ms(self) -> int:
-        """Gets the duration in milliseconds."""
-        return (self.end_pc - self.start_pc) // 1_000_000
+    def elapsed(self) -> Timespan:
+        end_pc = perf_counter_ns()
+        end_utc = datetime.now(timezone.utc)
 
-    @property
-    def elapsed_ms(self) -> int:
-        """Gets the elapsed time in milliseconds."""
-        return (time.perf_counter_ns() - self.start_pc) // 1_000_000
-
-    @property
-    def start_dt(self) -> datetime:
-        return datetime.fromtimestamp(self.start_at, timezone.utc)
-
-    @property
-    def end_dt(self) -> datetime:
-        return datetime.fromtimestamp(self.end_at, timezone.utc)
-
-    def to_dict(self, iso: bool = False) -> dict:
-        # core: Create keys based on the state of the stopwatch.
-        return {
-            "start_at": self.start_dt.isoformat() if iso else self.start_dt,
-            "elapsed_ms": self.elapsed_ms,
-        } if self.is_running else {
-            "start_at": self.start_dt.isoformat() if iso else self.start_dt,
-            "end_at": self.end_dt.isoformat() if iso else self.end_dt,
-            "duration_ms": self.duration_ms,
-        }
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, *_):
-        self.stop()
+        return Timespan(
+            start_utc=self._start_utc,
+            end_utc=end_utc,
+            duration_ms=(end_pc - self._start_pc) // 1_000_000,
+        )
