@@ -5,7 +5,6 @@ import logging
 from contextvars import ContextVar
 from typing import Any, ClassVar, Iterator, Optional
 
-from wiretap.core.channel import INTERNAL
 from wiretap.core.activity_event import ActivityEvent
 from wiretap.util.stopwatch import Stopwatch
 from wiretap.util.trace_w3c import TraceW3C
@@ -22,7 +21,6 @@ class ActivityScope:
             self,
             logger: logging.Logger,
             about: str,
-            channel: str,
             state: dict[str, Any],
             trace_id: str | None,
             parent: Optional["ActivityScope"] = None,
@@ -42,7 +40,6 @@ class ActivityScope:
         """
         self.logger = logger
         self.about = about
-        self.channel = channel
         self.parent = parent
         self.depth: int = parent.depth + 1 if parent else 0
         resolved_trace_id = trace_id
@@ -75,7 +72,6 @@ class ActivityScope:
             "activity": {
                 "about": self.about,
                 "event": event.name,
-                "channel": self.channel if channel is None else channel,
                 "depth": self.depth,
             },
             "properties": self.state | kwargs,
@@ -97,7 +93,7 @@ class ActivityScope:
         if beep_code in self.beeps or not self.logger.isEnabledFor(level):
             return
 
-        extra = self.extra(ActivityEvent.BEEP, INTERNAL, **kwargs)
+        extra = self.extra(ActivityEvent.BEEP, **kwargs)
         extra["properties"]["beep_code"] = beep_code
         self.beeps.add(beep_code)
         self.logger.log(level, message, extra=extra, stacklevel=stacklevel)
@@ -115,7 +111,6 @@ class ActivityScope:
             cls: type[ActivityScope],
             logger: logging.Logger,
             about: str,
-            channel: str,
             state: dict[str, Any],
             trace_id: str | None = None,
             parent_id: str | None = None,
@@ -127,7 +122,6 @@ class ActivityScope:
         activity = cls(
             logger=logger,
             about=about,
-            channel=channel,
             state=state,
             trace_id=trace_id,
             parent=cls.get_current(),

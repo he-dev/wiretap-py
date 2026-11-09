@@ -3,11 +3,13 @@ from __future__ import annotations
 import contextlib
 import logging
 import logging.config
+from collections.abc import Mapping
 from typing import Any, Iterator
 
 from wiretap.core.activity import Activity
 from wiretap.core.activity_scope import ActivityScope
 from wiretap.core.activity_event import ActivityEvent
+from wiretap.util.buzz.merge_properties import merge_properties
 
 
 class Wiretap:
@@ -32,7 +34,7 @@ class Wiretap:
     def begin_scope(
             self,
             about: str,
-            channel: str,
+            *args: Mapping[str, Any],
             trace_id: str | None = None,
             parent_id: str | None = None,
             **kwargs,
@@ -44,8 +46,7 @@ class Wiretap:
         with ActivityScope.push(
                 logger=self._logger,
                 about=about,
-                channel=channel,
-                state=kwargs,
+                state=merge_properties(*args, **kwargs),
                 trace_id=trace_id,
                 parent_id=parent_id,
         ) as activity_scope:
@@ -78,16 +79,15 @@ class Wiretap:
                         stacklevel=3,
                     )
 
-    def snap(self, about: str, channel: str, **kwargs) -> dict[str, Any]:
+    def snap(self, about: str, *args: Mapping[str, Any], **kwargs: Any) -> dict[str, Any]:
         activity = ActivityScope.get_current()
         properties = activity.state.copy() if activity else {}
-        properties.update(kwargs)
+        properties.update(merge_properties(*args, **kwargs))
         return {
             "_format_map": True,
             "activity": {
                 "about": about,
                 "event": ActivityEvent.SNAP.name,
-                "channel": channel,
                 "depth": activity.depth + 1 if activity else 0,
             },
             "properties": properties,

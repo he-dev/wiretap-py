@@ -14,7 +14,11 @@ formatters:
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       {asctime}.{msecs:03.0f} [{levelname:7s}]
-      {activity[channel]:>8}: {indent}{activity[about]}[{activity[event]}]: "{message}", properties: {properties}
+      {properties[content]:>8}:{indent}{activity[about]}[{activity[event]}]: "{message}", properties: {properties}, src={source}
+    indent: ":"
+    defaults:
+      properties:
+        content: stranger
   elastic_json:
     (): wiretap.util.buzz.logging.JsonFormatter
     encoders:
@@ -28,6 +32,7 @@ formatters:
       - wiretap.util.buzz.AddMessage
       - wiretap.util.buzz.AddActivity
       - wiretap.util.buzz.AddProperties
+      - wiretap.util.buzz.EnsureContent
       - wiretap.util.buzz.AddTrace
       - "()": wiretap.util.buzz.AddSource
         include_when: [DEBUG, ERROR, CRITICAL]

@@ -59,7 +59,6 @@ class AddActivity(BuildJSON):
         activity = record.__dict__.get("activity") or {
             "about": None,
             "event": None,
-            "channel": None,
             "depth": 0,
         }
         return entry | {"activity": activity}
@@ -127,6 +126,17 @@ class AddProperties(BuildJSON):
             entry["properties"]["beep_code"] = "rooted-properties-must-be-unique"
 
         return entry
+
+
+class EnsureContent(BuildJSON):
+    """Sets properties.content to stranger when content is not set. Use after AddProperties."""
+
+    root_keys = ("properties",)
+
+    def __call__(self, record: logging.LogRecord, entry: Entry) -> Entry:
+        properties = dict(entry.get("properties") or {})
+        properties.setdefault("content", "stranger")
+        return entry | {"properties": properties}
 
 
 class AddTrace(BuildJSON):

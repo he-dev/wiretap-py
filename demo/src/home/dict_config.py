@@ -45,6 +45,7 @@ config = {
                 "wiretap.util.buzz.AddMessage",
                 "wiretap.util.buzz.AddActivity",
                 "wiretap.util.buzz.AddProperties",
+                "wiretap.util.buzz.EnsureContent",
                 "wiretap.util.buzz.AddTrace",
                 {
                     "()": "wiretap.util.buzz.AddSource",
