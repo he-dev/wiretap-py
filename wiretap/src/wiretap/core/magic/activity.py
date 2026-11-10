@@ -4,10 +4,10 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
-from wiretap.core.activity_scope import ActivityScope
-from wiretap.core.activity_event import ActivityEvent
-from wiretap.util.trace_w3c import TraceW3C
-from wiretap.util.buzz.merge_properties import merge_properties
+from wiretap.core.magic.activity_scope import ActivityScope
+from wiretap.data.activity_event import ActivityEvent
+from wiretap.data.trace_w3c import TraceW3C
+from wiretap.util.merge_properties import merge_properties
 
 
 class Activity:

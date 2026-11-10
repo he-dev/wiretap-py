@@ -1,8 +1,7 @@
 import logging
 from copy import copy
 
-from wiretap.meta import trim_path
-from wiretap.util.buzz.render_message import render_message
+from wiretap.util.render_message import render_message
 
 
 class TextFormatter(logging.Formatter):
@@ -40,7 +39,7 @@ class TextFormatter(logging.Formatter):
         if (is_debug and is_last) or is_error:
             record.source = {
                 "func": record.funcName,
-                "file": trim_path(record.filename),
+                "file": record.filename,
                 "line": record.lineno
             }
         else:

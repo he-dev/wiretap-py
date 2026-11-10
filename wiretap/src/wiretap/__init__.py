@@ -1,6 +1,6 @@
-from .core.wiretap import Wiretap
-from .core.content import BASELINE, INTERNAL, METADATA
-from .core.benchmark import Benchmark
+from .core.hello.wiretap import Wiretap
+from .data.content import BASELINE, INTERNAL, METADATA
+from .data.benchmark import Benchmark
 
 __all__ = [
     "Wiretap",

@@ -2,14 +2,14 @@ version: 1
 disable_existing_loggers: false
 formatters:
   console_full:
-    (): wiretap.util.buzz.logging.TextFormatter
+    (): wiretap.util.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
       {asctime}.{msecs:03.0f} [{levelname:7s}]
       {indent}{activity[about]}: "{message}", properties: {properties}, trc={trace}, src={source}
   console_lite:
-    (): wiretap.util.buzz.logging.TextFormatter
+    (): wiretap.util.logging.TextFormatter
     style: "{"
     datefmt: "%Y-%m-%d %H:%M:%S"
     fmt: >-
@@ -20,24 +20,24 @@ formatters:
       properties:
         content: stranger
   elastic_json:
-    (): wiretap.util.buzz.logging.JsonFormatter
+    (): wiretap.util.logging.JsonFormatter
     encoders:
-      - wiretap.util.buzz.EncodeDateTime
-      - wiretap.util.buzz.EncodeUUID
-      - wiretap.util.buzz.EncodeSet
-      - wiretap.util.buzz.EncodePath
-      - wiretap.util.buzz.EncodeToDict
+      - wiretap.util.EncodeDateTime
+      - wiretap.util.EncodeUUID
+      - wiretap.util.EncodeSet
+      - wiretap.util.EncodePath
+      - wiretap.util.EncodeToDict
     pipeline:
-      - wiretap.util.buzz.AddTimestamp
-      - wiretap.util.buzz.AddMessage
-      - wiretap.util.buzz.AddActivity
-      - wiretap.util.buzz.AddProperties
-      - wiretap.util.buzz.EnsureContent
-      - wiretap.util.buzz.AddTrace
-      - "()": wiretap.util.buzz.AddSource
+      - wiretap.util.AddTimestamp
+      - wiretap.util.AddMessage
+      - wiretap.util.AddActivity
+      - wiretap.util.AddProperties
+      - wiretap.util.EnsureContent
+      - wiretap.util.AddTrace
+      - "()": wiretap.util.AddSource
         include_when: [DEBUG, ERROR, CRITICAL]
-      - wiretap.util.buzz.AddException
-      - wiretap.util.buzz.RemoveNoneOrEmpty
+      - wiretap.util.AddException
+      - wiretap.util.RemoveNoneOrEmpty
 handlers:
   console_full:
     class: logging.StreamHandler

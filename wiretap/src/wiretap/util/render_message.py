@@ -1,6 +1,6 @@
 import logging
 
-from wiretap.meta import FormatData
+from wiretap.data.missing import FormatData
 
 
 def render_message(record: logging.LogRecord) -> str | None:

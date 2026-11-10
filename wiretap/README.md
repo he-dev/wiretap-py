@@ -4,7 +4,7 @@ Wiretap adds structured activity metadata to standard Python logging.
 
 ```python
 from wiretap import Wiretap
-from wiretap.core.content import BASELINE, INTERNAL
+from wiretap.data.content import BASELINE, INTERNAL
 
 logger, wiretap = Wiretap.get(__name__)
 
@@ -19,7 +19,7 @@ Use Wiretap's text or JSON formatter for message interpolation and structured ou
 `BASELINE`, `INTERNAL`, `METADATA`, and `STRANGER` are property dictionaries
 containing `{"content": "baseline"}`, `{"content": "internal"}`,
 `{"content": "metadata"}`, and `{"content": "stranger"}`, respectively.
-They can be imported from `wiretap` or `wiretap.core.content`.
+They can be imported from `wiretap` or `wiretap.data.content`.
 Custom content values need no declaration:
 
 ```python

@@ -1,7 +1,7 @@
 import logging
 
 from wiretap import Wiretap
-from wiretap.core.activity_scope import ActivityScope
+from wiretap.core.magic.activity_scope import ActivityScope
 
 
 def test_custom_channel_flows_through_events_and_snap() -> None:

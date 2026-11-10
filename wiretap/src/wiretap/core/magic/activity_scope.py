@@ -5,9 +5,9 @@ import logging
 from contextvars import ContextVar
 from typing import Any, ClassVar, Iterator, Optional
 
-from wiretap.core.activity_event import ActivityEvent
-from wiretap.util.stopwatch import Stopwatch
-from wiretap.util.trace_w3c import TraceW3C
+from wiretap.data.activity_event import ActivityEvent
+from wiretap.data.stopwatch import Stopwatch
+from wiretap.data.trace_w3c import TraceW3C
 
 
 class ActivityScope:

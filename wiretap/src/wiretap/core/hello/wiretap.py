@@ -6,10 +6,10 @@ import logging.config
 from collections.abc import Mapping
 from typing import Any, Iterator
 
-from wiretap.core.activity import Activity
-from wiretap.core.activity_scope import ActivityScope
-from wiretap.core.activity_event import ActivityEvent
-from wiretap.util.buzz.merge_properties import merge_properties
+from wiretap.core.magic.activity import Activity
+from wiretap.core.magic.activity_scope import ActivityScope
+from wiretap.data.activity_event import ActivityEvent
+from wiretap.util.merge_properties import merge_properties
 
 
 class Wiretap:

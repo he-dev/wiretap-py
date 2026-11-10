@@ -1,7 +1,7 @@
 import time
 
 from wiretap import Wiretap
-from wiretap.core.content import BASELINE, INTERNAL
+from wiretap.data.content import BASELINE, INTERNAL
 
 logger, wiretap = Wiretap.get(__name__)
 
